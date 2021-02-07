@@ -1,6 +1,6 @@
 use log::{debug, info, trace};
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 
 use noisy_float::prelude::*;
 use rayon::prelude::*;
@@ -80,6 +80,7 @@ fn main() {
             events.push(event)
         }
     }
+    let mut writer = File::create(args.last().unwrap()).unwrap();
     info!("Read {} events", events.len());
 
     let orig_sum_wt: N64 = events.iter().map(|e| e.weight).sum();
@@ -143,4 +144,18 @@ fn main() {
     progress.map(|p| p.finish());
     info!("Created {} cells", cells.len());
     info!("Median radius: {}", median_radius(&cells));
+
+    info!("Resampling");
+    cells.par_iter_mut().for_each(|cell| cell.resample());
+
+    info!("Collecting and sorting events");
+    for cell in cells {
+        events.append(&mut cell.into());
+    }
+    events.par_sort_unstable();
+
+    info!("Writing output...");
+    for event in events {
+        writeln!(writer, "{} {:e}", event.id, event.weight).unwrap();
+    }
 }
