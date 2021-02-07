@@ -1,6 +1,7 @@
 use crate::event::Event;
 
 use noisy_float::prelude::*;
+use rayon::prelude::*;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub struct Cell {
@@ -44,6 +45,15 @@ impl Cell {
     pub fn weight_sum(&self) -> N64 {
         self.weight_sum
     }
+
+    pub fn iter(&self) -> std::slice::Iter<Event> {
+        self.events.iter()
+    }
+
+    pub fn par_iter(&self) -> rayon::slice::Iter<Event> {
+        self.events.par_iter()
+    }
+
 }
 
 impl std::convert::From<Cell> for Vec<Event> {
