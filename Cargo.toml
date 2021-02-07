@@ -15,3 +15,7 @@ rayon = "1.5"
 logbar = "0.1"
 indicatif = "0.15"
 console = "0.14"
+
+[[bin]]
+name = "cres"
+path = "src/bin/main.rs"
