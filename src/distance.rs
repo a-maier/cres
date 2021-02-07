@@ -7,32 +7,38 @@ use noisy_float::prelude::*;
 use permutohedron::LexicalPermutation;
 
 pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
-    let mut it1 = ev1.outgoing_by_pid.iter();
-    let mut it2 = ev2.outgoing_by_pid.iter();
-    let mut n1 = it1.next();
-    let mut n2 = it2.next();
     let mut dist = n64(0.);
-    while let (Some((t1, p1)), Some((t2, p2))) = (n1, n2) {
-        match t1.cmp(t2) {
+    let out1 = &ev1.outgoing_by_pid;
+    let out2 = &ev2.outgoing_by_pid;
+    let mut idx1 = 0;
+    let mut idx2 = 0;
+    while idx1 < out1.len() && idx2 < out2.len() {
+        let (t1, p1) = &out1[idx1];
+        let (t2, p2) = &out2[idx2];
+        match t1.cmp(&t2) {
             Ordering::Less => {
-                dist += euclid_norm(p1);
-                n1 = it1.next();
-            }
+                dist += euclid_norm(&p1);
+                idx1 += 1;
+            },
             Ordering::Greater => {
-                dist += euclid_norm(p2);
-                n2 = it2.next();
-            }
+                dist += euclid_norm(&p2);
+                idx2 += 1;
+            },
             Ordering::Equal => {
-                dist += min_paired_distance(p1, p2);
-                n1 = it1.next();
-                n2 = it2.next();
+                dist += min_paired_distance(&p1, &p2);
+                idx1 += 1;
+                idx2 += 1;
             }
         }
     }
 
     // consume remainders
-    dist += it1.map(|(_t, p)| euclid_norm(p)).sum::<N64>();
-    dist += it2.map(|(_t, p)| euclid_norm(p)).sum::<N64>();
+    debug_assert!(idx1 >= out1.len() || idx2 >= out2.len());
+    if idx1 < out1.len() {
+        dist += out1[idx1..].iter().map(|(_t, p)| euclid_norm(p)).sum::<N64>();
+    } else if idx2 < out2.len() {
+        dist += out2[idx2..].iter().map(|(_t, p)| euclid_norm(p)).sum::<N64>();
+    }
     dist
 }
 
