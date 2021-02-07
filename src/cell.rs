@@ -30,7 +30,7 @@ impl Cell {
 
     pub fn push_with_dist(&mut self, event: Event, distance: N64) {
         self.push(event);
-        self.radius += distance;
+        self.radius = distance;
     }
 
     pub fn nmembers(&self) -> usize {
