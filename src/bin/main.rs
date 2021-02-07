@@ -75,7 +75,7 @@ fn main() {
 
     for arg in &args[1..args.len() - 1] {
         info!("Reading events from {}", arg);
-        let mut reader = BufReader::new(File::open(&args[1]).unwrap());
+        let mut reader = BufReader::new(File::open(arg).unwrap());
         while let Some(event) = parse_event(&mut reader) {
             events.push(event)
         }
