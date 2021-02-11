@@ -6,6 +6,8 @@ use std::cmp::Ordering;
 use noisy_float::prelude::*;
 use permutohedron::LexicalPermutation;
 
+const FALLBACK_SIZE: usize = 8;
+
 pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
     let mut dist = n64(0.);
     let out1 = &ev1.outgoing_by_pid;
@@ -25,7 +27,7 @@ pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
                 idx2 += 1;
             },
             Ordering::Equal => {
-                dist += min_paired_distance(&p1, &p2);
+                dist += set_distance(&p1, &p2);
                 idx1 += 1;
                 idx2 += 1;
             }
@@ -46,6 +48,14 @@ fn euclid_norm(p: &[FourVector]) -> N64 {
     p.iter().map(|p| p.euclid_norm()).sum()
 }
 
+fn set_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
+    if std::cmp::max(p1.len(), p2.len()) < FALLBACK_SIZE {
+        min_paired_distance(p1, p2)
+    } else {
+        norm_ordered_paired_distance(p1, p2)
+    }
+}
+
 fn min_paired_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
     if p1.len() > p2.len() {
         return min_paired_distance(p2, p1);
@@ -64,9 +74,37 @@ fn min_paired_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
 }
 
 fn paired_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
-    //debug_assert!(p1.len() == p2.len());
+    debug_assert!(p1.len() == p2.len());
     p1.iter()
         .zip(p2.iter())
         .map(|(p1, p2)| (*p1 - *p2).euclid_norm())
         .sum()
+}
+
+fn norm_ordered_paired_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
+    if p1.len() > p2.len() {
+        return norm_ordered_paired_distance(p2, p1);
+    }
+    let mut p1: Vec<_> = p1.iter().copied().collect();
+    p1.resize_with(p2.len(), FourVector::new);
+    std::cmp::min(
+        ordered_paired_distance_eq_size(&p1, p2),
+        ordered_paired_distance_eq_size(p2, &p1)
+    )
+}
+
+fn ordered_paired_distance_eq_size(p1: &[FourVector], p2: &[FourVector]) -> N64 {
+    debug_assert!(p1.len() == p2.len());
+    let mut dists: Vec<_> = p2.iter().map(|q| (n64(0.), q)).collect();
+    let mut dist = n64(0.);
+    for p in p1 {
+        for (dist, q) in &mut dists {
+            *dist = (*p - **q).euclid_norm_sq();
+        }
+        let (n, min) = dists.iter().enumerate()
+            .min_by_key(|(_n, d)| *d).unwrap();
+        dist += min.0.sqrt();
+        dists.swap_remove(n);
+    }
+    dist
 }
