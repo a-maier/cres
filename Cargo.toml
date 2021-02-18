@@ -3,6 +3,7 @@ name = "cres"
 version = "0.1.0"
 authors = ["Andreas Maier <andreas.martin.maier@desy.de>"]
 edition = "2018"
+autobins = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,6 +19,10 @@ console = "0.14"
 hepmc2 = "0.1"
 jetty = "0.1"
 bzip2 = "0.4"
+
+[lib]
+name = "cres"
+path = "src/lib.rs"
 
 [[bin]]
 name = "cres"
