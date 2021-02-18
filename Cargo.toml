@@ -16,6 +16,7 @@ logbar = "0.1"
 indicatif = "0.15"
 console = "0.14"
 hepmc2 = "0.1"
+jetty = "0.1"
 bzip2 = "0.4"
 
 [[bin]]
