@@ -2,14 +2,12 @@ mod progress_bar;
 mod hepmc;
 
 use crate::progress_bar::get_progress_bar;
-use crate::hepmc::from;
+use crate::hepmc::{from, CombinedReader};
 
 use log::{debug, info, trace};
 use std::fs::File;
-use std::io::{BufReader, Write};
+use std::io::Write;
 
-use bzip2::read::BzDecoder;
-use hepmc2::reader::Reader;
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 
@@ -30,15 +28,16 @@ fn main() {
 
     let mut events = Vec::new();
 
-    for arg in &args[1..args.len() - 1] {
-        info!("Reading events from {}", arg);
-        let decoder = BzDecoder::new(BufReader::new(File::open(arg).unwrap()));
-        let reader = Reader::from(BufReader::new(decoder));
-        for (id, event) in reader.enumerate() {
-            let mut event = from(event.unwrap());
-            event.id = id;
-            events.push(event)
-        }
+    info!("Reading events from {:?}", &args[1..args.len() - 1]);
+    let infiles = args[1..args.len() - 1].into_iter().rev().map(
+        |f| File::open(f).unwrap()
+    ).collect();
+    let reader = CombinedReader::new(infiles);
+    for (id, event) in reader.enumerate() {
+        trace!("read event {}", id);
+        let mut event = from(event.unwrap());
+        event.id = id;
+        events.push(event)
     }
 
     let mut writer = File::create(args.last().unwrap()).unwrap();
