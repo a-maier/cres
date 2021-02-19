@@ -2,10 +2,12 @@ mod progress_bar;
 mod hepmc;
 mod opt;
 mod auto_decompress;
+mod unweight;
 
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::hepmc::{into_event, CombinedReader};
 use crate::opt::Opt;
+use crate::unweight::unweight;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -17,6 +19,8 @@ use hepmc2::writer::Writer;
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 use structopt::StructOpt;
+use rand::SeedableRng;
+use rand_xoshiro::Xoshiro256Plus;
 
 use cres::cell::Cell;
 use cres::distance::distance;
@@ -185,6 +189,12 @@ fn main() {
         events.append(&mut cell.into());
     }
     events.par_sort_unstable();
+
+    if opt.unweight.minweight > 0.0 {
+        info!("Unweight to minimum weight {:e}", opt.unweight.minweight);
+        let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
+        unweight(&mut events, opt.unweight.minweight, &mut rng);
+    }
 
     let final_sum_wt: N64 = events.iter().map(|e| e.weight).sum();
     let final_sum_wt2: N64 = events.iter().map(|e| e.weight * e.weight).sum();

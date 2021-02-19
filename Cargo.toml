@@ -23,6 +23,8 @@ structopt = "0.3"
 flate2 = "1.0"
 zstd = "0.5"
 lz4 = "1.23"
+rand = "0.8"
+rand_xoshiro = "0.6"
 
 [lib]
 name = "cres"
