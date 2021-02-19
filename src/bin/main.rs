@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 
+use env_logger::Env;
 use log::{debug, info, trace};
 use hepmc2::writer::Writer;
 use noisy_float::prelude::*;
@@ -86,10 +87,10 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
 }
 
 fn main() {
-    env_logger::init();
-
     let opt = Opt::from_args();
-    log::set_max_level(opt.loglevel);
+    let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
+    env_logger::init_from_env(env);
+
     debug!("settings: {:?}", opt);
 
     let mut events = Vec::new();

@@ -82,7 +82,7 @@ pub(crate) struct Opt {
 
     /// Verbosity level
     #[structopt(short, long, default_value = "Info", help = "Verbosity level.\nPossible values with increasing amount of output are\n'off', 'error', 'warn', 'info', 'debug', 'trace'.")]
-    pub(crate) loglevel: log::LevelFilter,
+    pub(crate) loglevel: String,
 
     /// Input files
     #[structopt(name = "INFILES", parse(from_os_str))]
