@@ -5,6 +5,7 @@ use crate::progress_bar::{Progress, ProgressBar};
 use crate::hepmc::{from, CombinedReader};
 
 use std::fs::File;
+use std::io::BufWriter;
 
 use log::{debug, info, trace};
 use hepmc2::writer::Writer;
@@ -124,7 +125,7 @@ fn main() {
 
     info!("Writing output to {}", outfile);
     reader.rewind().unwrap();
-    let outfile = File::create(outfile).unwrap();
+    let outfile = BufWriter::new(File::create(outfile).unwrap());
     let mut writer = Writer::try_from(outfile).unwrap();
     let mut hepmc_events = reader.enumerate();
     let progress = ProgressBar::new(events.len() as u64, "events written:");
