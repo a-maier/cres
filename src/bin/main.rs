@@ -35,7 +35,7 @@ fn median_radius(cells: &[Cell]) -> N64 {
 const NUM_DUMP_CELLS: usize = 10;
 
 fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
-    let mut res = HashMap::new();
+    let mut res: HashMap<_, Vec<_>> = HashMap::new();
     info!("Cells by creation order:");
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
         info!(
@@ -46,7 +46,7 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
             cell.weight_sum()
         );
         for event in cell.iter() {
-            res.entry(event.id).or_insert(Vec::new()).push(cell.id())
+            res.entry(event.id).or_default().push(cell.id())
         }
     }
 
@@ -62,7 +62,7 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
             cell.weight_sum()
         );
         for event in cell.iter() {
-            res.entry(event.id).or_insert(Vec::new()).push(cell.id())
+            res.entry(event.id).or_default().push(cell.id())
         }
     }
 
@@ -79,7 +79,7 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
             cell.weight_sum()
         );
         for event in cell.iter() {
-            res.entry(event.id).or_insert(Vec::new()).push(cell.id())
+            res.entry(event.id).or_default().push(cell.id())
         }
     }
 
@@ -95,7 +95,7 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
             cell.weight_sum()
         );
         for event in cell.iter() {
-            res.entry(event.id).or_insert(Vec::new()).push(cell.id())
+            res.entry(event.id).or_default().push(cell.id())
         }
     }
 
@@ -120,7 +120,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("Reading events from {:?}", opt.infiles);
     let infiles: Result<Vec<_>, _> =
-        opt.infiles.iter().rev().map(|f| File::open(f)).collect();
+        opt.infiles.iter().rev().map(File::open).collect();
     let infiles = infiles?;
     let mut reader = CombinedReader::new(infiles);
     for (id, event) in (&mut reader).enumerate() {
