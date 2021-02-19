@@ -21,6 +21,8 @@ jetty = "0.1"
 bzip2 = "0.4"
 structopt = "0.3"
 flate2 = "1.0"
+zstd = "0.5"
+lz4 = "1.23"
 
 [lib]
 name = "cres"
