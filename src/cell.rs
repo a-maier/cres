@@ -7,6 +7,7 @@ use rayon::prelude::*;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub struct Cell {
+    id: usize,
     events: Vec<Event>,
     radius: N64,
     weight_sum: N64,
@@ -17,13 +18,18 @@ impl Cell {
         Self::default()
     }
 
-    pub fn from_seed(seed: Event) -> Self {
+    pub fn from_seed(id: usize, seed: Event) -> Self {
         let weight_sum = seed.weight;
         Self {
+            id,
             events: vec![seed],
             radius: n64(0.),
             weight_sum,
         }
+    }
+
+    pub fn id(&self) -> usize {
+        self.id
     }
 
     pub fn push(&mut self, event: Event) {
