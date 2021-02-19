@@ -113,6 +113,15 @@ fn main() {
     }
     events.par_sort_unstable();
 
+    let final_sum_wt: N64 = events.iter().map(|e| e.weight).sum();
+    let final_sum_wt2: N64 = events.iter().map(|e| e.weight * e.weight).sum();
+
+    info!(
+        "Final sum of weights: {:e} ± {:e}",
+        final_sum_wt,
+        final_sum_wt2.sqrt()
+    );
+
     info!("Writing output to {}", outfile);
     reader.rewind().unwrap();
     let outfile = File::create(outfile).unwrap();
