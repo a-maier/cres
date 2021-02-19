@@ -3,7 +3,7 @@ mod hepmc;
 mod opt;
 
 use crate::progress_bar::{Progress, ProgressBar};
-use crate::hepmc::{from, CombinedReader};
+use crate::hepmc::{into_event, CombinedReader};
 use crate::opt::Opt;
 
 use std::fs::File;
@@ -29,6 +29,7 @@ fn main() {
     env_logger::init();
 
     let opt = Opt::from_args();
+    log::set_max_level(opt.loglevel);
     debug!("settings: {:?}", opt);
 
     let mut events = Vec::new();
@@ -38,9 +39,10 @@ fn main() {
         |f| File::open(f).unwrap()
     ).collect();
     let mut reader = CombinedReader::new(infiles);
+    let jet_def = opt.jet_def();
     for (id, event) in (&mut reader).enumerate() {
         trace!("read event {}", id);
-        let mut event = from(event.unwrap());
+        let mut event = into_event(event.unwrap(), &jet_def);
         event.id = id;
         events.push(event);
     }

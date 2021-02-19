@@ -4,10 +4,12 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
 use bzip2::read::BzDecoder;
-use jetty::{anti_kt_f, cluster_if};
+use jetty::{anti_kt_f, kt_f, cambridge_aachen_f, cluster_if, PseudoJet};
 use hepmc2::reader::{Reader, LineParseError};
 use log::info;
 use noisy_float::prelude::*;
+
+use crate::opt::{JetAlgorithm, JetDefinition};
 
 fn is_parton(particle: &hepmc2::event::Particle) -> bool {
     let id = particle.id;
@@ -17,7 +19,23 @@ fn is_parton(particle: &hepmc2::event::Particle) -> bool {
 const OUTGOING_STATUS: i32 = 1;
 const PID_JET: i32 = 81;
 
-pub(crate) fn from(event: hepmc2::event::Event) -> Event {
+fn cluster(
+    partons: Vec<PseudoJet>,
+    jet_def: &JetDefinition
+) -> Vec<PseudoJet> {
+    let minpt2 = jet_def.minpt * jet_def.minpt;
+    let cut = |jet: PseudoJet| jet.pt2() > minpt2;
+    match jet_def.algo {
+        JetAlgorithm::AntiKt => cluster_if(partons, &anti_kt_f(jet_def.r), cut),
+        JetAlgorithm::Kt => cluster_if(partons, &kt_f(jet_def.r), cut),
+        JetAlgorithm::CambridgeAachen => cluster_if(partons, &cambridge_aachen_f(jet_def.r), cut),
+    }
+}
+
+pub(crate) fn into_event(
+    event: hepmc2::event::Event,
+    jet_def: &JetDefinition,
+) -> Event {
     let mut res = Event::new();
     let mut partons = Vec::new();
     res.weight = n64(*event.weights.first().unwrap());
@@ -34,7 +52,7 @@ pub(crate) fn from(event: hepmc2::event::Event) -> Event {
             }
         }
     }
-    let jets = cluster_if(partons, &anti_kt_f(0.4), |jet| jet.pt2() > 400.);
+    let jets = cluster(partons, jet_def);
     for jet in jets {
         let p = [jet.e(), jet.px(), jet.py(), jet.pz()];
         res.add_outgoing(PID_JET, p.into());

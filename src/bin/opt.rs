@@ -5,6 +5,13 @@ use std::fmt::{self, Display};
 use structopt::StructOpt;
 
 #[derive(Debug, Copy, Clone)]
+pub(crate) struct JetDefinition {
+    pub algo: JetAlgorithm,
+    pub r: f64,
+    pub minpt: f64
+}
+
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum JetAlgorithm {
     AntiKt,
     CambridgeAachen,
@@ -77,4 +84,14 @@ pub(crate) struct Opt {
     /// Input files
     #[structopt(name = "INFILES", parse(from_os_str))]
     pub(crate) infiles: Vec<PathBuf>,
+}
+
+impl Opt {
+    pub fn jet_def(&self) -> JetDefinition {
+        JetDefinition {
+            algo: self.jetalgorithm,
+            r: self.jetradius,
+            minpt: self.jetpt,
+        }
+    }
 }
