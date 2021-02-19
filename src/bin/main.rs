@@ -1,8 +1,10 @@
 mod progress_bar;
 mod hepmc;
+mod opt;
 
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::hepmc::{from, CombinedReader};
+use crate::opt::Opt;
 
 use std::fs::File;
 use std::io::BufWriter;
@@ -11,6 +13,7 @@ use log::{debug, info, trace};
 use hepmc2::writer::Writer;
 use noisy_float::prelude::*;
 use rayon::prelude::*;
+use structopt::StructOpt;
 
 use cres::cell::Cell;
 use cres::distance::distance;
@@ -25,13 +28,13 @@ fn median_radius(cells: &[Cell]) -> N64 {
 fn main() {
     env_logger::init();
 
-    let args: Vec<String> = std::env::args().collect();
+    let opt = Opt::from_args();
+    debug!("settings: {:?}", opt);
 
     let mut events = Vec::new();
 
-    let (outfile, infiles) = &args[1..].split_last().unwrap();
-    debug!("Reading events from {:?}", infiles);
-    let infiles = infiles.iter().rev().map(
+    debug!("Reading events from {:?}", opt.infiles);
+    let infiles = opt.infiles.iter().rev().map(
         |f| File::open(f).unwrap()
     ).collect();
     let mut reader = CombinedReader::new(infiles);
@@ -123,9 +126,9 @@ fn main() {
         final_sum_wt2.sqrt()
     );
 
-    info!("Writing output to {}", outfile);
+    info!("Writing {} events to {:?}", events.len(), opt.outfile);
     reader.rewind().unwrap();
-    let outfile = BufWriter::new(File::create(outfile).unwrap());
+    let outfile = BufWriter::new(File::create(opt.outfile).unwrap());
     let mut writer = Writer::try_from(outfile).unwrap();
     let mut hepmc_events = reader.enumerate();
     let progress = ProgressBar::new(events.len() as u64, "events written:");
