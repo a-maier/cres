@@ -17,7 +17,7 @@ use env_logger::Env;
 use hepmc2::writer::Writer;
 use log::{debug, info, trace};
 use noisy_float::prelude::*;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng, seq::SliceRandom};
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use structopt::StructOpt;
@@ -34,7 +34,10 @@ fn median_radius(cells: &[Cell]) -> N64 {
 
 const NUM_DUMP_CELLS: usize = 10;
 
-fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
+fn select_dump_cells<R: Rng>(
+    cells: &mut [Cell],
+    mut rng: R,
+) -> HashMap<usize, Vec<usize>> {
     let mut res: HashMap<_, Vec<_>> = HashMap::new();
     info!("Cells by creation order:");
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
@@ -87,6 +90,20 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
     cells.select_nth_unstable_by_key(NUM_DUMP_CELLS - 1, |c| -c.weight_sum());
     cells[..NUM_DUMP_CELLS].sort_unstable_by_key(|c| -c.weight_sum());
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
+        info!(
+            "Cell {} with {} events and radius {} and weight {:e}",
+            cell.id(),
+            cell.nmembers(),
+            cell.radius(),
+            cell.weight_sum()
+        );
+        for event in cell.iter() {
+            res.entry(event.id).or_default().push(cell.id())
+        }
+    }
+
+    info!("Randomly selected cells:");
+    for cell in cells.choose_multiple(&mut rng, NUM_DUMP_CELLS) {
         info!(
             "Cell {} with {} events and radius {} and weight {:e}",
             cell.id(),
@@ -196,7 +213,8 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     cells.par_iter_mut().for_each(|cell| cell.resample());
 
     let dump_event_to = if opt.dumpcells {
-        select_dump_cells(&mut cells)
+        let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
+        select_dump_cells(&mut cells, &mut rng)
     } else {
         HashMap::new()
     };
