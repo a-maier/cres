@@ -2,12 +2,12 @@ mod progress_bar;
 mod hepmc;
 
 use crate::progress_bar::get_progress_bar;
-use crate::hepmc::{from, CombinedReader, Writer};
+use crate::hepmc::{from, CombinedReader};
+
+use std::fs::File;
 
 use log::{debug, info, trace};
-use std::fs::File;
-use std::io::Write;
-
+use hepmc2::writer::Writer;
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 
@@ -41,7 +41,6 @@ fn main() {
         events.push(event);
     }
 
-    let mut writer = File::create(args.last().unwrap()).unwrap();
     info!("Read {} events", events.len());
 
     let orig_sum_wt: N64 = events.iter().map(|e| e.weight).sum();
@@ -117,7 +116,8 @@ fn main() {
 
     info!("Writing output to {}", outfile);
     reader.rewind().unwrap();
-    let writer = Writer::try_from(outfile).unwrap();
+    let outfile = File::create(outfile).unwrap();
+    let mut writer = Writer::try_from(outfile).unwrap();
     let mut hepmc_events = reader.enumerate();
     for event in events {
         let (hepmc_id, hepmc_event) = hepmc_events.next().unwrap();
@@ -132,7 +132,7 @@ fn main() {
             hepmc_event = ev.unwrap();
         }
         let old_weight = hepmc_event.weights.first().unwrap();
-        let reweight = (event.weight/old_weight).into();
+        let reweight: f64 = (event.weight/old_weight).into();
         for weight in &mut hepmc_event.weights {
             *weight *= reweight
         }
