@@ -1,9 +1,10 @@
-use cres::event::Event;
-
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
-use bzip2::read::BzDecoder;
+use crate::auto_decompress::auto_decompress;
+
+use cres::event::Event;
+
 use jetty::{anti_kt_f, kt_f, cambridge_aachen_f, cluster_if, PseudoJet};
 use hepmc2::reader::{Reader, LineParseError};
 use log::info;
@@ -104,12 +105,8 @@ impl Iterator for CombinedReader {
                     self.previous_files.len(), self.previous_files.len() + self.next_files.len()
                 );
 
-                let decoder = BzDecoder::new(BufReader::new(next_file));
-                let new_reader = Reader::from(
-                    Box::new(BufReader::new(decoder))
-                        as Box<dyn BufRead>
-                );
-                self.reader = new_reader;
+                let decoder = auto_decompress(BufReader::new(next_file));
+                self.reader = Reader::from(decoder);
                 self.next()
             } else {
                 None

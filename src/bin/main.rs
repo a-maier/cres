@@ -1,6 +1,7 @@
 mod progress_bar;
 mod hepmc;
 mod opt;
+mod auto_decompress;
 
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::hepmc::{into_event, CombinedReader};
