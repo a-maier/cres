@@ -1,6 +1,6 @@
+use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::fmt::{self, Display};
 
 use structopt::StructOpt;
 
@@ -12,7 +12,7 @@ pub(crate) enum JetAlgorithm {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct UnknownAlgorithm (String);
+pub(crate) struct UnknownAlgorithm(String);
 
 impl Display for UnknownAlgorithm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,14 +27,11 @@ impl FromStr for JetAlgorithm {
         match s {
             "anti_kt" | "antikt" | "anti-kt" => Ok(Self::AntiKt),
             "kt" => Ok(Self::Kt),
-            "Cambridge/Aachen"
-                | "Cambridge-Aachen"
-                | "Cambridge_Aachen"
-                | "cambridge/aachen"
-                | "cambridge-aachen"
-                | "cambridge_aachen"
-                => Ok(Self::CambridgeAachen),
-            _ => Err(UnknownAlgorithm(s.to_string()))
+            "Cambridge/Aachen" | "Cambridge-Aachen" | "Cambridge_Aachen"
+            | "cambridge/aachen" | "cambridge-aachen" | "cambridge_aachen" => {
+                Ok(Self::CambridgeAachen)
+            }
+            _ => Err(UnknownAlgorithm(s.to_string())),
         }
     }
 }
@@ -42,14 +39,18 @@ impl FromStr for JetAlgorithm {
 #[derive(Debug, Copy, Clone, StructOpt)]
 pub(crate) struct JetDefinition {
     /// Jet algorithm
-    #[structopt(short = "a", long, help = "Jet algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'")]
+    #[structopt(
+        short = "a",
+        long,
+        help = "Jet algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'"
+    )]
     pub jetalgorithm: JetAlgorithm,
     /// Jet radius parameter
     #[structopt(short = "R", long)]
     pub jetradius: f64,
     #[structopt(short = "p", long)]
     /// Minimum jet transverse momentum
-    pub jetpt: f64
+    pub jetpt: f64,
 }
 
 #[derive(Debug, Copy, Clone, StructOpt)]
@@ -81,7 +82,12 @@ pub(crate) struct Opt {
     pub(crate) dumpcells: bool,
 
     /// Verbosity level
-    #[structopt(short, long, default_value = "Info", help = "Verbosity level.\nPossible values with increasing amount of output are\n'off', 'error', 'warn', 'info', 'debug', 'trace'.")]
+    #[structopt(
+        short,
+        long,
+        default_value = "Info",
+        help = "Verbosity level.\nPossible values with increasing amount of output are\n'off', 'error', 'warn', 'info', 'debug', 'trace'."
+    )]
     pub(crate) loglevel: String,
 
     /// Input files

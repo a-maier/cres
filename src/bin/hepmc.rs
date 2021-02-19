@@ -5,8 +5,8 @@ use crate::auto_decompress::auto_decompress;
 
 use cres::event::Event;
 
-use jetty::{anti_kt_f, kt_f, cambridge_aachen_f, cluster_if, PseudoJet};
-use hepmc2::reader::{Reader, LineParseError};
+use hepmc2::reader::{LineParseError, Reader};
+use jetty::{anti_kt_f, cambridge_aachen_f, cluster_if, kt_f, PseudoJet};
 use log::info;
 use noisy_float::prelude::*;
 
@@ -20,17 +20,16 @@ fn is_parton(particle: &hepmc2::event::Particle) -> bool {
 const OUTGOING_STATUS: i32 = 1;
 const PID_JET: i32 = 81;
 
-fn cluster(
-    partons: Vec<PseudoJet>,
-    jet_def: &JetDefinition
-) -> Vec<PseudoJet> {
+fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
     let minpt2 = jet_def.jetpt * jet_def.jetpt;
     let cut = |jet: PseudoJet| jet.pt2() > minpt2;
     let r = jet_def.jetradius;
     match jet_def.jetalgorithm {
         JetAlgorithm::AntiKt => cluster_if(partons, &anti_kt_f(r), cut),
         JetAlgorithm::Kt => cluster_if(partons, &kt_f(r), cut),
-        JetAlgorithm::CambridgeAachen => cluster_if(partons, &cambridge_aachen_f(r), cut),
+        JetAlgorithm::CambridgeAachen => {
+            cluster_if(partons, &cambridge_aachen_f(r), cut)
+        }
     }
 }
 
@@ -42,14 +41,20 @@ pub(crate) fn into_event(
     let mut partons = Vec::new();
     res.weight = n64(*event.weights.first().unwrap());
     for vx in event.vertices {
-        let outgoing = vx.particles_out.into_iter().filter(
-            |p| p.status == OUTGOING_STATUS
-        );
+        let outgoing = vx
+            .particles_out
+            .into_iter()
+            .filter(|p| p.status == OUTGOING_STATUS);
         for out in outgoing {
             if is_parton(&out) {
                 partons.push(out.p.0.into());
             } else {
-                let p = [n64(out.p[0]), n64(out.p[1]), n64(out.p[2]), n64(out.p[3])];
+                let p = [
+                    n64(out.p[0]),
+                    n64(out.p[1]),
+                    n64(out.p[2]),
+                    n64(out.p[3]),
+                ];
                 res.add_outgoing(out.id, p.into())
             }
         }
@@ -65,7 +70,7 @@ pub(crate) fn into_event(
 pub struct CombinedReader {
     next_files: Vec<File>,
     previous_files: Vec<File>,
-    reader: Reader<Box<dyn BufRead>>
+    reader: Reader<Box<dyn BufRead>>,
 }
 
 fn empty_reader() -> Reader<Box<dyn BufRead>> {
@@ -74,7 +79,7 @@ fn empty_reader() -> Reader<Box<dyn BufRead>> {
 
 impl CombinedReader {
     pub fn new(files: Vec<File>) -> Self {
-        CombinedReader{
+        CombinedReader {
             next_files: files,
             previous_files: Vec::new(),
             reader: empty_reader(),
@@ -102,7 +107,8 @@ impl Iterator for CombinedReader {
                 self.previous_files.push(next_file.try_clone().unwrap());
                 info!(
                     "Reading from file {}/{}",
-                    self.previous_files.len(), self.previous_files.len() + self.next_files.len()
+                    self.previous_files.len(),
+                    self.previous_files.len() + self.next_files.len()
                 );
 
                 let decoder = auto_decompress(BufReader::new(next_file));

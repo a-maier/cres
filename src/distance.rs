@@ -21,11 +21,11 @@ pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
             Ordering::Less => {
                 dist += euclid_norm(&p1);
                 idx1 += 1;
-            },
+            }
             Ordering::Greater => {
                 dist += euclid_norm(&p2);
                 idx2 += 1;
-            },
+            }
             Ordering::Equal => {
                 dist += set_distance(&p1, &p2);
                 idx1 += 1;
@@ -37,9 +37,15 @@ pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
     // consume remainders
     debug_assert!(idx1 >= out1.len() || idx2 >= out2.len());
     if idx1 < out1.len() {
-        dist += out1[idx1..].iter().map(|(_t, p)| euclid_norm(p)).sum::<N64>();
+        dist += out1[idx1..]
+            .iter()
+            .map(|(_t, p)| euclid_norm(p))
+            .sum::<N64>();
     } else if idx2 < out2.len() {
-        dist += out2[idx2..].iter().map(|(_t, p)| euclid_norm(p)).sum::<N64>();
+        dist += out2[idx2..]
+            .iter()
+            .map(|(_t, p)| euclid_norm(p))
+            .sum::<N64>();
     }
     dist
 }
@@ -89,11 +95,14 @@ fn norm_ordered_paired_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
     p1.resize_with(p2.len(), FourVector::new);
     std::cmp::min(
         ordered_paired_distance_eq_size(&p1, p2),
-        ordered_paired_distance_eq_size(p2, &p1)
+        ordered_paired_distance_eq_size(p2, &p1),
     )
 }
 
-fn ordered_paired_distance_eq_size(p1: &[FourVector], p2: &[FourVector]) -> N64 {
+fn ordered_paired_distance_eq_size(
+    p1: &[FourVector],
+    p2: &[FourVector],
+) -> N64 {
     debug_assert!(p1.len() == p2.len());
     let mut dists: Vec<_> = p2.iter().map(|q| (n64(0.), q)).collect();
     let mut dist = n64(0.);
@@ -101,8 +110,8 @@ fn ordered_paired_distance_eq_size(p1: &[FourVector], p2: &[FourVector]) -> N64 
         for (dist, q) in &mut dists {
             *dist = (*p - **q).euclid_norm_sq();
         }
-        let (n, min) = dists.iter().enumerate()
-            .min_by_key(|(_n, d)| *d).unwrap();
+        let (n, min) =
+            dists.iter().enumerate().min_by_key(|(_n, d)| *d).unwrap();
         dist += min.0.sqrt();
         dists.swap_remove(n);
     }

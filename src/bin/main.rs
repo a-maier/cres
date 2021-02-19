@@ -1,26 +1,26 @@
-mod progress_bar;
+mod auto_decompress;
 mod hepmc;
 mod opt;
-mod auto_decompress;
+mod progress_bar;
 mod unweight;
 
-use crate::progress_bar::{Progress, ProgressBar};
 use crate::hepmc::{into_event, CombinedReader};
 use crate::opt::Opt;
+use crate::progress_bar::{Progress, ProgressBar};
 use crate::unweight::unweight;
 
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 use std::fs::File;
 use std::io::BufWriter;
 
 use env_logger::Env;
-use log::{debug, info, trace};
 use hepmc2::writer::Writer;
+use log::{debug, info, trace};
 use noisy_float::prelude::*;
-use rayon::prelude::*;
-use structopt::StructOpt;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
+use rayon::prelude::*;
+use structopt::StructOpt;
 
 use cres::cell::Cell;
 use cres::distance::distance;
@@ -40,7 +40,10 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
         info!(
             "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(), cell.nmembers(), cell.radius(), cell.weight_sum()
+            cell.id(),
+            cell.nmembers(),
+            cell.radius(),
+            cell.weight_sum()
         );
         for event in cell.iter() {
             res.entry(event.id).or_insert(Vec::new()).push(cell.id())
@@ -53,7 +56,10 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
         info!(
             "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(), cell.nmembers(), cell.radius(), cell.weight_sum()
+            cell.id(),
+            cell.nmembers(),
+            cell.radius(),
+            cell.weight_sum()
         );
         for event in cell.iter() {
             res.entry(event.id).or_insert(Vec::new()).push(cell.id())
@@ -67,7 +73,10 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
         info!(
             "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(), cell.nmembers(), cell.radius(), cell.weight_sum()
+            cell.id(),
+            cell.nmembers(),
+            cell.radius(),
+            cell.weight_sum()
         );
         for event in cell.iter() {
             res.entry(event.id).or_insert(Vec::new()).push(cell.id())
@@ -80,7 +89,10 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
     for cell in cells.iter().take(NUM_DUMP_CELLS) {
         info!(
             "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(), cell.nmembers(), cell.radius(), cell.weight_sum()
+            cell.id(),
+            cell.nmembers(),
+            cell.radius(),
+            cell.weight_sum()
         );
         for event in cell.iter() {
             res.entry(event.id).or_insert(Vec::new()).push(cell.id())
@@ -107,9 +119,8 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut events = Vec::new();
 
     debug!("Reading events from {:?}", opt.infiles);
-    let infiles: Result<Vec<_>, _> = opt.infiles.iter().rev().map(
-        |f| File::open(f)
-    ).collect();
+    let infiles: Result<Vec<_>, _> =
+        opt.infiles.iter().rev().map(|f| File::open(f)).collect();
     let infiles = infiles?;
     let mut reader = CombinedReader::new(infiles);
     for (id, event) in (&mut reader).enumerate() {
@@ -173,7 +184,6 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
             cell.weight_sum()
         );
         cells.push(cell);
-
 
         events = event_dists.into_par_iter().map(|(_, e)| e).collect();
         debug!("{} events left", events.len());
@@ -239,12 +249,13 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
             hepmc_event = ev.unwrap();
         }
         let old_weight = hepmc_event.weights.first().unwrap();
-        let reweight: f64 = (event.weight/old_weight).into();
+        let reweight: f64 = (event.weight / old_weight).into();
         for weight in &mut hepmc_event.weights {
             *weight *= reweight
         }
         writer.write(&hepmc_event)?;
-        let cellnums: &[usize] = dump_event_to.get(&event.id)
+        let cellnums: &[usize] = dump_event_to
+            .get(&event.id)
             .map(|v| v.as_slice())
             .unwrap_or_default();
         for cellnum in cellnums {

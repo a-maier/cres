@@ -55,7 +55,8 @@ impl Cell {
                 for event in &mut self.events {
                     event.weight = event.weight.abs();
                 }
-                let abs_weight_sum: N64 = self.events.iter().map(|e| e.weight).sum();
+                let abs_weight_sum: N64 =
+                    self.events.iter().map(|e| e.weight).sum();
                 for event in &mut self.events {
                     event.weight *= orig_weight_sum / abs_weight_sum;
                 }
@@ -82,7 +83,6 @@ impl Cell {
     pub fn par_iter(&self) -> rayon::slice::Iter<Event> {
         self.events.par_iter()
     }
-
 }
 
 impl std::convert::From<Cell> for Vec<Event> {

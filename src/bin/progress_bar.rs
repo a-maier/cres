@@ -43,10 +43,7 @@ impl Progress for ProgressBar {
 }
 
 impl ProgressBar {
-    pub(crate) fn new(
-        len: u64,
-        message: &str
-    ) -> Self {
+    pub(crate) fn new(len: u64, message: &str) -> Self {
         if log::max_level().to_level() != Some(log::Level::Info) {
             ProgressBar::default()
         } else if console::Term::stderr().features().is_attended() {
@@ -59,14 +56,15 @@ impl ProgressBar {
     fn indicatif(len: u64, message: &str) -> Self {
         let bar = indicatif::ProgressBar::new(len);
         bar.set_style(
-            indicatif::ProgressStyle::default_bar().template(
-                "{bar:60.cyan/cyan} {msg} {pos}/{len} [{elapsed}]"
-            )
+            indicatif::ProgressStyle::default_bar()
+                .template("{bar:60.cyan/cyan} {msg} {pos}/{len} [{elapsed}]"),
         );
         bar.set_message(message);
         // temporarily disable logging to not overwrite the bar
         log::set_max_level(log::LevelFilter::Off);
-        ProgressBar{bar: Some(Box::new(bar))}
+        ProgressBar {
+            bar: Some(Box::new(bar)),
+        }
     }
 
     fn logbar(len: u64, message: &str) -> Self {
@@ -75,6 +73,8 @@ impl ProgressBar {
         let bar = logbar::ProgressBar::with_style(len as usize, style);
         // temporarily disable logging to not overwrite the bar
         log::set_max_level(log::LevelFilter::Off);
-        ProgressBar{bar: Some(Box::new(bar))}
+        ProgressBar {
+            bar: Some(Box::new(bar)),
+        }
     }
 }
