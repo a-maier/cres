@@ -1,7 +1,7 @@
 mod progress_bar;
 mod hepmc;
 
-use crate::progress_bar::get_progress_bar;
+use crate::progress_bar::{Progress, ProgressBar};
 use crate::hepmc::{from, CombinedReader};
 
 use std::fs::File;
@@ -53,7 +53,7 @@ fn main() {
     );
 
     let nneg_weight = events.iter().filter(|e| e.weight < 0.).count();
-    let mut progress = get_progress_bar(nneg_weight as u64, "events treated:");
+    let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
 
     let mut cells = Vec::new();
     while let Some((n, _)) =
@@ -87,8 +87,7 @@ fn main() {
             );
             cell.push_with_dist(event, dist)
         }
-        progress.as_mut()
-            .map(|p| p.inc(cell.iter().filter(|e| e.weight < 0.).count() as u64));
+        progress.inc(cell.iter().filter(|e| e.weight < 0.).count() as u64);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
             cell.nmembers(),
@@ -101,7 +100,7 @@ fn main() {
         events = event_dists.into_par_iter().map(|(_, e)| e).collect();
         debug!("{} events left", events.len());
     }
-    progress.map(|p| p.finish());
+    progress.finish();
     info!("Created {} cells", cells.len());
     info!("Median radius: {}", median_radius(&cells));
 
@@ -119,6 +118,7 @@ fn main() {
     let outfile = File::create(outfile).unwrap();
     let mut writer = Writer::try_from(outfile).unwrap();
     let mut hepmc_events = reader.enumerate();
+    let progress = ProgressBar::new(events.len() as u64, "events written:");
     for event in events {
         let (hepmc_id, hepmc_event) = hepmc_events.next().unwrap();
         let mut hepmc_event = hepmc_event.unwrap();
@@ -137,5 +137,8 @@ fn main() {
             *weight *= reweight
         }
         writer.write(&hepmc_event).unwrap();
+        progress.inc(1);
     }
+    progress.finish();
+    info!("done");
 }

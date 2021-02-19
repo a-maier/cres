@@ -1,9 +1,9 @@
-pub(crate) trait ProgressBar {
+pub(crate) trait Progress {
     fn inc(&self, i: u64);
     fn finish(&self);
 }
 
-impl ProgressBar for indicatif::ProgressBar {
+impl Progress for indicatif::ProgressBar {
     fn inc(&self, i: u64) {
         indicatif::ProgressBar::inc(&self, i)
     }
@@ -13,7 +13,7 @@ impl ProgressBar for indicatif::ProgressBar {
     }
 }
 
-impl ProgressBar for logbar::ProgressBar {
+impl Progress for logbar::ProgressBar {
     fn inc(&self, i: u64) {
         logbar::ProgressBar::inc(&self, i as usize)
     }
@@ -23,28 +23,58 @@ impl ProgressBar for logbar::ProgressBar {
     }
 }
 
-pub(crate) fn get_progress_bar(
-    len: u64,
-    message: &str
-) -> Option<Box<dyn ProgressBar>>
-{
-    if log::max_level().to_level() != Some(log::Level::Info) {
-        return None;
+#[derive(Default)]
+pub(crate) struct ProgressBar {
+    bar: Option<Box<dyn Progress>>,
+}
+
+impl Progress for ProgressBar {
+    fn inc(&self, i: u64) {
+        self.bar.as_ref().map(|b| b.inc(i));
     }
-    if console::Term::stderr().features().is_attended() {
-        let progress = indicatif::ProgressBar::new(len);
-        progress.set_style(
+
+    fn finish(&self) {
+        self.bar.as_ref().map(|p| p.finish());
+        if self.bar.is_some() {
+            // restore logging
+            log::set_max_level(log::LevelFilter::Info);
+        }
+    }
+}
+
+impl ProgressBar {
+    pub(crate) fn new(
+        len: u64,
+        message: &str
+    ) -> Self {
+        if log::max_level().to_level() != Some(log::Level::Info) {
+            ProgressBar::default()
+        } else if console::Term::stderr().features().is_attended() {
+            ProgressBar::indicatif(len, message)
+        } else {
+            ProgressBar::logbar(len, message)
+        }
+    }
+
+    fn indicatif(len: u64, message: &str) -> Self {
+        let bar = indicatif::ProgressBar::new(len);
+        bar.set_style(
             indicatif::ProgressStyle::default_bar().template(
                 "{bar:60.cyan/cyan} {msg} {pos}/{len} [{elapsed}]"
             )
         );
-        progress.set_message(message);
-        Some(Box::new(progress))
+        bar.set_message(message);
+        // temporarily disable logging to not overwrite the bar
+        log::set_max_level(log::LevelFilter::Off);
+        ProgressBar{bar: Some(Box::new(bar))}
     }
-    else {
+
+    fn logbar(len: u64, message: &str) -> Self {
         let style = logbar::Style::new().indicator('█');
         eprintln!("{}", message);
-        let progress = logbar::ProgressBar::with_style(len as usize, style);
-        Some(Box::new(progress))
+        let bar = logbar::ProgressBar::with_style(len as usize, style);
+        // temporarily disable logging to not overwrite the bar
+        log::set_max_level(log::LevelFilter::Off);
+        ProgressBar{bar: Some(Box::new(bar))}
     }
 }
