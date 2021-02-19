@@ -23,12 +23,13 @@ fn cluster(
     partons: Vec<PseudoJet>,
     jet_def: &JetDefinition
 ) -> Vec<PseudoJet> {
-    let minpt2 = jet_def.minpt * jet_def.minpt;
+    let minpt2 = jet_def.jetpt * jet_def.jetpt;
     let cut = |jet: PseudoJet| jet.pt2() > minpt2;
-    match jet_def.algo {
-        JetAlgorithm::AntiKt => cluster_if(partons, &anti_kt_f(jet_def.r), cut),
-        JetAlgorithm::Kt => cluster_if(partons, &kt_f(jet_def.r), cut),
-        JetAlgorithm::CambridgeAachen => cluster_if(partons, &cambridge_aachen_f(jet_def.r), cut),
+    let r = jet_def.jetradius;
+    match jet_def.jetalgorithm {
+        JetAlgorithm::AntiKt => cluster_if(partons, &anti_kt_f(r), cut),
+        JetAlgorithm::Kt => cluster_if(partons, &kt_f(r), cut),
+        JetAlgorithm::CambridgeAachen => cluster_if(partons, &cambridge_aachen_f(r), cut),
     }
 }
 

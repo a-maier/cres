@@ -39,10 +39,9 @@ fn main() {
         |f| File::open(f).unwrap()
     ).collect();
     let mut reader = CombinedReader::new(infiles);
-    let jet_def = opt.jet_def();
     for (id, event) in (&mut reader).enumerate() {
         trace!("read event {}", id);
-        let mut event = into_event(event.unwrap(), &jet_def);
+        let mut event = into_event(event.unwrap(), &opt.jet_def);
         event.id = id;
         events.push(event);
     }

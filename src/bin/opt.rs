@@ -5,13 +5,6 @@ use std::fmt::{self, Display};
 use structopt::StructOpt;
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct JetDefinition {
-    pub algo: JetAlgorithm,
-    pub r: f64,
-    pub minpt: f64
-}
-
-#[derive(Debug, Copy, Clone)]
 pub(crate) enum JetAlgorithm {
     AntiKt,
     CambridgeAachen,
@@ -46,25 +39,21 @@ impl FromStr for JetAlgorithm {
     }
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "cres", about = "Make event weights positive")]
-pub(crate) struct Opt {
-    /// Output file
-    #[structopt(long, short, parse(from_os_str))]
-    pub(crate) outfile: PathBuf,
-
+#[derive(Debug, Copy, Clone, StructOpt)]
+pub(crate) struct JetDefinition {
     /// Jet algorithm
     #[structopt(short = "a", long, help = "Jet algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'")]
-    pub(crate) jetalgorithm: JetAlgorithm,
-
+    pub jetalgorithm: JetAlgorithm,
     /// Jet radius parameter
     #[structopt(short = "R", long)]
-    pub(crate) jetradius: f64,
-
-    /// Minimum jet transverse momentum
+    pub jetradius: f64,
     #[structopt(short = "p", long)]
-    pub(crate) jetpt: f64,
+    /// Minimum jet transverse momentum
+    pub jetpt: f64
+}
 
+#[derive(Debug, Copy, Clone, StructOpt)]
+pub(crate) struct UnweightOpt {
     /// Weight below which events are unweighted
     #[structopt(short = "w", long, default_value = "0.")]
     pub(crate) minweight: f64,
@@ -72,6 +61,20 @@ pub(crate) struct Opt {
     /// Random number generator seed for unweighting
     #[structopt(short, long, default_value = "0")]
     pub(crate) seed: u64,
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "cres", about = "Make event weights positive")]
+pub(crate) struct Opt {
+    /// Output file
+    #[structopt(long, short, parse(from_os_str))]
+    pub(crate) outfile: PathBuf,
+
+    #[structopt(flatten)]
+    pub(crate) jet_def: JetDefinition,
+
+    #[structopt(flatten)]
+    pub(crate) unweight: UnweightOpt,
 
     /// Whether to dump selected cells of interest
     #[structopt(short = "c", long)]
@@ -84,14 +87,4 @@ pub(crate) struct Opt {
     /// Input files
     #[structopt(name = "INFILES", parse(from_os_str))]
     pub(crate) infiles: Vec<PathBuf>,
-}
-
-impl Opt {
-    pub fn jet_def(&self) -> JetDefinition {
-        JetDefinition {
-            algo: self.jetalgorithm,
-            r: self.jetradius,
-            minpt: self.jetpt,
-        }
-    }
 }
