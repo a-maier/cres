@@ -2,7 +2,7 @@ mod progress_bar;
 mod hepmc;
 
 use crate::progress_bar::get_progress_bar;
-use crate::hepmc::{from, CombinedReader};
+use crate::hepmc::{from, CombinedReader, Writer};
 
 use log::{debug, info, trace};
 use std::fs::File;
@@ -28,16 +28,17 @@ fn main() {
 
     let mut events = Vec::new();
 
-    info!("Reading events from {:?}", &args[1..args.len() - 1]);
-    let infiles = args[1..args.len() - 1].into_iter().rev().map(
+    let (outfile, infiles) = &args[1..].split_last().unwrap();
+    debug!("Reading events from {:?}", infiles);
+    let infiles = infiles.iter().rev().map(
         |f| File::open(f).unwrap()
     ).collect();
-    let reader = CombinedReader::new(infiles);
-    for (id, event) in reader.enumerate() {
+    let mut reader = CombinedReader::new(infiles);
+    for (id, event) in (&mut reader).enumerate() {
         trace!("read event {}", id);
         let mut event = from(event.unwrap());
         event.id = id;
-        events.push(event)
+        events.push(event);
     }
 
     let mut writer = File::create(args.last().unwrap()).unwrap();
@@ -114,8 +115,27 @@ fn main() {
     }
     events.par_sort_unstable();
 
-    info!("Writing output...");
+    info!("Writing output to {}", outfile);
+    reader.rewind().unwrap();
+    let writer = Writer::try_from(outfile).unwrap();
+    let mut hepmc_events = reader.enumerate();
     for event in events {
-        writeln!(writer, "{} {:e}", event.id, event.weight).unwrap();
+        let (hepmc_id, hepmc_event) = hepmc_events.next().unwrap();
+        let mut hepmc_event = hepmc_event.unwrap();
+        if hepmc_id < event.id {
+            for _ in hepmc_id..event.id {
+                let (_, ev) = hepmc_events.next().unwrap();
+                ev.unwrap();
+            }
+            let (id, ev) = hepmc_events.next().unwrap();
+            debug_assert_eq!(id, event.id);
+            hepmc_event = ev.unwrap();
+        }
+        let old_weight = hepmc_event.weights.first().unwrap();
+        let reweight = (event.weight/old_weight).into();
+        for weight in &mut hepmc_event.weights {
+            *weight *= reweight
+        }
+        writer.write(&hepmc_event).unwrap();
     }
 }

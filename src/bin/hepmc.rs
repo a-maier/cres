@@ -1,7 +1,7 @@
 use cres::event::Event;
 
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
 use bzip2::read::BzDecoder;
 use jetty::{anti_kt_f, cluster_if};
@@ -48,13 +48,27 @@ pub struct CombinedReader {
     reader: Reader<Box<dyn BufRead>>
 }
 
+fn empty_reader() -> Reader<Box<dyn BufRead>> {
+    Reader::new(Box::new(BufReader::new(std::io::empty())))
+}
+
 impl CombinedReader {
     pub fn new(files: Vec<File>) -> Self {
         CombinedReader{
             next_files: files,
             previous_files: Vec::new(),
-            reader: Reader::new(Box::new(BufReader::new(std::io::empty()))),
+            reader: empty_reader(),
         }
+    }
+
+    pub fn rewind(&mut self) -> Result<(), std::io::Error> {
+        self.previous_files.reverse();
+        self.next_files.append(&mut self.previous_files);
+        for file in &mut self.next_files {
+            file.seek(SeekFrom::Start(0))?;
+        }
+        self.reader = empty_reader();
+        Ok(())
     }
 }
 
