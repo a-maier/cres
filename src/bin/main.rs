@@ -9,7 +9,7 @@ use crate::hepmc::{into_event, CombinedReader};
 use crate::opt::Opt;
 use crate::unweight::unweight;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::fs::File;
 use std::io::BufWriter;
 
@@ -92,6 +92,12 @@ fn select_dump_cells(cells: &mut [Cell]) -> HashMap<usize, Vec<usize>> {
 }
 
 fn main() {
+    if let Err(err) = run_main() {
+        eprintln!("ERROR: {}", err)
+    }
+}
+
+fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
@@ -101,13 +107,14 @@ fn main() {
     let mut events = Vec::new();
 
     debug!("Reading events from {:?}", opt.infiles);
-    let infiles = opt.infiles.iter().rev().map(
-        |f| File::open(f).unwrap()
+    let infiles: Result<Vec<_>, _> = opt.infiles.iter().rev().map(
+        |f| File::open(f)
     ).collect();
+    let infiles = infiles?;
     let mut reader = CombinedReader::new(infiles);
     for (id, event) in (&mut reader).enumerate() {
         trace!("read event {}", id);
-        let mut event = into_event(event.unwrap(), &opt.jet_def);
+        let mut event = into_event(event?, &opt.jet_def);
         event.id = id;
         events.push(event);
     }
@@ -206,19 +213,17 @@ fn main() {
     );
 
     info!("Writing {} events to {:?}", events.len(), opt.outfile);
-    reader.rewind().unwrap();
-    let outfile = BufWriter::new(File::create(opt.outfile).unwrap());
+    reader.rewind()?;
+    let outfile = BufWriter::new(File::create(opt.outfile)?);
     let mut cell_writers = HashMap::new();
     for cellnr in dump_event_to.values().flatten() {
-        cell_writers.entry(cellnr).or_insert(
-            Writer::try_from(
-                BufWriter::new(File::create(
-                    format!("cell{}.hepmc", cellnr)
-                ).unwrap())
-            ).unwrap()
-        );
+        if let Entry::Vacant(entry) = cell_writers.entry(cellnr) {
+            let file = File::create(format!("cell{}.hepmc", cellnr))?;
+            let writer = Writer::try_from(BufWriter::new(file))?;
+            entry.insert(writer);
+        }
     }
-    let mut writer = Writer::try_from(outfile).unwrap();
+    let mut writer = Writer::try_from(outfile)?;
     let mut hepmc_events = reader.enumerate();
     let progress = ProgressBar::new(events.len() as u64, "events written:");
     for event in events {
@@ -238,16 +243,17 @@ fn main() {
         for weight in &mut hepmc_event.weights {
             *weight *= reweight
         }
-        writer.write(&hepmc_event).unwrap();
+        writer.write(&hepmc_event)?;
         let cellnums: &[usize] = dump_event_to.get(&event.id)
             .map(|v| v.as_slice())
             .unwrap_or_default();
         for cellnum in cellnums {
             let cell_writer = cell_writers.get_mut(cellnum).unwrap();
-            cell_writer.write(&hepmc_event).unwrap();
+            cell_writer.write(&hepmc_event)?;
         }
         progress.inc(1);
     }
     progress.finish();
     info!("done");
+    Ok(())
 }
