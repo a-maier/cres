@@ -26,8 +26,7 @@ use cres::cell::Cell;
 use cres::distance::distance;
 // use cres::parser::parse_event;
 
-fn median_radius(cells: &[Cell]) -> N64 {
-    let mut radii: Vec<_> = cells.iter().map(|c| c.radius()).collect();
+fn median_radius(radii: &mut [N64]) -> N64 {
     radii.sort_unstable();
     radii[radii.len() / 2]
 }
@@ -73,11 +72,11 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let nneg_weight = events.iter().filter(|e| e.weight < 0.).count();
     let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
 
-    let mut cells = Vec::new();
+    let mut cell_radii = Vec::new();
     while let Some((n, _)) =
         events.par_iter().enumerate().min_by_key(|(_n, e)| e.weight)
     {
-        if events[n].weight > 0. {
+        if events[n].weight >= 0. {
             break;
         }
         let seed = events.swap_remove(n);
@@ -112,21 +111,22 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
             cell.radius(),
             cell.weight_sum()
         );
-        cells.push(cell);
+        cell_radii.push(cell.radius());
+        cell.resample();
+        let cell_events: Vec<_> = cell.into();
 
-        events = event_dists.into_par_iter().map(|(_, e)| e).collect();
+        events = event_dists.into_par_iter().map(|(_, e)| e)
+            .chain(cell_events.into_par_iter())
+            .collect();
         debug!("{} events left", events.len());
     }
     progress.finish();
-    info!("Created {} cells", cells.len());
-    info!("Median radius: {}", median_radius(&cells));
+    info!("Created {} cells", cell_radii.len());
+    info!("Median radius: {}", median_radius(cell_radii.as_mut_slice()));
 
     let dump_event_to: HashMap<usize, _> = HashMap::new();
 
     info!("Collecting and sorting events");
-    for cell in cells {
-        events.append(&mut cell.into());
-    }
     events.par_sort_unstable();
 
     if opt.unweight.minweight > 0.0 {
