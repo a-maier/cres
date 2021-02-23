@@ -87,7 +87,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|e| (distance(&e, &seed), e))
             .collect();
 
-        let mut cell = Cell::from_seed(cells.len(), seed);
+        let mut cell = Cell::from_seed(seed);
         debug!("Cell seed with weight {:e}", cell.weight_sum());
 
         while cell.weight_sum() < 0. {
