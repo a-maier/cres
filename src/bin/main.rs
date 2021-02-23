@@ -17,7 +17,7 @@ use env_logger::Env;
 use hepmc2::writer::Writer;
 use log::{debug, info, trace};
 use noisy_float::prelude::*;
-use rand::{Rng, SeedableRng, seq::SliceRandom};
+use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use structopt::StructOpt;
@@ -30,94 +30,6 @@ fn median_radius(cells: &[Cell]) -> N64 {
     let mut radii: Vec<_> = cells.iter().map(|c| c.radius()).collect();
     radii.sort_unstable();
     radii[radii.len() / 2]
-}
-
-const NUM_DUMP_CELLS: usize = 10;
-
-fn select_dump_cells<R: Rng>(
-    cells: &mut [Cell],
-    mut rng: R,
-) -> HashMap<usize, Vec<usize>> {
-    let mut res: HashMap<_, Vec<_>> = HashMap::new();
-    info!("Cells by creation order:");
-    for cell in cells.iter().take(NUM_DUMP_CELLS) {
-        info!(
-            "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(),
-            cell.nmembers(),
-            cell.radius(),
-            cell.weight_sum()
-        );
-        for event in cell.iter() {
-            res.entry(event.id).or_default().push(cell.id())
-        }
-    }
-
-    info!("Largest cells by radius:");
-    cells.select_nth_unstable_by_key(NUM_DUMP_CELLS - 1, |c| -c.radius());
-    cells[..NUM_DUMP_CELLS].sort_unstable_by_key(|c| -c.radius());
-    for cell in cells.iter().take(NUM_DUMP_CELLS) {
-        info!(
-            "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(),
-            cell.nmembers(),
-            cell.radius(),
-            cell.weight_sum()
-        );
-        for event in cell.iter() {
-            res.entry(event.id).or_default().push(cell.id())
-        }
-    }
-
-    info!("Largest cells by number of events:");
-    let cmp = |c1: &Cell, c2: &Cell| c2.nmembers().cmp(&c1.nmembers());
-    cells.select_nth_unstable_by(NUM_DUMP_CELLS - 1, cmp);
-    cells[..NUM_DUMP_CELLS].sort_unstable_by(cmp);
-    for cell in cells.iter().take(NUM_DUMP_CELLS) {
-        info!(
-            "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(),
-            cell.nmembers(),
-            cell.radius(),
-            cell.weight_sum()
-        );
-        for event in cell.iter() {
-            res.entry(event.id).or_default().push(cell.id())
-        }
-    }
-
-    info!("Cells with largest accumulated weights:");
-    cells.select_nth_unstable_by_key(NUM_DUMP_CELLS - 1, |c| -c.weight_sum());
-    cells[..NUM_DUMP_CELLS].sort_unstable_by_key(|c| -c.weight_sum());
-    for cell in cells.iter().take(NUM_DUMP_CELLS) {
-        info!(
-            "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(),
-            cell.nmembers(),
-            cell.radius(),
-            cell.weight_sum()
-        );
-        for event in cell.iter() {
-            res.entry(event.id).or_default().push(cell.id())
-        }
-    }
-
-    info!("Randomly selected cells:");
-    for cell in cells.choose_multiple(&mut rng, NUM_DUMP_CELLS) {
-        info!(
-            "Cell {} with {} events and radius {} and weight {:e}",
-            cell.id(),
-            cell.nmembers(),
-            cell.radius(),
-            cell.weight_sum()
-        );
-        for event in cell.iter() {
-            res.entry(event.id).or_default().push(cell.id())
-        }
-    }
-
-    //TODO: info!("Randomly selected cells:");
-    res
 }
 
 fn main() {
@@ -209,15 +121,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Created {} cells", cells.len());
     info!("Median radius: {}", median_radius(&cells));
 
-    info!("Resampling");
-    cells.par_iter_mut().for_each(|cell| cell.resample());
-
-    let dump_event_to = if opt.dumpcells {
-        let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
-        select_dump_cells(&mut cells, &mut rng)
-    } else {
-        HashMap::new()
-    };
+    let dump_event_to: HashMap<usize, _> = HashMap::new();
 
     info!("Collecting and sorting events");
     for cell in cells {
@@ -274,7 +178,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         writer.write(&hepmc_event)?;
         let cellnums: &[usize] = dump_event_to
             .get(&event.id)
-            .map(|v| v.as_slice())
+            .map(|v: &Vec<usize>| v.as_slice())
             .unwrap_or_default();
         for cellnum in cellnums {
             let cell_writer = cell_writers.get_mut(cellnum).unwrap();
