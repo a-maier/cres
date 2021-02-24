@@ -282,6 +282,10 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         }
         progress.inc(1);
     }
+    writer.finish()?;
+    for (_, cell_writer) in cell_writers {
+        cell_writer.finish()?;
+    }
     progress.finish();
     info!("done");
     Ok(())
