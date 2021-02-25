@@ -84,15 +84,15 @@ impl CellCollector {
             info!("Cell {} with {} events", id, events.len());
         }
         info!("Largest cells by radius:");
-        for (r, (id, events)) in &self.largest_by_radius {
+        for (r, (id, events)) in self.largest_by_radius.iter().rev() {
             info!("Cell {} with {} events and radius {}", id, events.len(), r);
         }
         info!("Largest cells by number of events:");
-        for (_, (id, events)) in &self.largest_by_members {
+        for (_, (id, events)) in self.largest_by_members.iter().rev() {
             info!("Cell {} with {} events", id, events.len());
         }
         info!("Cells with largest accumulated weights:");
-        for (weight, (id, events)) in &self.largest_by_weight {
+        for (weight, (id, events)) in self.largest_by_weight.iter().rev() {
             info!("Cell {} with {} events and weight {:e}", id, events.len(), weight);
         }
         info!("Randomly selected cells:");
