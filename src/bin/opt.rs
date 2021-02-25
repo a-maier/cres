@@ -12,16 +12,16 @@ pub(crate) enum JetAlgorithm {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct UnknownAlgorithm(String);
+pub(crate) struct UnknownJetAlgorithm(String);
 
-impl Display for UnknownAlgorithm {
+impl Display for UnknownJetAlgorithm {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Unknown jet algorithm: {}", self.0)
     }
 }
 
 impl FromStr for JetAlgorithm {
-    type Err = UnknownAlgorithm;
+    type Err = UnknownJetAlgorithm;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -31,7 +31,38 @@ impl FromStr for JetAlgorithm {
             | "cambridge/aachen" | "cambridge-aachen" | "cambridge_aachen" => {
                 Ok(Self::CambridgeAachen)
             }
-            _ => Err(UnknownAlgorithm(s.to_string())),
+            _ => Err(UnknownJetAlgorithm(s.to_string())),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum Compression {
+    Bzip2,
+    Gzip,
+    Lz4,
+    Zstd,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UnknownCompressionAlgorithm(String);
+
+impl Display for UnknownCompressionAlgorithm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unknown compression algorithm: {}", self.0)
+    }
+}
+
+impl FromStr for Compression {
+    type Err = UnknownCompressionAlgorithm;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "bzip2" | "bz2" => Ok(Self::Bzip2),
+            "gzip" | "gz" => Ok(Self::Gzip),
+            "lz4" => Ok(Self::Lz4),
+            "zstd" | "zstandard" => Ok(Self::Zstd),
+            _ => Err(UnknownCompressionAlgorithm(s.to_string())),
         }
     }
 }
@@ -78,8 +109,11 @@ pub(crate) struct Opt {
     pub(crate) unweight: UnweightOpt,
 
     /// Whether to dump selected cells of interest
-    #[structopt(short = "c", long)]
+    #[structopt(short = "d", long)]
     pub(crate) dumpcells: bool,
+
+    #[structopt(short = "c", long, help = "Compress output file. Possible values are\n'bzip2', 'gzip', 'zstd', 'lz4'")]
+    pub(crate) compression: Option<Compression>,
 
     /// Verbosity level
     #[structopt(
