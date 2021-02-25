@@ -73,38 +73,50 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
 
     let mut cell_radii = Vec::new();
+    let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
     while let Some((n, _)) =
-        events.par_iter().enumerate().min_by_key(|(_n, e)| e.weight)
+        events.par_iter().enumerate().min_by_key(|(_n, (_dist, e))| e.weight)
     {
-        if events[n].weight >= 0. {
+        let mut cell_weight = events[n].1.weight;
+        if cell_weight >= 0. {
             break;
         }
-        let seed = events.swap_remove(n);
+        debug!("Cell seed with weight {:e}", cell_weight);
 
-        let mut event_dists: Vec<_> = events
-            .into_par_iter()
-            .map(|e| (distance(&e, &seed), e))
-            .collect();
+        let last_idx = events.len() - 1;
+        events.swap(n, last_idx);
+        let (mut seed, mut rest) = events.split_last_mut().unwrap();
+        seed.0 = n64(0.);
+        let seed = seed;
 
-        let mut cell = Cell::from_seed(seed);
-        debug!("Cell seed with weight {:e}", cell.weight_sum());
+        rest.par_iter_mut().for_each(
+            |(dist, e)| *dist = distance(e, &seed.1)
+        );
 
-        while cell.weight_sum() < 0. {
-            let nearest = event_dists
+        while cell_weight < 0. {
+            let nearest = rest
                 .par_iter()
                 .enumerate()
-                .min_by_key(|(_n, (d, _e))| d);
-            let nearest_idx =
-                if let Some((n, _)) = nearest { n } else { break };
-            let (dist, event) = event_dists.swap_remove(nearest_idx);
-            trace!(
-                "adding event with distance {}, weight {:e} to cell",
-                dist,
-                event.weight
-            );
-            cell.push_with_dist(event, dist)
+                .min_by_key(|(_idx, (dist, _event))| dist);
+            let nearest_idx = if let Some((idx, (dist, event))) = nearest {
+                trace!(
+                    "adding event with distance {}, weight {:e} to cell",
+                    dist,
+                    event.weight
+                );
+                cell_weight += event.weight;
+                idx
+            } else {
+                break
+            };
+            rest.swap(nearest_idx, rest.len() - 1);
+            let last_idx = rest.len() - 1;
+            rest = &mut rest[..last_idx];
         }
-        progress.inc(cell.iter().filter(|e| e.weight < 0.).count() as u64);
+        let rest_len = rest.len();
+        let cell = &mut events[rest_len..];
+        let mut cell = Cell::with_weight_sum_unchecked(cell, cell_weight);
+        progress.inc(cell.nneg_weights() as u64);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
             cell.nmembers(),
@@ -113,12 +125,6 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         );
         cell_radii.push(cell.radius());
         cell.resample();
-        let cell_events: Vec<_> = cell.into();
-
-        events = event_dists.into_par_iter().map(|(_, e)| e)
-            .chain(cell_events.into_par_iter())
-            .collect();
-        debug!("{} events left", events.len());
     }
     progress.finish();
     info!("Created {} cells", cell_radii.len());
@@ -127,6 +133,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let dump_event_to: HashMap<usize, _> = HashMap::new();
 
     info!("Collecting and sorting events");
+    let mut events: Vec<_> = events.into_par_iter().map(|(_dist, event)| event).collect();
     events.par_sort_unstable();
 
     if opt.unweight.minweight > 0.0 {
@@ -135,8 +142,8 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         unweight(&mut events, opt.unweight.minweight, &mut rng);
     }
 
-    let final_sum_wt: N64 = events.iter().map(|e| e.weight).sum();
-    let final_sum_wt2: N64 = events.iter().map(|e| e.weight * e.weight).sum();
+    let final_sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
+    let final_sum_wt2: N64 = events.par_iter().map(|e| e.weight * e.weight).sum();
 
     info!(
         "Final sum of weights: {:e} ± {:e}",
