@@ -3,11 +3,13 @@ mod hepmc;
 mod opt;
 mod progress_bar;
 mod unweight;
+mod cell_collector;
 
 use crate::hepmc::{into_event, CombinedReader};
 use crate::opt::Opt;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::unweight::unweight;
+use crate::cell_collector::CellCollector;
 
 use std::collections::{hash_map::Entry, HashMap};
 use std::fs::File;
@@ -73,6 +75,8 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
 
     let mut cell_radii = Vec::new();
+    let mut cell_collector = CellCollector::new();
+    let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
     while let Some((mut cell, _)) = Cell::new(&mut events, distance) {
         progress.inc(cell.nneg_weights() as u64);
@@ -84,12 +88,14 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         );
         cell_radii.push(cell.radius());
         cell.resample();
+        if opt.dumpcells { cell_collector.collect(&cell, &mut rng); }
     }
     progress.finish();
     info!("Created {} cells", cell_radii.len());
     info!("Median radius: {}", median_radius(cell_radii.as_mut_slice()));
 
-    let dump_event_to: HashMap<usize, _> = HashMap::new();
+    if opt.dumpcells { cell_collector.dump_info(); }
+    let dump_event_to = cell_collector.event_cells();
 
     info!("Collecting and sorting events");
     let mut events: Vec<_> = events.into_par_iter().map(|(_dist, event)| event).collect();
@@ -97,7 +103,6 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
 
     if opt.unweight.minweight > 0.0 {
         info!("Unweight to minimum weight {:e}", opt.unweight.minweight);
-        let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
         unweight(&mut events, opt.unweight.minweight, &mut rng);
     }
 
