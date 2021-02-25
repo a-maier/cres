@@ -70,9 +70,10 @@ impl CellCollector {
                 self.largest_by_weight.insert(weight, (count, events));
             }
             let distr = Uniform::from(0..=count);
-            if distr.sample(&mut rng) == count {
+            let idx = distr.sample(&mut rng);
+            if idx < self.random.len() {
                 let events = cell.iter().map(|(_d, e)| e.id).collect();
-                *self.random.choose_mut(&mut rng).unwrap() = (count, events)
+                self.random[idx] = (count, events);
             }
         }
         self.count += 1;
