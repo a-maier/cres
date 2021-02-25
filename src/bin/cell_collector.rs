@@ -6,7 +6,6 @@ use noisy_float::prelude::*;
 use log::info;
 use rand::{
     distributions::{Distribution, Uniform},
-    prelude::SliceRandom,
     Rng,
 };
 
