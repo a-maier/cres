@@ -4,12 +4,14 @@ mod opt;
 mod progress_bar;
 mod unweight;
 mod cell_collector;
+mod writer;
 
 use crate::hepmc::{into_event, CombinedReader};
 use crate::opt::Opt;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::unweight::unweight;
 use crate::cell_collector::CellCollector;
+use crate::writer::make_writer;
 
 use std::collections::{hash_map::Entry, HashMap};
 use std::fs::File;
@@ -117,12 +119,14 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Writing {} events to {:?}", events.len(), opt.outfile);
     reader.rewind()?;
-    let outfile = BufWriter::new(File::create(opt.outfile)?);
+    let outfile = File::create(opt.outfile)?;
+    let outfile = make_writer(BufWriter::new(outfile), opt.compression)?;
     let mut cell_writers = HashMap::new();
     for cellnr in dump_event_to.values().flatten() {
         if let Entry::Vacant(entry) = cell_writers.entry(cellnr) {
             let file = File::create(format!("cell{}.hepmc", cellnr))?;
-            let writer = Writer::try_from(BufWriter::new(file))?;
+            let writer = make_writer(BufWriter::new(file), opt.compression)?;
+            let writer = Writer::try_from(writer)?;
             entry.insert(writer);
         }
     }

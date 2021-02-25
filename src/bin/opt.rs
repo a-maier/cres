@@ -112,7 +112,7 @@ pub(crate) struct Opt {
     #[structopt(short = "d", long)]
     pub(crate) dumpcells: bool,
 
-    #[structopt(short = "c", long, help = "Compress output file. Possible values are\n'bzip2', 'gzip', 'zstd', 'lz4'")]
+    #[structopt(short = "c", long, help = "Compress output file.\nPossible settings are 'bzip2', 'gzip', 'zstd', 'lz4'")]
     pub(crate) compression: Option<Compression>,
 
     /// Verbosity level
