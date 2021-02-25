@@ -74,48 +74,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut cell_radii = Vec::new();
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
-    while let Some((n, _)) =
-        events.par_iter().enumerate().min_by_key(|(_n, (_dist, e))| e.weight)
-    {
-        let mut cell_weight = events[n].1.weight;
-        if cell_weight >= 0. {
-            break;
-        }
-        debug!("Cell seed with weight {:e}", cell_weight);
-
-        let last_idx = events.len() - 1;
-        events.swap(n, last_idx);
-        let (mut seed, mut rest) = events.split_last_mut().unwrap();
-        seed.0 = n64(0.);
-        let seed = seed;
-
-        rest.par_iter_mut().for_each(
-            |(dist, e)| *dist = distance(e, &seed.1)
-        );
-
-        while cell_weight < 0. {
-            let nearest = rest
-                .par_iter()
-                .enumerate()
-                .min_by_key(|(_idx, (dist, _event))| dist);
-            let nearest_idx = if let Some((idx, (dist, event))) = nearest {
-                trace!(
-                    "adding event with distance {}, weight {:e} to cell",
-                    dist,
-                    event.weight
-                );
-                cell_weight += event.weight;
-                idx
-            } else {
-                break
-            };
-            rest.swap(nearest_idx, rest.len() - 1);
-            let last_idx = rest.len() - 1;
-            rest = &mut rest[..last_idx];
-        }
-        let rest_len = rest.len();
-        let cell = &mut events[rest_len..];
-        let mut cell = Cell::with_weight_sum_unchecked(cell, cell_weight);
+    while let Some((mut cell, _)) = Cell::new(&mut events, distance) {
         progress.inc(cell.nneg_weights() as u64);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",

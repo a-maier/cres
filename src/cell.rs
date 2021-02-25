@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 
 use noisy_float::prelude::*;
 use rayon::prelude::*;
+use log::{debug, trace};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Cell<'a> {
@@ -13,26 +14,71 @@ pub struct Cell<'a> {
 }
 
 impl<'a> Cell<'a> {
-    pub fn new<'b: 'a>(events: &'b mut [(N64, Event)]) -> Self {
-        events.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-        Self::new_unchecked(events)
-    }
-
-    pub fn new_unchecked<'b: 'a>(
-        events: &'b mut [(N64, Event)]
-    ) -> Self {
-        // TODO: add as soon as `is_sorted_by` is stable
-        // debug_assert!(events.is_sorted_by(|a, b| b.0.cmp(&a.0)));
-        let weight_sum = events.iter().map(|(_d, e)| e.weight).sum();
-        Self::with_weight_sum_unchecked(events, weight_sum)
-    }
-
-    pub fn with_weight_sum_unchecked<'b: 'a>(
+    pub fn new<'b: 'a, F>(
         events: &'b mut [(N64, Event)],
-        weight_sum: N64,
-    ) -> Self {
-        let radius = events.first().unwrap().0;
-        Self{events, radius, weight_sum}
+        distance: F
+    ) -> Option<(Self, &'b mut [(N64, Event)])>
+    where F: Sync + Fn(&Event, &Event) -> N64
+    {
+        let seed = events.par_iter().enumerate().min_by_key(|(_n, (_dist, e))| e.weight);
+        if let Some((n, _)) = seed {
+            Self::from_seed(events, n, distance)
+        } else {
+            None
+        }
+    }
+
+    fn from_seed<'b: 'a, F>(
+        events: &'b mut [(N64, Event)],
+        seed_idx: usize,
+        distance: F
+    ) -> Option<(Self, &'b mut [(N64, Event)])>
+    where F: Sync + Fn(&Event, &Event) -> N64
+    {
+        let mut weight_sum = events[seed_idx].1.weight;
+        if weight_sum >= 0. {
+            return None;
+        }
+        debug!("Cell seed with weight {:e}", weight_sum);
+        let last_idx = events.len() - 1;
+        events.swap(seed_idx, last_idx);
+        let (mut seed, mut rest) = events.split_last_mut().unwrap();
+        seed.0 = n64(0.);
+        let seed = seed;
+
+        rest.par_iter_mut().for_each(
+            |(dist, e)| *dist = distance(e, &seed.1)
+        );
+
+        while weight_sum < 0. {
+            let nearest = rest
+                .par_iter()
+                .enumerate()
+                .min_by_key(|(_idx, (dist, _event))| dist);
+            let nearest_idx = if let Some((idx, (dist, event))) = nearest {
+                trace!(
+                    "adding event with distance {}, weight {:e} to cell",
+                    dist,
+                    event.weight
+                );
+                weight_sum += event.weight;
+                idx
+            } else {
+                break
+            };
+            rest.swap(nearest_idx, rest.len() - 1);
+            let last_idx = rest.len() - 1;
+            rest = &mut rest[..last_idx];
+        }
+        let rest_len = rest.len();
+        let (rest, cell) = events.split_at_mut(rest_len);
+        let radius = cell.first().unwrap().0;
+        let cell = Self {
+            events: cell,
+            weight_sum,
+            radius
+        };
+        Some((cell, rest))
     }
 
     pub fn resample(&mut self) {
