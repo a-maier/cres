@@ -69,8 +69,8 @@ impl CellCollector {
                 let events = cell.iter().map(|(_d, e)| e.id).collect();
                 self.largest_by_weight.insert(weight, (count, events));
             }
-            let distr = Uniform::from(0..=count + 1);
-            if distr.sample(&mut rng) == count + 1 {
+            let distr = Uniform::from(0..=count);
+            if distr.sample(&mut rng) == count {
                 let events = cell.iter().map(|(_d, e)| e.id).collect();
                 *self.random.choose_mut(&mut rng).unwrap() = (count, events)
             }
