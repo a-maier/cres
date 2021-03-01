@@ -20,7 +20,11 @@ impl<'a> Cell<'a> {
     ) -> Option<(Self, &'b mut [(N64, Event)])>
     where F: Sync + Fn(&Event, &Event) -> N64
     {
-        let seed = events.par_iter().enumerate().min_by_key(|(_n, (_dist, e))| e.weight);
+        let seed = events.par_iter().enumerate().filter(
+            |(_n, (_dist, e))| e.weight < 0.
+        ).max_by_key(
+            |(_n, (_dist, e))| e.weight
+        );
         if let Some((n, _)) = seed {
             Self::from_seed(events, n, distance)
         } else {
