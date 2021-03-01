@@ -26,7 +26,7 @@ impl<'a> Cell<'a> {
             |(_n, (_dist, e))| e.weight
         );
         if let Some((n, _)) = seed {
-            Self::from_seed(events, n, distance)
+            Some(Self::from_seed(events, n, distance))
         } else {
             None
         }
@@ -36,13 +36,11 @@ impl<'a> Cell<'a> {
         events: &'b mut [(N64, Event)],
         seed_idx: usize,
         distance: F
-    ) -> Option<(Self, &'b mut [(N64, Event)])>
+    ) -> (Self, &'b mut [(N64, Event)])
     where F: Sync + Fn(&Event, &Event) -> N64
     {
         let mut weight_sum = events[seed_idx].1.weight;
-        if weight_sum >= 0. {
-            return None;
-        }
+        debug_assert!(weight_sum < 0.);
         debug!("Cell seed with weight {:e}", weight_sum);
         let last_idx = events.len() - 1;
         events.swap(seed_idx, last_idx);
@@ -82,7 +80,7 @@ impl<'a> Cell<'a> {
             weight_sum,
             radius
         };
-        Some((cell, rest))
+        (cell, rest)
     }
 
     pub fn resample(&mut self) {
