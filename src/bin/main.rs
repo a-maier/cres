@@ -66,14 +66,11 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Read {} events", events.len());
 
-    let orig_sum_wt: N64 = events.iter().map(|e| e.weight).sum();
-    let orig_sum_wt2: N64 = events.iter().map(|e| e.weight * e.weight).sum();
-
-    info!(
-        "Initial sum of weights: {:e} ± {:e}",
-        orig_sum_wt,
-        orig_sum_wt2.sqrt()
-    );
+    let xs: N64 = events.iter().map(|e| e.weight).sum();
+    let xs = n64(opt.weight_norm) * xs;
+    let sum_wtsqr: N64 = events.iter().map(|e| e.weight * e.weight).sum();
+    let xs_err = n64(opt.weight_norm) * sum_wtsqr.sqrt();
+    info!("Initial cross section: σ = {:.3e} ± {:.3e}", xs, xs_err);
 
     let nneg_weight = events.iter().filter(|e| e.weight < 0.).count();
     let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
@@ -96,7 +93,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     }
     progress.finish();
     info!("Created {} cells", cell_radii.len());
-    info!("Median radius: {}", median_radius(cell_radii.as_mut_slice()));
+    info!("Median radius: {:.3}", median_radius(cell_radii.as_mut_slice()));
 
     if opt.dumpcells { cell_collector.dump_info(); }
     let dump_event_to = cell_collector.event_cells();
@@ -110,14 +107,11 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         unweight(&mut events, opt.unweight.minweight, &mut rng);
     }
 
-    let final_sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
-    let final_sum_wt2: N64 = events.par_iter().map(|e| e.weight * e.weight).sum();
-
-    info!(
-        "Final sum of weights: {:e} ± {:e}",
-        final_sum_wt,
-        final_sum_wt2.sqrt()
-    );
+    let sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
+    let xs = n64(opt.weight_norm) * sum_wt;
+    let sum_wtsqr: N64 = events.par_iter().map(|e| e.weight * e.weight).sum();
+    let xs_err = n64(opt.weight_norm) * sum_wtsqr.sqrt();
+    info!("Final cross section: σ = {:.3e} ± {:.3e}", xs, xs_err);
 
     info!("Writing {} events to {:?}", events.len(), opt.outfile);
     reader.rewind()?;
@@ -152,6 +146,8 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         for weight in &mut hepmc_event.weights {
             *weight *= reweight
         }
+        hepmc_event.xs.cross_section = xs.into();
+        hepmc_event.xs.cross_section_error = xs_err.into();
         writer.write(&hepmc_event)?;
         let cellnums: &[usize] = dump_event_to
             .get(&event.id)

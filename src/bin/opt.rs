@@ -108,6 +108,10 @@ pub(crate) struct Opt {
     #[structopt(flatten)]
     pub(crate) unweight: UnweightOpt,
 
+    /// Factor between cross section and sum of weights: σ = weight_norm * Σ(weights)
+    #[structopt(short = "n", long, default_value = "1.")]
+    pub(crate) weight_norm: f64,
+
     /// Whether to dump selected cells of interest
     #[structopt(short = "d", long)]
     pub(crate) dumpcells: bool,
