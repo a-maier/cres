@@ -51,6 +51,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut events = Vec::new();
 
     debug!("Reading events from {:?}", opt.infiles);
+    info!("Dividing all weights by number of input files ({})", opt.infiles.len());
     let infiles: Result<Vec<_>, _> =
         opt.infiles.iter().rev().map(File::open).collect();
     let infiles = infiles?;
@@ -59,6 +60,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         trace!("read event {}", id);
         let mut event = into_event(event?, &opt.jet_def);
         event.id = id;
+        event.weight /= opt.infiles.len() as f64;
         events.push(event);
     }
 
