@@ -19,7 +19,7 @@ use std::io::BufWriter;
 
 use env_logger::Env;
 use hepmc2::writer::Writer;
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use noisy_float::prelude::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
@@ -51,7 +51,12 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut events = Vec::new();
 
     debug!("Reading events from {:?}", opt.infiles);
-    info!("Dividing all weights by number of input files ({})", opt.infiles.len());
+    if opt.infiles.len() > 1 {
+        warn!(
+            "Dividing all weights by number of input files ({})",
+            opt.infiles.len()
+        );
+    }
     let infiles: Result<Vec<_>, _> =
         opt.infiles.iter().rev().map(File::open).collect();
     let infiles = infiles?;
