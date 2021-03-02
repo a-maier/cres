@@ -2,6 +2,8 @@ use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use lazy_static::lazy_static;
+use regex::Regex;
 use structopt::StructOpt;
 
 #[derive(Debug, Copy, Clone)]
@@ -39,30 +41,89 @@ impl FromStr for JetAlgorithm {
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum Compression {
     Bzip2,
-    Gzip,
-    Lz4,
-    Zstd,
+    Gzip(u8),
+    Lz4(u8),
+    Zstd(u8),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct UnknownCompressionAlgorithm(String);
+pub(crate) enum ParseCompressionErr {
+    Algorithm(String),
+    Level(String, String),
+}
 
-impl Display for UnknownCompressionAlgorithm {
+impl Display for ParseCompressionErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unknown compression algorithm: {}", self.0)
+        match self {
+            Self::Algorithm(s) => write!(f, "Unknown compression algorithm: {}", s),
+            Self::Level(algo,lvl) =>
+                write!(f, "Level {} not supported for {} compression", lvl, algo)
+        }
     }
 }
 
+lazy_static!{
+    static ref COMPRESSION_RE: Regex = Regex::new(r#"^(?P<algo>[[:alpha:]]+)(?P<lvl>_\d+)?$"#).unwrap();
+}
+
+const GZIP_DEFAULT_LEVEL: u8 = 6;
+const LZ4_DEFAULT_LEVEL: u8 = 0;
+const ZSTD_DEFAULT_LEVEL: u8 = 0;
+
 impl FromStr for Compression {
-    type Err = UnknownCompressionAlgorithm;
+    type Err = ParseCompressionErr;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "bzip2" | "bz2" => Ok(Self::Bzip2),
-            "gzip" | "gz" => Ok(Self::Gzip),
-            "lz4" => Ok(Self::Lz4),
-            "zstd" | "zstandard" => Ok(Self::Zstd),
-            _ => Err(UnknownCompressionAlgorithm(s.to_string())),
+        let lower_case = s.to_ascii_lowercase().to_string();
+        let captures = COMPRESSION_RE.captures(&lower_case);
+        let captures = if let Some(captures) = captures {
+            captures
+        } else {
+            return Err(Self::Err::Algorithm(s.to_owned()))
+        };
+        let algo = &captures["algo"];
+        let lvl_str = &captures.name("lvl");
+        match algo {
+            "bzip2" | "bz2" => {
+                if let Some(lvl_str) = lvl_str {
+                    Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
+                } else {
+                    Ok(Self::Bzip2)
+                }
+            },
+            "gzip" | "gz" => {
+                if let Some(lvl_str) = lvl_str {
+                    match lvl_str.as_str()[1..].parse::<u8>() {
+                        Ok(lvl) if lvl <= 9 => Ok(Self::Gzip(lvl)),
+                        _ => Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
+                    }
+                } else {
+                    Ok(Self::Gzip(GZIP_DEFAULT_LEVEL))
+                }
+            },
+            "lz4" => {
+                if let Some(lvl_str) = lvl_str {
+                    match lvl_str.as_str()[1..].parse::<u8>() {
+                        Ok(lvl) if lvl <= 16 => Ok(Self::Lz4(lvl)),
+                        _ => Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
+                    }
+                } else {
+                    Ok(Self::Lz4(LZ4_DEFAULT_LEVEL))
+                }
+            },
+            "zstd" | "zstandard" => {
+                if let Some(lvl_str) = lvl_str {
+                    match lvl_str.as_str()[1..].parse::<u8>() {
+                        Ok(lvl) if lvl <= 19 => Ok(Self::Zstd(lvl)),
+                        _ => Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
+                    }
+                } else {
+                    Ok(Self::Zstd(ZSTD_DEFAULT_LEVEL))
+                }
+            }
+            _ => {
+                Err(Self::Err::Algorithm(s.to_string()))
+            },
         }
     }
 }
@@ -108,15 +169,18 @@ pub(crate) struct Opt {
     #[structopt(flatten)]
     pub(crate) unweight: UnweightOpt,
 
-    /// Factor between cross section and sum of weights: σ = weight_norm * Σ(weights)
-    #[structopt(short = "n", long, default_value = "1.")]
+    #[structopt(short = "n", long, default_value = "1.", help = "Factor between cross section and sum of weights:
+σ = weight_norm * Σ(weights)")]
     pub(crate) weight_norm: f64,
 
     /// Whether to dump selected cells of interest
     #[structopt(short = "d", long)]
     pub(crate) dumpcells: bool,
 
-    #[structopt(short = "c", long, help = "Compress output file.\nPossible settings are 'bzip2', 'gzip', 'zstd', 'lz4'")]
+    #[structopt(short = "c", long, help = "Compress output file.
+Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
+Compression levels can be set with algorithm_level e.g. 'zstd_5'.
+Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
 
     /// Verbosity level
@@ -124,7 +188,9 @@ pub(crate) struct Opt {
         short,
         long,
         default_value = "Info",
-        help = "Verbosity level.\nPossible values with increasing amount of output are\n'off', 'error', 'warn', 'info', 'debug', 'trace'."
+        help = "Verbosity level.
+Possible values with increasing amount of output are
+'off', 'error', 'warn', 'info', 'debug', 'trace'."
     )]
     pub(crate) loglevel: String,
 
