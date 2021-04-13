@@ -6,6 +6,13 @@ use noisy_float::prelude::*;
 use rayon::prelude::*;
 use log::{debug, trace};
 
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Strategy {
+    LeastNegative,
+    MostNegative,
+    Next,
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Cell<'a> {
     events: &'a mut [(N64, Event)],
@@ -13,19 +20,38 @@ pub struct Cell<'a> {
     weight_sum: N64,
 }
 
+fn choose_seed(events: &mut [(N64, Event)], strategy: Strategy) -> Option<usize> {
+    use Strategy::*;
+    if strategy == Next {
+        events.iter().position(|(_dist, e)| e.weight < 0.)
+    } else {
+        let neg_weight = events.par_iter().enumerate().filter(
+            |(_n, (_dist, e))| e.weight < 0.
+        );
+        let seed = if strategy == LeastNegative {
+            neg_weight.max_by_key(
+                |(_n, (_dist, e))| e.weight
+            )
+        } else {
+            debug_assert_eq!(strategy, MostNegative);
+            neg_weight.min_by_key(
+                |(_n, (_dist, e))| e.weight
+            )
+        };
+        seed.map(|(n, _)| n)
+    }
+}
+
 impl<'a> Cell<'a> {
     pub fn new<'b: 'a, F>(
         events: &'b mut [(N64, Event)],
-        distance: F
+        distance: F,
+        strategy: Strategy,
     ) -> Option<(Self, &'b mut [(N64, Event)])>
     where F: Sync + Fn(&Event, &Event) -> N64
     {
-        let seed = events.par_iter().enumerate().filter(
-            |(_n, (_dist, e))| e.weight < 0.
-        ).max_by_key(
-            |(_n, (_dist, e))| e.weight
-        );
-        if let Some((n, _)) = seed {
+        let seed = choose_seed(events, strategy);
+        if let Some(n) = seed {
             Some(Self::from_seed(events, n, distance))
         } else {
             None

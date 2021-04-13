@@ -26,7 +26,7 @@ use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use structopt::StructOpt;
 
-use cres::cell::Cell;
+use cres::cell::{Cell, Strategy};
 use cres::distance::distance;
 // use cres::parser::parse_event;
 
@@ -84,7 +84,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cell_collector = CellCollector::new();
     let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
-    while let Some((mut cell, _)) = Cell::new(&mut events, distance) {
+    while let Some((mut cell, _)) = Cell::new(&mut events, distance, Strategy::LeastNegative) {
         progress.inc(cell.nneg_weights() as u64);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
