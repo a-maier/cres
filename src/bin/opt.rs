@@ -2,6 +2,8 @@ use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use cres::cell::Strategy;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 use structopt::StructOpt;
@@ -35,6 +37,25 @@ impl FromStr for JetAlgorithm {
             }
             _ => Err(UnknownJetAlgorithm(s.to_string())),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct UnknownStrategy(String);
+
+impl Display for UnknownStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unknown strategy: {}", self.0)
+    }
+}
+
+fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
+    use cres::cell::Strategy::*;
+    match s {
+        "Any" | "any" => Ok(Next),
+        "MostNegative" | "most_negative" => Ok(MostNegative),
+        "LeastNegative" | "least_negative" => Ok(LeastNegative),
+        _ => Err(UnknownStrategy(s.to_string())),
     }
 }
 
@@ -193,6 +214,16 @@ Possible values with increasing amount of output are
 'off', 'error', 'warn', 'info', 'debug', 'trace'."
     )]
     pub(crate) loglevel: String,
+
+    #[structopt(
+        long, default_value = "least_negative",
+        parse(try_from_str = parse_strategy),
+        help = "Strategy for choosing cell seeds. Possible values are
+'least_negative': event with negative weight closest to zero,
+'most_negative' event with the lowest weight,
+'any': no additional requirements beyond a negative weight.\n"
+    )]
+    pub(crate) strategy: Strategy,
 
     /// Input files
     #[structopt(name = "INFILES", parse(from_os_str))]
