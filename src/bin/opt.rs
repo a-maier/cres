@@ -95,7 +95,7 @@ impl FromStr for Compression {
     type Err = ParseCompressionErr;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let lower_case = s.to_ascii_lowercase().to_string();
+        let lower_case = s.to_ascii_lowercase();
         let captures = COMPRESSION_RE.captures(&lower_case);
         let captures = if let Some(captures) = captures {
             captures
