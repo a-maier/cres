@@ -1,7 +1,5 @@
 use crate::event::Event;
 
-use std::cmp::Ordering;
-
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 use log::{debug, trace};
@@ -110,24 +108,9 @@ impl<'a> Cell<'a> {
     }
 
     pub fn resample(&mut self) {
-        let orig_weight_sum = self.weight_sum();
-        match orig_weight_sum.cmp(&n64(0.)) {
-            Ordering::Less => {}
-            Ordering::Equal => {
-                for event in self.events.iter_mut() {
-                    event.1.weight = n64(0.);
-                }
-            }
-            Ordering::Greater => {
-                for event in self.events.iter_mut() {
-                    event.1.weight = event.1.weight.abs();
-                }
-                let abs_weight_sum: N64 =
-                    self.events.iter().map(|e| e.1.weight).sum();
-                for event in self.events.iter_mut() {
-                    event.1.weight *= orig_weight_sum / abs_weight_sum;
-                }
-            }
+        let new_wt = self.weight_sum() / (self.events.len() as f64);
+        for event in self.events.iter_mut() {
+            event.1.weight = new_wt;
         }
     }
 
