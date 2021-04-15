@@ -6,7 +6,7 @@ use log::debug;
 
 const GZIP_MAGIC_BYTES: [u8; 2] = [0x1f, 0x8b];
 const BZIP2_MAGIC_BYTES: [u8; 3] = [b'B', b'Z', b'h'];
-const ZSTD_MAGIC_BYTES: [u8; 4] = [0x37, 0xa4, 0x30, 0xec];
+const ZSTD_MAGIC_BYTES: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
 const LZ4_MAGIC_BYTES: [u8; 4] = [0x04, 0x22, 0x4d, 0x18];
 
 pub fn auto_decompress<'a, B: 'a + BufRead>(mut r: B) -> Box<dyn BufRead + 'a> {
