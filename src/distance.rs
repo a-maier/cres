@@ -19,11 +19,11 @@ pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
         let (t2, p2) = &out2[idx2];
         match t1.cmp(&t2) {
             Ordering::Less => {
-                dist += euclid_norm(&p1);
+                dist += spatial_norm(&p1);
                 idx1 += 1;
             }
             Ordering::Greater => {
-                dist += euclid_norm(&p2);
+                dist += spatial_norm(&p2);
                 idx2 += 1;
             }
             Ordering::Equal => {
@@ -39,19 +39,19 @@ pub fn distance(ev1: &Event, ev2: &Event) -> N64 {
     if idx1 < out1.len() {
         dist += out1[idx1..]
             .iter()
-            .map(|(_t, p)| euclid_norm(p))
+            .map(|(_t, p)| spatial_norm(p))
             .sum::<N64>();
     } else if idx2 < out2.len() {
         dist += out2[idx2..]
             .iter()
-            .map(|(_t, p)| euclid_norm(p))
+            .map(|(_t, p)| spatial_norm(p))
             .sum::<N64>();
     }
     dist
 }
 
-fn euclid_norm(p: &[FourVector]) -> N64 {
-    p.iter().map(|p| p.euclid_norm()).sum()
+fn spatial_norm(p: &[FourVector]) -> N64 {
+    p.iter().map(|p| p.spatial_norm()).sum()
 }
 
 fn set_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
@@ -83,7 +83,7 @@ fn paired_distance(p1: &[FourVector], p2: &[FourVector]) -> N64 {
     debug_assert!(p1.len() == p2.len());
     p1.iter()
         .zip(p2.iter())
-        .map(|(p1, p2)| (*p1 - *p2).euclid_norm())
+        .map(|(p1, p2)| (*p1 - *p2).spatial_norm())
         .sum()
 }
 
@@ -108,7 +108,7 @@ fn ordered_paired_distance_eq_size(
     let mut dist = n64(0.);
     for p in p1 {
         for (dist, q) in &mut dists {
-            *dist = (*p - **q).euclid_norm_sq();
+            *dist = (*p - **q).spatial_norm_sq();
         }
         let (n, min) =
             dists.iter().enumerate().min_by_key(|(_n, d)| *d).unwrap();
