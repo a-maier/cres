@@ -16,6 +16,14 @@ impl FourVector {
         self.0.iter().map(|e| *e * *e).sum()
     }
 
+    pub fn spatial_norm(&self) -> N64 {
+        self.spatial_norm_sq().sqrt()
+    }
+
+    pub fn spatial_norm_sq(&self) -> N64 {
+        self.0.iter().skip(1).map(|e| *e * *e).sum()
+    }
+
     const fn len() -> usize {
         4
     }
