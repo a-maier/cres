@@ -139,12 +139,9 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
         let mut hepmc_event = hepmc_event.unwrap();
         if hepmc_id < event.id {
             for _ in hepmc_id..event.id {
-                let (_, ev) = hepmc_events.next().unwrap();
-                ev.unwrap();
+                let (_id, ev) = hepmc_events.next().unwrap();
+                hepmc_event = ev.unwrap();
             }
-            let (id, ev) = hepmc_events.next().unwrap();
-            debug_assert_eq!(id, event.id);
-            hepmc_event = ev.unwrap();
         }
         let old_weight = hepmc_event.weights.first().unwrap();
         let reweight: f64 = (event.weight / old_weight).into();
