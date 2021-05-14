@@ -51,11 +51,7 @@ impl<'a> Cell<'a> {
     where F: Sync + Fn(&Event, &Event) -> N64
     {
         let seed = choose_seed(events, strategy);
-        if let Some(n) = seed {
-            Some(Self::from_seed(events, n, distance))
-        } else {
-            None
-        }
+        seed.map(move |n| Self::from_seed(events, n, distance))
     }
 
     fn from_seed<'b: 'a, F>(
