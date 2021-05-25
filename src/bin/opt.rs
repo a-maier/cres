@@ -190,6 +190,10 @@ pub(crate) struct Opt {
     #[structopt(flatten)]
     pub(crate) unweight: UnweightOpt,
 
+    /// Weight of transverse momentum when calculating particle momentum distances
+    #[structopt(long, default_value = "0.")]
+    pub(crate) ptweight: f64,
+
     #[structopt(short = "n", long, default_value = "1.", help = "Factor between cross section and sum of weights:
 σ = weight_norm * Σ(weights)")]
     pub(crate) weight_norm: f64,

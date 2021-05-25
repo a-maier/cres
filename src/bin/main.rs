@@ -84,7 +84,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cell_collector = CellCollector::new();
     let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
-    let distance = EuclWithScaledPt::new(n64(0.));
+    let distance = EuclWithScaledPt::new(n64(opt.ptweight));
     while let Some((mut cell, _)) = Cell::new(&mut events, &distance, opt.strategy) {
         progress.inc(cell.nneg_weights() as u64);
         debug!(
