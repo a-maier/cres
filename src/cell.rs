@@ -1,4 +1,5 @@
 use crate::event::Event;
+use crate::distance::Distance;
 
 use std::cmp::Ordering;
 
@@ -43,23 +44,21 @@ fn choose_seed(events: &mut [(N64, Event)], strategy: Strategy) -> Option<usize>
 }
 
 impl<'a> Cell<'a> {
-    pub fn new<'b: 'a, F>(
+    pub fn new<'b: 'a, F: Distance + Sync + Send>(
         events: &'b mut [(N64, Event)],
-        distance: F,
+        distance: &F,
         strategy: Strategy,
     ) -> Option<(Self, &'b mut [(N64, Event)])>
-    where F: Sync + Fn(&Event, &Event) -> N64
     {
         let seed = choose_seed(events, strategy);
         seed.map(move |n| Self::from_seed(events, n, distance))
     }
 
-    fn from_seed<'b: 'a, F>(
+    fn from_seed<'b: 'a, F: Distance + Sync + Send>(
         events: &'b mut [(N64, Event)],
         seed_idx: usize,
-        distance: F
+        distance: &F
     ) -> (Self, &'b mut [(N64, Event)])
-    where F: Sync + Fn(&Event, &Event) -> N64
     {
         let mut weight_sum = events[seed_idx].1.weight;
         debug_assert!(weight_sum < 0.);
@@ -71,7 +70,7 @@ impl<'a> Cell<'a> {
         let seed = seed;
 
         rest.par_iter_mut().for_each(
-            |(dist, e)| *dist = distance(e, &seed.1)
+            |(dist, e)| *dist = distance.distance(e, &seed.1)
         );
 
         while weight_sum < 0. {

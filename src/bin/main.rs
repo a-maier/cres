@@ -27,7 +27,7 @@ use rayon::prelude::*;
 use structopt::StructOpt;
 
 use cres::cell::Cell;
-use cres::distance::distance;
+use cres::distance::EuclWithScaledPt;
 // use cres::parser::parse_event;
 
 fn median_radius(radii: &mut [N64]) -> N64 {
@@ -84,7 +84,8 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cell_collector = CellCollector::new();
     let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
-    while let Some((mut cell, _)) = Cell::new(&mut events, distance, opt.strategy) {
+    let distance = EuclWithScaledPt::new(n64(0.));
+    while let Some((mut cell, _)) = Cell::new(&mut events, &distance, opt.strategy) {
         progress.inc(cell.nneg_weights() as u64);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
