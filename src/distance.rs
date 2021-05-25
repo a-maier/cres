@@ -13,7 +13,7 @@ pub trait Distance {
 const FALLBACK_SIZE: usize = 8;
 
 pub struct EuclWithScaledPt {
-    pt_scale: N64
+    pt_weight: N64
 }
 
 impl Distance for EuclWithScaledPt {
@@ -28,11 +28,11 @@ impl Distance for EuclWithScaledPt {
             let (t2, p2) = &out2[idx2];
             match t1.cmp(&t2) {
                 Ordering::Less => {
-                    dist += self.spatial_norm(&p1);
+                    dist += self.pt_norm(&p1);
                     idx1 += 1;
                 }
                 Ordering::Greater => {
-                    dist += self.spatial_norm(&p2);
+                    dist += self.pt_norm(&p2);
                     idx2 += 1;
                 }
                 Ordering::Equal => {
@@ -48,12 +48,12 @@ impl Distance for EuclWithScaledPt {
         if idx1 < out1.len() {
             dist += out1[idx1..]
                 .iter()
-                .map(|(_t, p)| self.spatial_norm(p))
+                .map(|(_t, p)| self.pt_norm(p))
                 .sum::<N64>();
         } else if idx2 < out2.len() {
             dist += out2[idx2..]
                 .iter()
-                .map(|(_t, p)| self.spatial_norm(p))
+                .map(|(_t, p)| self.pt_norm(p))
                 .sum::<N64>();
         }
         dist
@@ -61,12 +61,12 @@ impl Distance for EuclWithScaledPt {
 }
 
 impl EuclWithScaledPt {
-    pub fn new(pt_scale: N64) -> Self {
-        EuclWithScaledPt{pt_scale}
+    pub fn new(pt_weight: N64) -> Self {
+        EuclWithScaledPt{pt_weight}
     }
 
-    fn spatial_norm(&self, p: &[FourVector]) -> N64 {
-        p.iter().map(|p| self.vector_norm(p)).sum()
+    fn pt_norm(&self, p: &[FourVector]) -> N64 {
+        p.iter().map(|p| pt_norm(p, self.pt_weight)).sum()
     }
 
     fn set_distance(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
@@ -98,7 +98,7 @@ impl EuclWithScaledPt {
         debug_assert!(p1.len() == p2.len());
         p1.iter()
             .zip(p2.iter())
-            .map(|(p1, p2)| self.vector_norm(&(*p1 - *p2)))
+            .map(|(p1, p2)| pt_dist(p1, p2, self.pt_weight))
             .sum()
     }
 
@@ -124,7 +124,7 @@ impl EuclWithScaledPt {
         let mut dist = n64(0.);
         for p in p1 {
             for (dist, q) in &mut dists {
-                *dist = self.vector_norm_sq(&(*p - **q));
+                *dist = pt_dist_sq(p, *q, self.pt_weight);
             }
             let (n, min) =
                 dists.iter().enumerate().min_by_key(|(_n, d)| *d).unwrap();
@@ -133,16 +133,22 @@ impl EuclWithScaledPt {
         }
         dist
     }
-
-    fn vector_norm_sq(&self, p: &FourVector) -> N64 {
-        p.spatial_norm_sq() + self.pt_scale * self.pt_scale * pt_sq(p)
-    }
-
-    fn vector_norm(&self, p: &FourVector) -> N64 {
-        self.vector_norm_sq(p).sqrt()
-    }
 }
 
-fn pt_sq(p: &FourVector) -> N64 {
-    p[1] * p[1] + p[2] * p[2]
+pub fn pt_norm(p: &FourVector, pt_weight: N64) -> N64 {
+    pt_norm_sq(p, pt_weight).sqrt()
+}
+
+fn pt_norm_sq(p: &FourVector, pt_weight: N64) -> N64 {
+    let pt = pt_weight * p.pt();
+    p.spatial_norm_sq() + pt * pt
+}
+
+fn pt_dist(p: &FourVector, q: &FourVector, pt_weight: N64) -> N64 {
+    pt_dist_sq(p, q, pt_weight).sqrt()
+}
+
+fn pt_dist_sq(p: &FourVector, q: &FourVector, pt_weight: N64) -> N64 {
+    let dpt = pt_weight * (p.pt() - q.pt());
+    (*p - *q).spatial_norm_sq() + dpt * dpt
 }
