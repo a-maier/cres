@@ -220,7 +220,7 @@ Possible values with increasing amount of output are
     pub(crate) loglevel: String,
 
     #[structopt(
-        long, default_value = "least_negative",
+        long, default_value = "most_negative",
         parse(try_from_str = parse_strategy),
         help = "Strategy for choosing cell seeds. Possible values are
 'least_negative': event with negative weight closest to zero,
