@@ -7,7 +7,7 @@ mod cell_collector;
 mod writer;
 
 use crate::hepmc::{into_event, CombinedReader};
-use crate::opt::Opt;
+use crate::opt::{Opt, Strategy};
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::unweight::unweight;
 use crate::cell_collector::CellCollector;
@@ -27,6 +27,7 @@ use rayon::prelude::*;
 use structopt::StructOpt;
 
 use cres::cell::Cell;
+use cres::event::Event;
 use cres::distance::EuclWithScaledPt;
 // use cres::parser::parse_event;
 
@@ -39,6 +40,20 @@ fn main() {
     if let Err(err) = run_main() {
         eprintln!("ERROR: {}", err)
     }
+}
+
+fn choose_seeds(events: &[Event], strategy: Strategy) -> Vec<usize> {
+    use Strategy::*;
+    let mut neg_weight: Vec<_> = events.par_iter().enumerate().filter(
+        |(_n, e)| e.weight < 0.
+    ).map(|(n, _e)| n).collect();
+    match strategy {
+        Next => {},
+        MostNegative => neg_weight.par_sort_unstable_by_key(|&n| events[n].weight),
+        LeastNegative => neg_weight
+            .par_sort_unstable_by(|&n, &m| events[m].weight.cmp(&events[n].weight)),
+    }
+    neg_weight
 }
 
 fn run_main() -> Result<(), Box<dyn std::error::Error>> {
@@ -83,9 +98,11 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cell_radii = Vec::new();
     let mut cell_collector = CellCollector::new();
     let mut rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
+    let seeds = choose_seeds(&events, opt.strategy);
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
     let distance = EuclWithScaledPt::new(n64(opt.ptweight));
-    while let Some((mut cell, _)) = Cell::new(&mut events, &distance, opt.strategy) {
+    for seed in seeds {
+        let mut cell = Cell::new(&mut events, seed, &distance, n64(f64::MAX));
         progress.inc(cell.nneg_weights() as u64);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",

@@ -2,11 +2,16 @@ use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cres::cell::Strategy;
-
 use lazy_static::lazy_static;
 use regex::Regex;
 use structopt::StructOpt;
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(crate) enum Strategy {
+    LeastNegative,
+    MostNegative,
+    Next,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum JetAlgorithm {
@@ -50,7 +55,7 @@ impl Display for UnknownStrategy {
 }
 
 fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
-    use cres::cell::Strategy::*;
+    use Strategy::*;
     match s {
         "Any" | "any" => Ok(Next),
         "MostNegative" | "most_negative" => Ok(MostNegative),

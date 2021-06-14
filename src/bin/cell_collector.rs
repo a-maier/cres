@@ -45,12 +45,11 @@ impl CellCollector {
         let nmembers = cell.nmembers();
         let weight = cell.weight_sum();
         if count < NCELLS {
-            let events = cell.iter().map(|(_d, e)| e.id);
-            self.first.push((count, events.clone().collect()));
-            self.random.push((count, events.clone().collect()));
-            self.largest_by_radius.insert((r, count), events.clone().collect());
-            self.largest_by_members.insert((nmembers, count), events.clone().collect());
-            self.largest_by_weight.insert((weight, count), events.collect());
+            self.first.push((count, cell.iter().map(|(_d, e)| e.id).collect()));
+            self.random.push((count, cell.iter().map(|(_d, e)| e.id).collect()));
+            self.largest_by_radius.insert((r, count), cell.iter().map(|(_d, e)| e.id).collect());
+            self.largest_by_members.insert((nmembers, count), cell.iter().map(|(_d, e)| e.id).collect());
+            self.largest_by_weight.insert((weight, count), cell.iter().map(|(_d, e)| e.id).collect());
         } else {
             let (smallest_r, n) = *self.largest_by_radius.keys().next().unwrap();
             if r > smallest_r {

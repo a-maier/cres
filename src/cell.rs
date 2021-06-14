@@ -1,137 +1,87 @@
 use crate::event::Event;
 use crate::distance::Distance;
 
-use std::cmp::Ordering;
-
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 use log::{debug, trace};
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum Strategy {
-    LeastNegative,
-    MostNegative,
-    Next,
-}
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Cell<'a> {
     events: &'a mut [(N64, Event)],
+    members: Vec<usize>,
     radius: N64,
     weight_sum: N64,
-}
-
-fn choose_seed(events: &mut [(N64, Event)], strategy: Strategy) -> Option<usize> {
-    use Strategy::*;
-    if strategy == Next {
-        events.iter().position(|(_dist, e)| e.weight < 0.)
-    } else {
-        let neg_weight = events.par_iter().enumerate().filter(
-            |(_n, (_dist, e))| e.weight < 0.
-        );
-        let seed = if strategy == LeastNegative {
-            neg_weight.max_by_key(
-                |(_n, (_dist, e))| e.weight
-            )
-        } else {
-            debug_assert_eq!(strategy, MostNegative);
-            neg_weight.min_by_key(
-                |(_n, (_dist, e))| e.weight
-            )
-        };
-        seed.map(|(n, _)| n)
-    }
 }
 
 impl<'a> Cell<'a> {
     pub fn new<'b: 'a, F: Distance + Sync + Send>(
         events: &'b mut [(N64, Event)],
-        distance: &F,
-        strategy: Strategy,
-    ) -> Option<(Self, &'b mut [(N64, Event)])>
-    {
-        let seed = choose_seed(events, strategy);
-        seed.map(move |n| Self::from_seed(events, n, distance))
-    }
-
-    fn from_seed<'b: 'a, F: Distance + Sync + Send>(
-        events: &'b mut [(N64, Event)],
         seed_idx: usize,
-        distance: &F
-    ) -> (Self, &'b mut [(N64, Event)])
+        distance: &F,
+        max_size: N64,
+    ) -> Self
     {
         let mut weight_sum = events[seed_idx].1.weight;
         debug_assert!(weight_sum < 0.);
         debug!("Cell seed with weight {:e}", weight_sum);
-        let last_idx = events.len() - 1;
-        events.swap(seed_idx, last_idx);
-        let (mut seed, mut rest) = events.split_last_mut().unwrap();
-        seed.0 = n64(0.);
-        let seed = seed;
+        let mut members = vec![seed_idx];
+        let seed = events[seed_idx].1.clone();
 
-        rest.par_iter_mut().for_each(
-            |(dist, e)| *dist = distance.distance(e, &seed.1)
+        events.par_iter_mut().for_each(
+            |(dist, e)| *dist = distance.distance(e, &seed)
         );
 
+        let mut candidates: Vec<_> = (0..events.len()).collect();
+        candidates.swap_remove(seed_idx);
+
         while weight_sum < 0. {
-            let nearest = rest
+            let nearest = candidates
                 .par_iter()
                 .enumerate()
-                .min_by_key(|(_idx, (dist, _event))| dist);
-            let nearest_idx = if let Some((idx, (dist, event))) = nearest {
+                .min_by_key(|(_pos, &idx)| events[idx].0);
+            if let Some((pos, &idx)) = nearest {
+                candidates.swap_remove(pos);
                 trace!(
                     "adding event with distance {}, weight {:e} to cell",
-                    dist,
-                    event.weight
+                    events[idx].0,
+                    events[idx].1.weight
                 );
-                weight_sum += event.weight;
-                idx
+                if events[idx].0 > max_size { break }
+                weight_sum += events[idx].1.weight;
+                members.push(idx);
             } else {
                 break
             };
-            rest.swap(nearest_idx, rest.len() - 1);
-            let last_idx = rest.len() - 1;
-            rest = &mut rest[..last_idx];
         }
-        let rest_len = rest.len();
-        let (rest, cell) = events.split_at_mut(rest_len);
-        let radius = cell.first().unwrap().0;
-        let cell = Self {
-            events: cell,
-            weight_sum,
-            radius
-        };
-        (cell, rest)
+        let radius = events[*members.last().unwrap()].0;
+        Self{events, members, weight_sum, radius}
     }
 
     pub fn resample(&mut self) {
         let orig_weight_sum = self.weight_sum();
-        match orig_weight_sum.cmp(&n64(0.)) {
-            Ordering::Less => {}
-            Ordering::Equal => {
-                for event in self.events.iter_mut() {
-                    event.1.weight = n64(0.);
-                }
+        if orig_weight_sum == n64(0.) {
+            for &idx in &self.members {
+                self.events[idx].1.weight = n64(0.);
             }
-            Ordering::Greater => {
-                for event in self.events.iter_mut() {
-                    event.1.weight = event.1.weight.abs();
-                }
-                let abs_weight_sum: N64 =
-                    self.events.iter().map(|e| e.1.weight).sum();
-                for event in self.events.iter_mut() {
-                    event.1.weight *= orig_weight_sum / abs_weight_sum;
-                }
+        } else {
+            let mut abs_weight_sum = n64(0.);
+            for &idx in &self.members {
+                let awt = self.events[idx].1.weight.abs();
+                self.events[idx].1.weight = awt;
+                abs_weight_sum += awt;
+            }
+            for &idx in &self.members {
+                self.events[idx].1.weight *= orig_weight_sum / abs_weight_sum;
             }
         }
     }
 
     pub fn nmembers(&self) -> usize {
-        self.events.len()
+        self.members.len()
     }
 
     pub fn nneg_weights(&self) -> usize {
-        self.events.iter().filter(|e| e.1.weight < 0.).count()
+        self.members.iter().filter(|&&idx| self.events[idx].1.weight < 0.).count()
     }
 
     pub fn radius(&self) -> N64 {
@@ -142,11 +92,7 @@ impl<'a> Cell<'a> {
         self.weight_sum
     }
 
-    pub fn iter(&self) -> std::slice::Iter<(N64, Event)> {
-        self.events.iter()
-    }
-
-    pub fn par_iter(&self) -> rayon::slice::Iter<(N64, Event)> {
-        self.events.par_iter()
+    pub fn iter(&'a self) -> Box<dyn std::iter::Iterator<Item=&'a (N64, Event)> + 'a> {
+        Box::new(self.members.iter().map(move |idx| & self.events[*idx]))
     }
 }
