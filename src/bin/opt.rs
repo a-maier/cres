@@ -195,8 +195,9 @@ pub(crate) struct Opt {
     #[structopt(flatten)]
     pub(crate) unweight: UnweightOpt,
 
-    /// Weight of transverse momentum when calculating particle momentum distances
-    #[structopt(long, default_value = "0.")]
+    ///
+    #[structopt(long, default_value = "0.", help = "Weight of transverse momentum
+when calculating particle momentum distances.\n")]
     pub(crate) ptweight: f64,
 
     #[structopt(short = "n", long, default_value = "1.", help = "Factor between cross section and sum of weights:
@@ -220,7 +221,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
         default_value = "Info",
         help = "Verbosity level.
 Possible values with increasing amount of output are
-'off', 'error', 'warn', 'info', 'debug', 'trace'."
+'off', 'error', 'warn', 'info', 'debug', 'trace'.\n"
     )]
     pub(crate) loglevel: String,
 
@@ -233,6 +234,12 @@ Possible values with increasing amount of output are
 'any': no additional requirements beyond a negative weight.\n"
     )]
     pub(crate) strategy: Strategy,
+
+    #[structopt(long,
+        help = "Maximum cell size. Limiting the cell size can cause
+left-over negative-weight events."
+    )]
+    pub(crate) max_cell_size: Option<f64>,
 
     /// Input files
     #[structopt(name = "INFILES", parse(from_os_str))]

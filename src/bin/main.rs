@@ -101,10 +101,12 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let seeds = choose_seeds(&events, opt.strategy);
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
     let distance = EuclWithScaledPt::new(n64(opt.ptweight));
+    let max_cell_size = n64(opt.max_cell_size.unwrap_or(f64::MAX));
+    let mut nneg = 0;
     for seed in seeds {
+        progress.inc(1);
         if events[seed].1.weight > 0. { continue }
-        let mut cell = Cell::new(&mut events, seed, &distance, n64(f64::MAX));
-        progress.inc(cell.nneg_weights() as u64);
+        let mut cell = Cell::new(&mut events, seed, &distance, max_cell_size);
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
             cell.nmembers(),
@@ -112,13 +114,14 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
             cell.weight_sum()
         );
         cell_radii.push(cell.radius());
+        if cell.weight_sum() < 0. { nneg += 1 }
         cell.resample();
         if opt.dumpcells { cell_collector.collect(&cell, &mut rng); }
     }
     progress.finish();
     info!("Created {} cells", cell_radii.len());
+    if nneg > 0 { warn!("{} cells had negative weight!", nneg); }
     info!("Median radius: {:.3}", median_radius(cell_radii.as_mut_slice()));
-
     if opt.dumpcells { cell_collector.dump_info(); }
     let dump_event_to = cell_collector.event_cells();
 
