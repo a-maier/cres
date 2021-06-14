@@ -102,6 +102,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
     let distance = EuclWithScaledPt::new(n64(opt.ptweight));
     for seed in seeds {
+        if events[seed].1.weight > 0. { continue }
         let mut cell = Cell::new(&mut events, seed, &distance, n64(f64::MAX));
         progress.inc(cell.nneg_weights() as u64);
         debug!(
