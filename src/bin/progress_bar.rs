@@ -59,7 +59,7 @@ impl ProgressBar {
             indicatif::ProgressStyle::default_bar()
                 .template("{bar:60.cyan/cyan} {msg} {pos}/{len} [{elapsed}]"),
         );
-        bar.set_message(message);
+        bar.set_message(message.to_owned());
         // temporarily disable logging to not overwrite the bar
         log::set_max_level(log::LevelFilter::Off);
         ProgressBar {
