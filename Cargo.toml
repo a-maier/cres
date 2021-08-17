@@ -3,6 +3,11 @@ name = "cres"
 version = "0.1.0"
 authors = ["Andreas Maier <andreas.martin.maier@desy.de>"]
 edition = "2018"
+license = "GPL-3.0-or-later"
+readme = "Readme.md"
+keywords = ["physics"]
+categories = ["science"]
+repository = "https://github.com/a-maier/cres"
 autobins = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
