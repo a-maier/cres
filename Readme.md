@@ -56,7 +56,7 @@ The most important options are
 - `--ptweight` specifies how much transverse momenta affect distances
   between particles with momenta p and q according to the formula
 
-      `d(p, q) = \sqrt{ ptweight^2 (p_\perp - q_\perp)^2 + \sum (p_i - q_i)^2 }`
+      d(p, q) = \sqrt{ ptweight^2 (p_\perp - q_\perp)^2 + \sum (p_i - q_i)^2 }
 
 - `--strategy` sets the order in which cell seeds are selected. The
   chosen strategy can affect generation times and cell sizes
