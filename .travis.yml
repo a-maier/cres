@@ -4,7 +4,6 @@
 dist: trusty
 language: rust
 services: docker
-sudo: required
 
 env:
   global:
@@ -102,7 +101,7 @@ deploy:
     condition: $TRAVIS_RUST_VERSION = stable
     tags: true
   provider: releases
-  skip_cleanup: true
+  cleanup: false
 
 cache: cargo
 before_cache:
