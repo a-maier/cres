@@ -139,7 +139,7 @@ pub fn pt_norm(p: &FourVector, pt_weight: N64) -> N64 {
     pt_norm_sq(p, pt_weight).sqrt()
 }
 
-fn pt_norm_sq(p: &FourVector, pt_weight: N64) -> N64 {
+pub fn pt_norm_sq(p: &FourVector, pt_weight: N64) -> N64 {
     let pt = pt_weight * p.pt();
     p.spatial_norm_sq() + pt * pt
 }

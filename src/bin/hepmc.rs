@@ -10,6 +10,7 @@ use jetty::{anti_kt_f, cambridge_aachen_f, cluster_if, kt_f, PseudoJet};
 use log::info;
 use noisy_float::prelude::*;
 
+use cres::distance::pt_norm_sq;
 use crate::opt::{JetAlgorithm, JetDefinition};
 
 fn is_parton(particle: &hepmc2::event::Particle) -> bool {
@@ -36,6 +37,7 @@ fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
 pub(crate) fn into_event(
     event: hepmc2::event::Event,
     jet_def: &JetDefinition,
+    ptweight: N64
 ) -> Event {
     let mut res = Event::new();
     let mut partons = Vec::new();
@@ -63,6 +65,10 @@ pub(crate) fn into_event(
     for jet in jets {
         let p = [jet.e(), jet.px(), jet.py(), jet.pz()];
         res.add_outgoing(PID_JET, p.into());
+    }
+    for (_type, ps) in &mut res.outgoing_by_pid {
+        ps.sort_unstable_by_key(|p| pt_norm_sq(p, ptweight));
+        ps.reverse()
     }
     res
 }

@@ -78,7 +78,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = CombinedReader::new(infiles);
     for (id, event) in (&mut reader).enumerate() {
         trace!("read event {}", id);
-        let mut event = into_event(event?, &opt.jet_def);
+        let mut event = into_event(event?, &opt.jet_def, n64(opt.ptweight));
         event.id = id;
         event.weight /= opt.infiles.len() as f64;
         events.push(event);

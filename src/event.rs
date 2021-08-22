@@ -10,7 +10,7 @@ pub struct Event {
     pub id: usize,
     pub weight: N64,
 
-    pub(crate) outgoing_by_pid: Vec<(i32, MomentumSet)>,
+    pub outgoing_by_pid: Vec<(i32, MomentumSet)>,
 }
 
 impl Event {
@@ -31,10 +31,7 @@ impl Event {
         };
 
         let (_, type_array) = &mut self.outgoing_by_pid[id_pos];
-        let pos = type_array
-            .binary_search_by(|a| p.cmp(a))
-            .unwrap_or_else(|x| x);
-        type_array.insert(pos, p);
+        type_array.push(p)
         // debug_assert!(type_array.is_sorted_by(|a, b| b.cmp(a)));
     }
 }
