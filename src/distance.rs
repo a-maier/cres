@@ -26,17 +26,17 @@ impl Distance for EuclWithScaledPt {
         while idx1 < out1.len() && idx2 < out2.len() {
             let (t1, p1) = &out1[idx1];
             let (t2, p2) = &out2[idx2];
-            match t1.cmp(&t2) {
+            match t1.cmp(t2) {
                 Ordering::Less => {
-                    dist += self.pt_norm(&p1);
+                    dist += self.pt_norm(p1);
                     idx1 += 1;
                 }
                 Ordering::Greater => {
-                    dist += self.pt_norm(&p2);
+                    dist += self.pt_norm(p2);
                     idx2 += 1;
                 }
                 Ordering::Equal => {
-                    dist += self.set_distance(&p1, &p2);
+                    dist += self.set_distance(p1, p2);
                     idx1 += 1;
                     idx2 += 1;
                 }
@@ -87,9 +87,9 @@ impl EuclWithScaledPt {
         let mut p1: Vec<_> = p1.iter().copied().collect();
         p1.resize_with(p2.len(), || zero);
         p1.sort_unstable();
-        let mut min_dist = self.paired_distance(&p1, &p2);
+        let mut min_dist = self.paired_distance(&p1, p2);
         while p1.next_permutation() {
-            min_dist = std::cmp::min(min_dist, self.paired_distance(&p1, &p2));
+            min_dist = std::cmp::min(min_dist, self.paired_distance(&p1, p2));
         }
         min_dist
     }

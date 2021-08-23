@@ -5,21 +5,21 @@ pub(crate) trait Progress {
 
 impl Progress for indicatif::ProgressBar {
     fn inc(&self, i: u64) {
-        indicatif::ProgressBar::inc(&self, i)
+        indicatif::ProgressBar::inc(self, i)
     }
 
     fn finish(&self) {
-        indicatif::ProgressBar::finish(&self)
+        indicatif::ProgressBar::finish(self)
     }
 }
 
 impl Progress for logbar::ProgressBar {
     fn inc(&self, i: u64) {
-        logbar::ProgressBar::inc(&self, i as usize)
+        logbar::ProgressBar::inc(self, i as usize)
     }
 
     fn finish(&self) {
-        logbar::ProgressBar::finish(&self)
+        logbar::ProgressBar::finish(self)
     }
 }
 
