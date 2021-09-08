@@ -64,7 +64,7 @@ The most important options are
 
 - With `--minweight` events are also unweighted in addition to the
   resampling.  Events with weight `w < minweight` are discarded with
-  probability `|w|/minweight` and reweighted to `sign(w) * minweight`
+  probability `1-|w|/minweight` and reweighted to `sign(w) * minweight`
   otherwise. Finally, all event weights are rescaled to exactly
   preserve the original sum of weights. The seed for unweighting can
   be chosen with the `--seed` option.
