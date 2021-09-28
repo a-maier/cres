@@ -3,7 +3,11 @@ cres
 
 This crate implements the cell resampling algorithm for the
 elimination of negative weights in Monte Carlo collider event
-samples.
+samples. The algorithm is described in
+
+Unbiased Elimination of Negative Weights in Monte Carlo Samples
+J. Andersen, A. Maier
+[arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
 
 Installation
 ------------
