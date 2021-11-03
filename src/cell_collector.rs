@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use cres::cell::Cell;
+use crate::cell::Cell;
 
 use noisy_float::prelude::*;
 use log::info;
@@ -12,7 +12,7 @@ use rand::{
 const NCELLS: usize = 10;
 
 #[derive(Default, Clone, Debug)]
-pub(crate) struct CellCollector {
+pub struct CellCollector {
     first: Vec<(usize, Vec<usize>)>,
     random: Vec<(usize, Vec<usize>)>,
     // we keep the cell number as part of the key so that

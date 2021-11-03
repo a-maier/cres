@@ -1,7 +1,19 @@
 pub mod cell;
+pub mod converter;
 pub mod distance;
 pub mod event;
 pub mod four_vector;
+pub mod cres;
+pub mod traits;
+pub mod auto_decompress;
+pub mod hepmc;
+pub mod resampler;
+pub mod progress_bar;
+pub mod cell_collector;
+pub mod writer;
+pub mod compression;
+pub mod unweight;
+pub mod prelude;
 
 use lazy_static::lazy_static;
 

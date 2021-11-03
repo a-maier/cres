@@ -1,4 +1,4 @@
-pub(crate) trait Progress {
+pub trait Progress {
     fn inc(&self, i: u64);
     fn finish(&self);
 }
@@ -24,7 +24,7 @@ impl Progress for logbar::ProgressBar {
 }
 
 #[derive(Default)]
-pub(crate) struct ProgressBar {
+pub struct ProgressBar {
     bar: Option<Box<dyn Progress>>,
 }
 
@@ -43,7 +43,7 @@ impl Progress for ProgressBar {
 }
 
 impl ProgressBar {
-    pub(crate) fn new(len: u64, message: &str) -> Self {
+    pub fn new(len: u64, message: &str) -> Self {
         if log::max_level().to_level() != Some(log::Level::Info) {
             ProgressBar::default()
         } else if console::Term::stderr().features().is_attended() {

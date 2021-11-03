@@ -1,58 +1,13 @@
-use std::fmt::{self, Display};
 use std::path::PathBuf;
-use std::str::FromStr;
+
+use cres::compression::Compression;
+use cres::converter::JetAlgorithm;
+use cres::resampler::{Strategy, UnknownStrategy};
 
 use lazy_static::lazy_static;
 use regex::Regex;
 use structopt::StructOpt;
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub(crate) enum Strategy {
-    LeastNegative,
-    MostNegative,
-    Next,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub(crate) enum JetAlgorithm {
-    AntiKt,
-    CambridgeAachen,
-    Kt,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct UnknownJetAlgorithm(String);
-
-impl Display for UnknownJetAlgorithm {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unknown jet algorithm: {}", self.0)
-    }
-}
-
-impl FromStr for JetAlgorithm {
-    type Err = UnknownJetAlgorithm;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "anti_kt" | "antikt" | "anti-kt" => Ok(Self::AntiKt),
-            "kt" => Ok(Self::Kt),
-            "Cambridge/Aachen" | "Cambridge-Aachen" | "Cambridge_Aachen"
-            | "cambridge/aachen" | "cambridge-aachen" | "cambridge_aachen" => {
-                Ok(Self::CambridgeAachen)
-            }
-            _ => Err(UnknownJetAlgorithm(s.to_string())),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct UnknownStrategy(String);
-
-impl Display for UnknownStrategy {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unknown strategy: {}", self.0)
-    }
-}
+use thiserror::Error;
 
 fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
     use Strategy::*;
@@ -64,28 +19,12 @@ fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub(crate) enum Compression {
-    Bzip2,
-    Gzip(u8),
-    Lz4(u8),
-    Zstd(u8),
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub(crate) enum ParseCompressionErr {
-    Algorithm(String),
-    Level(String, String),
-}
-
-impl Display for ParseCompressionErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Algorithm(s) => write!(f, "Unknown compression algorithm: {}", s),
-            Self::Level(algo,lvl) =>
-                write!(f, "Level {} not supported for {} compression", lvl, algo)
-        }
-    }
+    #[error("Unknown compression algorithm: {0}")]
+    UnknownAlgorithm(String),
+    #[error("Level {0} not supported for {1} compression")]
+    UnsupportedLevel(String, String),
 }
 
 lazy_static!{
@@ -96,61 +35,60 @@ const GZIP_DEFAULT_LEVEL: u8 = 6;
 const LZ4_DEFAULT_LEVEL: u8 = 0;
 const ZSTD_DEFAULT_LEVEL: u8 = 0;
 
-impl FromStr for Compression {
-    type Err = ParseCompressionErr;
+fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
+    use Compression::*;
+    use ParseCompressionErr::*;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let lower_case = s.to_ascii_lowercase();
-        let captures = COMPRESSION_RE.captures(&lower_case);
-        let captures = if let Some(captures) = captures {
-            captures
-        } else {
-            return Err(Self::Err::Algorithm(s.to_owned()))
-        };
-        let algo = &captures["algo"];
-        let lvl_str = &captures.name("lvl");
-        match algo {
-            "bzip2" | "bz2" => {
-                if let Some(lvl_str) = lvl_str {
-                    Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
-                } else {
-                    Ok(Self::Bzip2)
-                }
-            },
-            "gzip" | "gz" => {
-                if let Some(lvl_str) = lvl_str {
-                    match lvl_str.as_str()[1..].parse::<u8>() {
-                        Ok(lvl) if lvl <= 9 => Ok(Self::Gzip(lvl)),
-                        _ => Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
-                    }
-                } else {
-                    Ok(Self::Gzip(GZIP_DEFAULT_LEVEL))
-                }
-            },
-            "lz4" => {
-                if let Some(lvl_str) = lvl_str {
-                    match lvl_str.as_str()[1..].parse::<u8>() {
-                        Ok(lvl) if lvl <= 16 => Ok(Self::Lz4(lvl)),
-                        _ => Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
-                    }
-                } else {
-                    Ok(Self::Lz4(LZ4_DEFAULT_LEVEL))
-                }
-            },
-            "zstd" | "zstandard" => {
-                if let Some(lvl_str) = lvl_str {
-                    match lvl_str.as_str()[1..].parse::<u8>() {
-                        Ok(lvl) if lvl <= 19 => Ok(Self::Zstd(lvl)),
-                        _ => Err(Self::Err::Level(algo.into(), lvl_str.as_str().to_owned()))
-                    }
-                } else {
-                    Ok(Self::Zstd(ZSTD_DEFAULT_LEVEL))
-                }
+    let lower_case = s.to_ascii_lowercase();
+    let captures = COMPRESSION_RE.captures(&lower_case);
+    let captures = if let Some(captures) = captures {
+        captures
+    } else {
+        return Err(UnknownAlgorithm(s.to_owned()))
+    };
+    let algo = &captures["algo"];
+    let lvl_str = &captures.name("lvl");
+    match algo {
+        "bzip2" | "bz2" => {
+            if let Some(lvl_str) = lvl_str {
+                Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+            } else {
+                Ok(Bzip2)
             }
-            _ => {
-                Err(Self::Err::Algorithm(s.to_string()))
-            },
+        },
+        "gzip" | "gz" => {
+            if let Some(lvl_str) = lvl_str {
+                match lvl_str.as_str()[1..].parse::<u8>() {
+                    Ok(lvl) if lvl <= 9 => Ok(Gzip(lvl)),
+                    _ => Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+                }
+            } else {
+                Ok(Gzip(GZIP_DEFAULT_LEVEL))
+            }
+        },
+        "lz4" => {
+            if let Some(lvl_str) = lvl_str {
+                match lvl_str.as_str()[1..].parse::<u8>() {
+                    Ok(lvl) if lvl <= 16 => Ok(Lz4(lvl)),
+                    _ => Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+                }
+            } else {
+                Ok(Lz4(LZ4_DEFAULT_LEVEL))
+            }
+        },
+        "zstd" | "zstandard" => {
+            if let Some(lvl_str) = lvl_str {
+                match lvl_str.as_str()[1..].parse::<u8>() {
+                    Ok(lvl) if lvl <= 19 => Ok(Zstd(lvl)),
+                    _ => Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+                }
+            } else {
+                Ok(Zstd(ZSTD_DEFAULT_LEVEL))
+            }
         }
+        _ => {
+            Err(UnknownAlgorithm (s.to_string()))
+        },
     }
 }
 
@@ -169,6 +107,16 @@ pub(crate) struct JetDefinition {
     #[structopt(short = "p", long)]
     /// Minimum jet transverse momentum
     pub jetpt: f64,
+}
+
+impl std::convert::From<JetDefinition> for cres::converter::JetDefinition {
+    fn from(j: JetDefinition) -> Self {
+        Self {
+            jetalgorithm: j.jetalgorithm,
+            jetradius: j.jetradius,
+            jetpt: j.jetpt,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, StructOpt)]
@@ -208,7 +156,8 @@ when calculating particle momentum distances.\n")]
     #[structopt(short = "d", long)]
     pub(crate) dumpcells: bool,
 
-    #[structopt(short = "c", long, help = "Compress output file.
+    #[structopt(short = "c", long, parse(try_from_str = parse_compr),
+                help = "Compress output file.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
 Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]

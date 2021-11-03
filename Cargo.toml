@@ -33,6 +33,9 @@ rand = "0.8"
 rand_xoshiro = "0.6"
 regex = "1.5"
 lazy_static = "1.4"
+thiserror = "1.0.30"
+anyhow = "1.0.44"
+derive_builder = "0.10.2"
 
 [build-dependencies]
 vergen = "5"

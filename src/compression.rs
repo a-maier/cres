@@ -3,9 +3,15 @@ use std::io::Write;
 use bzip2::write::BzEncoder;
 use flate2::write::GzEncoder;
 
-use crate::opt::Compression;
+#[derive(Debug, Copy, Clone)]
+pub enum Compression {
+    Bzip2,
+    Gzip(u8),
+    Lz4(u8),
+    Zstd(u8),
+}
 
-pub(crate) fn make_writer<'a, W: 'a + Write>(
+pub fn compress_writer<'a, W: 'a + Write>(
         writer: W,
         compression: Option<Compression>,
 ) -> Result<Box<dyn Write + 'a>, std::io::Error> {
