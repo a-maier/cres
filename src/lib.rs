@@ -6,14 +6,13 @@ pub mod four_vector;
 pub mod cres;
 pub mod traits;
 pub mod auto_decompress;
-pub mod hepmc;
 pub mod resampler;
 pub mod progress_bar;
 pub mod cell_collector;
-pub mod writer;
 pub mod compression;
 pub mod unweight;
 pub mod prelude;
+pub mod hepmc2;
 
 use lazy_static::lazy_static;
 

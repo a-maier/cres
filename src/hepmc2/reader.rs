@@ -13,8 +13,6 @@ pub struct CombinedReader {
     reader: Reader<Box<dyn BufRead>>,
 }
 
-pub type HepMCReader = CombinedReader;
-
 fn empty_reader() -> Reader<Box<dyn BufRead>> {
     Reader::new(Box::new(BufReader::new(std::io::empty())))
 }
