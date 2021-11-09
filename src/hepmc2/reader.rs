@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::path::Path;
 
 use crate::auto_decompress::auto_decompress;
 use crate::traits::{TryClone, Rewind};
@@ -15,7 +16,7 @@ pub enum ReadError<E>{
     HepMCReadErr(LineParseError, usize),
 }
 
-pub struct CombinedReader<'a, R: 'a> {
+pub struct CombinedReader<'a, R: TryClone + Read + Seek + 'a> {
     next_sources: Vec<R>,
     previous_sources: Vec<R>,
     reader: Reader<Box<dyn BufRead + 'a>>,
@@ -25,7 +26,7 @@ fn empty_reader() -> Reader<Box<dyn BufRead>> {
     Reader::new(Box::new(BufReader::new(std::io::empty())))
 }
 
-impl<'a, R: 'a> CombinedReader<'a, R> {
+impl<'a, R: TryClone + Read + Seek + 'a> CombinedReader<'a, R> {
     pub fn new(sources: Vec<R>) -> Self {
         CombinedReader {
             next_sources: sources,
@@ -36,12 +37,26 @@ impl<'a, R: 'a> CombinedReader<'a, R> {
 }
 
 impl CombinedReader<'static, crate::file::File> {
-    pub fn from_files(sources: Vec<std::fs::File>) -> Self {
+    pub fn from_files<I>(sources: I) -> Self
+    where I: IntoIterator<Item=std::fs::File>
+    {
         Self::new(sources.into_iter().map(crate::file::File).collect())
+    }
+
+    pub fn from_filenames<P, I>(sources: P) -> Result<Self, std::io::Error>
+    where
+        P: IntoIterator<Item=I>,
+        I: AsRef<Path>
+    {
+        use crate::file::File;
+        let sources: Result<Vec<File>, _> = sources.into_iter().map(
+            |p| File::open(p)
+        ).collect();
+        Ok(Self::new(sources?))
     }
 }
 
-impl<'a, R: Seek + 'a> Rewind for CombinedReader<'a, R> {
+impl<'a, R: TryClone + Read + Seek + 'a> Rewind for CombinedReader<'a, R> {
     type Error = std::io::Error;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
@@ -55,7 +70,7 @@ impl<'a, R: Seek + 'a> Rewind for CombinedReader<'a, R> {
     }
 }
 
-impl<'a, R: TryClone + Read + 'a> Iterator for CombinedReader<'a, R> {
+impl<'a, R: TryClone + Read + Seek + 'a> Iterator for CombinedReader<'a, R> {
     type Item = Result<hepmc2::event::Event, ReadError<<R as TryClone>::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {

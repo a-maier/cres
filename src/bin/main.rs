@@ -28,10 +28,6 @@ fn main() -> Result<()> {
 
     debug!("settings: {:?}", opt);
 
-    let infiles: Result<Vec<_>, _> =
-        opt.infiles.iter().rev().map(File::open).collect();
-    let infiles = infiles?;
-
     let mut resampler = DefaultResamplerBuilder::default();
     resampler.max_cell_size(opt.max_cell_size)
         .ptweight(opt.ptweight)
@@ -52,7 +48,7 @@ fn main() -> Result<()> {
         .build()?;
 
     let mut cres = CresBuilder {
-        reader: HepMCReader::from_files(infiles),
+        reader: HepMCReader::from_filenames(opt.infiles.iter().rev())?,
         converter: HepMCConverter::new(opt.jet_def.into(), n64(opt.ptweight)),
         resampler,
         unweighter: Unweighter::new(opt.unweight.minweight, rng),
