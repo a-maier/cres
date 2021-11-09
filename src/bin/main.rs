@@ -6,7 +6,7 @@ use std::cell::RefCell;
 
 use crate::opt::Opt;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cres::{
     prelude::*,
     resampler::DefaultResamplerBuilder,
@@ -40,8 +40,12 @@ fn main() -> Result<()> {
 
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
+    let outfile = File::create(&opt.outfile).with_context(
+        || format!("Failed to open {:?} for writing", opt.outfile)
+    )?;
+
     let writer = HepMCWriterBuilder::default()
-        .writer(File::create(opt.outfile)?)
+        .writer(outfile)
         .weight_norm(opt.weight_norm)
         .cell_collector(resampler.cell_collector())
         .compression(opt.compression)
