@@ -1,4 +1,7 @@
 use crate::event::Event;
+use crate::cell::Cell;
+
+pub use crate::distance::Distance;
 
 pub trait Rewind {
     type Error;
@@ -42,4 +45,10 @@ impl<T: Clone> TryClone for T {
     fn try_clone(&self) -> Result<Self, Self::Error> {
         Ok(self.clone())
     }
+}
+
+pub trait CellObserve {
+    fn cell_observe(&mut self, cell: &Cell);
+
+    fn finish(&mut self) { }
 }

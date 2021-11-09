@@ -12,6 +12,7 @@ pub trait Distance {
 
 const FALLBACK_SIZE: usize = 8;
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct EuclWithScaledPt {
     pt_weight: N64
 }
