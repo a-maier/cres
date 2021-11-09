@@ -29,3 +29,17 @@ pub trait Write<Reader> {
 
     fn write(&mut self, r: &mut Reader, e: &[Event]) -> Result<(), Self::Error>;
 }
+
+pub trait TryClone {
+    type Error;
+
+    fn try_clone(&self) -> Result<Self, Self::Error> where Self: Sized;
+}
+
+impl<T: Clone> TryClone for T {
+    type Error = std::convert::Infallible;
+
+    fn try_clone(&self) -> Result<Self, Self::Error> {
+        Ok(self.clone())
+    }
+}

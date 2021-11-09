@@ -1,69 +1,85 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
 use crate::auto_decompress::auto_decompress;
-use crate::traits::Rewind;
+use crate::traits::{TryClone, Rewind};
 
 use hepmc2::reader::{LineParseError, Reader};
 use log::info;
+use thiserror::Error;
 
-pub struct CombinedReader {
-    next_files: Vec<File>,
-    previous_files: Vec<File>,
-    reader: Reader<Box<dyn BufRead>>,
+#[derive(Debug, Error)]
+pub enum ReadError<E>{
+    #[error("Error cloning reader: {0}")]
+    CloneErr(E),
+    #[error("Error reading HepMC record: {0}")]
+    HepMCReadErr(LineParseError),
+}
+
+pub struct CombinedReader<'a, R: 'a> {
+    next_sources: Vec<R>,
+    previous_sources: Vec<R>,
+    reader: Reader<Box<dyn BufRead + 'a>>,
 }
 
 fn empty_reader() -> Reader<Box<dyn BufRead>> {
     Reader::new(Box::new(BufReader::new(std::io::empty())))
 }
 
-impl CombinedReader {
-    pub fn new(files: Vec<File>) -> Self {
+impl<'a, R: 'a> CombinedReader<'a, R> {
+    pub fn new(sources: Vec<R>) -> Self {
         CombinedReader {
-            next_files: files,
-            previous_files: Vec::new(),
+            next_sources: sources,
+            previous_sources: Vec::new(),
             reader: empty_reader(),
         }
     }
-
 }
 
-impl Rewind for CombinedReader {
+impl CombinedReader<'static, crate::file::File> {
+    pub fn from_files(sources: Vec<std::fs::File>) -> Self {
+        Self::new(sources.into_iter().map(crate::file::File).collect())
+    }
+}
+
+impl<'a, R: Seek + 'a> Rewind for CombinedReader<'a, R> {
     type Error = std::io::Error;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        self.previous_files.reverse();
-        self.next_files.append(&mut self.previous_files);
-        for file in &mut self.next_files {
-            file.seek(SeekFrom::Start(0))?;
+        self.previous_sources.reverse();
+        self.next_sources.append(&mut self.previous_sources);
+        for source in &mut self.next_sources {
+            source.seek(SeekFrom::Start(0))?;
         }
         self.reader = empty_reader();
         Ok(())
     }
 }
 
-impl Iterator for CombinedReader {
-    type Item = Result<hepmc2::event::Event, LineParseError>;
+impl<'a, R: TryClone + Read + 'a> Iterator for CombinedReader<'a, R> {
+    type Item = Result<hepmc2::event::Event, ReadError<<R as TryClone>::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = self.reader.next();
-        if next.is_none() {
-            if let Some(next_file) = self.next_files.pop() {
-                self.previous_files.push(next_file.try_clone().unwrap());
+        if let Some(next) = self.reader.next() {
+            Some(next.map_err(ReadError::HepMCReadErr))
+        } else {
+            if let Some(next_source) = self.next_sources.pop() {
+                let clone = match next_source.try_clone() {
+                    Ok(clone) => clone,
+                    Err(err) => return Some(Err(ReadError::CloneErr(err)))
+                };
+                self.previous_sources.push(clone);
                 info!(
-                    "Reading from file {}/{}",
-                    self.previous_files.len(),
-                    self.previous_files.len() + self.next_files.len()
+                    "Reading from source {}/{}",
+                    self.previous_sources.len(),
+                    self.previous_sources.len() + self.next_sources.len()
                 );
 
-                let decoder = auto_decompress(BufReader::new(next_file));
+                let decoder = auto_decompress(BufReader::new(next_source));
                 self.reader = Reader::from(decoder);
                 self.next()
             } else {
                 None
             }
-        } else {
-            next
         }
     }
 }

@@ -52,7 +52,7 @@ fn main() -> Result<()> {
         .build()?;
 
     let mut cres = CresBuilder {
-        reader: HepMCReader::new(infiles),
+        reader: HepMCReader::from_files(infiles),
         converter: HepMCConverter::new(opt.jet_def.into(), n64(opt.ptweight)),
         resampler,
         unweighter: Unweighter::new(opt.unweight.minweight, rng),
