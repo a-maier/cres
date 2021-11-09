@@ -9,10 +9,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ReadError<E>{
-    #[error("Error cloning reader: {0}")]
-    CloneErr(E),
-    #[error("Error reading HepMC record: {0}")]
-    HepMCReadErr(LineParseError),
+    #[error("Error cloning reader for source {1}: {0}")]
+    CloneErr(E, usize),
+    #[error("Error reading HepMC record from source {1}: {0}")]
+    HepMCReadErr(LineParseError, usize),
 }
 
 pub struct CombinedReader<'a, R: 'a> {
@@ -59,13 +59,15 @@ impl<'a, R: TryClone + Read + 'a> Iterator for CombinedReader<'a, R> {
     type Item = Result<hepmc2::event::Event, ReadError<<R as TryClone>::Error>>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let nsource = self.previous_sources.len();
         if let Some(next) = self.reader.next() {
-            Some(next.map_err(ReadError::HepMCReadErr))
+            debug_assert!(nsource > 0);
+            Some(next.map_err(|err| ReadError::HepMCReadErr(err, nsource - 1)))
         } else {
             if let Some(next_source) = self.next_sources.pop() {
                 let clone = match next_source.try_clone() {
                     Ok(clone) => clone,
-                    Err(err) => return Some(Err(ReadError::CloneErr(err)))
+                    Err(err) => return Some(Err(ReadError::CloneErr(err, nsource)))
                 };
                 self.previous_sources.push(clone);
                 info!(
