@@ -76,8 +76,8 @@ where
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
 
         let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
-        for seed in &mut self.seeds {
-            if seed > events.len() { break }
+        for seed in (&mut self.seeds).take(nneg_weight) {
+            if seed >= events.len() { break }
             progress.inc(1);
             if events[seed].1.weight > 0. { continue }
             let mut cell = Cell::new(
