@@ -2,6 +2,7 @@ use crate::event::Event;
 use crate::cell::Cell;
 
 pub use crate::distance::Distance;
+pub use crate::seeds::SelectSeeds;
 
 pub trait Rewind {
     type Error;
@@ -47,8 +48,8 @@ impl<T: Clone> TryClone for T {
     }
 }
 
-pub trait CellObserve {
-    fn cell_observe(&mut self, cell: &Cell);
+pub trait ObserveCell {
+    fn observe_cell(&mut self, cell: &Cell);
 
     fn finish(&mut self) { }
 }

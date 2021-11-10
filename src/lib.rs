@@ -11,6 +11,7 @@ pub mod progress_bar;
 pub mod cell_collector;
 pub mod compression;
 pub mod unweight;
+pub mod seeds;
 pub mod prelude;
 pub mod hepmc2;
 

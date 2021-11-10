@@ -1,8 +1,9 @@
 use std::path::PathBuf;
+use std::fmt::{self, Display};
 
 use cres::compression::Compression;
 use cres::hepmc2::converter::JetAlgorithm;
-use cres::resampler::{Strategy, UnknownStrategy};
+use cres::seeds::Strategy;
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -16,6 +17,15 @@ fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
         "MostNegative" | "most_negative" => Ok(MostNegative),
         "LeastNegative" | "least_negative" => Ok(LeastNegative),
         _ => Err(UnknownStrategy(s.to_string())),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UnknownStrategy(pub String);
+
+impl Display for UnknownStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unknown strategy: {}", self.0)
     }
 }
 

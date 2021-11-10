@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::default::Default;
-use std::fmt::{self, Display};
 use std::rc::Rc;
 use std::ops::RangeFrom;
 
@@ -10,7 +9,8 @@ use crate::distance::{Distance, EuclWithScaledPt};
 use crate::traits::Resample;
 use crate::event::Event;
 use crate::progress_bar::{Progress, ProgressBar};
-use crate::traits::CellObserve;
+use crate::seeds::{Strategy, StrategicSelector};
+use crate::traits::{ObserveCell, SelectSeeds};
 
 use derive_builder::Builder;
 use log::{debug, info, warn};
@@ -18,28 +18,6 @@ use noisy_float::prelude::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum Strategy {
-    LeastNegative,
-    MostNegative,
-    Next,
-}
-
-impl Default for Strategy {
-    fn default() -> Self {
-        Self::MostNegative
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct UnknownStrategy(pub String);
-
-impl Display for UnknownStrategy {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unknown strategy: {}", self.0)
-    }
-}
 
 pub struct Resampler<D, O, S>  {
     seeds: S,
@@ -59,11 +37,12 @@ impl<D, O, S> Resampler<D, O, S> {
     }
 }
 
-impl<D, O, S> Resample for Resampler<D, O, S>
+impl<D, O, S, T> Resample for Resampler<D, O, S>
 where
     D: Distance + Send + Sync,
-    S: Iterator<Item=usize>,
-    O: CellObserve,
+    S: SelectSeeds<Iter=T>,
+    T: Iterator<Item=usize>,
+    O: ObserveCell,
 {
     type Error = std::convert::Infallible;
 
@@ -75,8 +54,9 @@ where
 
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
 
+        let seeds = self.seeds.select_seeds(&events);
         let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
-        for seed in (&mut self.seeds).take(nneg_weight) {
+        for seed in seeds.take(nneg_weight) {
             if seed >= events.len() { break }
             progress.inc(1);
             if events[seed].1.weight > 0. { continue }
@@ -87,7 +67,7 @@ where
                 max_cell_size
             );
             cell.resample();
-            self.observer.cell_observe(&cell);
+            self.observer.observe_cell(&cell);
         }
         progress.finish();
         self.observer.finish();
@@ -199,9 +179,8 @@ impl Resample for DefaultResampler {
         let mut observer = Observer::default();
         observer.cell_collector = self.cell_collector.clone();
 
-        let seeds = choose_seeds(&events, self.strategy);
         let mut resampler = ResamplerBuilder::default()
-            .seeds(seeds.iter().copied())
+            .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
             .observer(observer)
             .weight_norm(self.weight_norm)
@@ -241,8 +220,8 @@ impl std::default::Default for Observer {
     }
 }
 
-impl CellObserve for Observer {
-    fn cell_observe(&mut self, cell: &Cell) {
+impl ObserveCell for Observer {
+    fn observe_cell(&mut self, cell: &Cell) {
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
             cell.nmembers(),
@@ -266,20 +245,6 @@ impl CellObserve for Observer {
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct NoObserver { }
-impl CellObserve for NoObserver {
-    fn cell_observe(&mut self, _cell: &Cell) { }
-}
-
-fn choose_seeds(events: &[Event], strategy: Strategy) -> Vec<usize> {
-    use Strategy::*;
-    let mut neg_weight: Vec<_> = events.par_iter().enumerate().filter(
-        |(_n, e)| e.weight < 0.
-    ).map(|(n, _e)| n).collect();
-    match strategy {
-        Next => {},
-        MostNegative => neg_weight.par_sort_unstable_by_key(|&n| events[n].weight),
-        LeastNegative => neg_weight
-            .par_sort_unstable_by(|&n, &m| events[m].weight.cmp(&events[n].weight)),
-    }
-    neg_weight
+impl ObserveCell for NoObserver {
+    fn observe_cell(&mut self, _cell: &Cell) { }
 }
