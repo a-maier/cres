@@ -1,6 +1,7 @@
 pub use crate::{
     cres::{Cres, CresBuilder},
     converter::HepMCConverter,
+    resampler::ResamplerBuilder,
     unweight::{Unweighter, NO_UNWEIGHTING},
 };
 

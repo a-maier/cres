@@ -110,7 +110,7 @@ pub struct ResamplerBuilder<D, O, S> {
 }
 
 impl<D, O, S> ResamplerBuilder<D, O, S> {
-    fn build(self) -> Resampler<D, O, S> {
+    pub fn build(self) -> Resampler<D, O, S> {
         Resampler {
             seeds: self.seeds,
             distance: self.distance,
@@ -120,7 +120,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    fn seeds<SS>(self, seeds: SS) -> ResamplerBuilder<D, O, SS> {
+    pub fn seeds<SS>(self, seeds: SS) -> ResamplerBuilder<D, O, SS> {
         ResamplerBuilder {
             seeds,
             distance: self.distance,
@@ -130,7 +130,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S> {
+    pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S> {
         ResamplerBuilder {
             seeds: self.seeds,
             distance,
@@ -140,7 +140,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S> {
+    pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S> {
         ResamplerBuilder {
             seeds: self.seeds,
             distance: self.distance,
@@ -150,14 +150,14 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S> {
+    pub fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             weight_norm,
             ..self
         }
     }
 
-    fn max_cell_size(self, max_cell_size: Option<f64>) -> ResamplerBuilder<D, O, S> {
+    pub fn max_cell_size(self, max_cell_size: Option<f64>) -> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             max_cell_size,
             ..self
