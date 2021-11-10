@@ -44,11 +44,11 @@ impl FromStr for JetAlgorithm {
 #[derive(Debug, Copy, Clone)]
 pub struct JetDefinition {
     /// Jet algorithm
-    pub jetalgorithm: JetAlgorithm,
+    pub algorithm: JetAlgorithm,
     /// Jet radius parameter
-    pub jetradius: f64,
+    pub radius: f64,
     /// Minimum jet transverse momentum
-    pub jetpt: f64,
+    pub min_pt: f64,
 }
 
 fn is_parton(particle: &hepmc2::event::Particle) -> bool {
@@ -60,10 +60,10 @@ const OUTGOING_STATUS: i32 = 1;
 const PID_JET: i32 = 81;
 
 fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
-    let minpt2 = jet_def.jetpt * jet_def.jetpt;
+    let minpt2 = jet_def.min_pt * jet_def.min_pt;
     let cut = |jet: PseudoJet| jet.pt2() > minpt2;
-    let r = jet_def.jetradius;
-    match jet_def.jetalgorithm {
+    let r = jet_def.radius;
+    match jet_def.algorithm {
         JetAlgorithm::AntiKt => cluster_if(partons, &anti_kt_f(r), cut),
         JetAlgorithm::Kt => cluster_if(partons, &kt_f(r), cut),
         JetAlgorithm::CambridgeAachen => {

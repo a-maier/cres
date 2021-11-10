@@ -112,9 +112,9 @@ pub(crate) struct JetDefinition {
 impl std::convert::From<JetDefinition> for cres::hepmc2::converter::JetDefinition {
     fn from(j: JetDefinition) -> Self {
         Self {
-            jetalgorithm: j.jetalgorithm,
-            jetradius: j.jetradius,
-            jetpt: j.jetpt,
+            algorithm: j.jetalgorithm,
+            radius: j.jetradius,
+            min_pt: j.jetpt,
         }
     }
 }
