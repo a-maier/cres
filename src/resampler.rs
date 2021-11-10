@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::default::Default;
 use std::fmt::{self, Display};
 use std::rc::Rc;
+use std::ops::RangeFrom;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
@@ -40,14 +41,11 @@ impl Display for UnknownStrategy {
     }
 }
 
-#[derive(Builder)]
 pub struct Resampler<D, O, S>  {
     seeds: S,
     distance: D,
     observer: O,
-    #[builder(default = "1.")]
     weight_norm: f64,
-    #[builder(default)]
     max_cell_size: Option<f64>,
 }
 
@@ -79,6 +77,7 @@ where
 
         let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
         for seed in &mut self.seeds {
+            if seed > events.len() { break }
             progress.inc(1);
             if events[seed].1.weight > 0. { continue }
             let mut cell = Cell::new(
@@ -99,6 +98,82 @@ where
         ).collect();
         events.par_sort_unstable();
         Ok(events)
+    }
+}
+
+pub struct ResamplerBuilder<D, O, S> {
+    seeds: S,
+    distance: D,
+    observer: O,
+    weight_norm: f64,
+    max_cell_size: Option<f64>,
+}
+
+impl<D, O, S> ResamplerBuilder<D, O, S> {
+    fn build(self) -> Resampler<D, O, S> {
+        Resampler {
+            seeds: self.seeds,
+            distance: self.distance,
+            observer: self.observer,
+            weight_norm: self.weight_norm,
+            max_cell_size: self.max_cell_size,
+        }
+    }
+
+    fn seeds<SS>(self, seeds: SS) -> ResamplerBuilder<D, O, SS> {
+        ResamplerBuilder {
+            seeds,
+            distance: self.distance,
+            observer: self.observer,
+            weight_norm: self.weight_norm,
+            max_cell_size: self.max_cell_size,
+        }
+    }
+
+    fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S> {
+        ResamplerBuilder {
+            seeds: self.seeds,
+            distance,
+            observer: self.observer,
+            weight_norm: self.weight_norm,
+            max_cell_size: self.max_cell_size,
+        }
+    }
+
+    fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S> {
+        ResamplerBuilder {
+            seeds: self.seeds,
+            distance: self.distance,
+            observer,
+            weight_norm: self.weight_norm,
+            max_cell_size: self.max_cell_size,
+        }
+    }
+
+    fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S> {
+        ResamplerBuilder {
+            weight_norm,
+            ..self
+        }
+    }
+
+    fn max_cell_size(self, max_cell_size: Option<f64>) -> ResamplerBuilder<D, O, S> {
+        ResamplerBuilder {
+            max_cell_size,
+            ..self
+        }
+    }
+}
+
+impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, RangeFrom<usize>> {
+    fn default() -> Self {
+        Self {
+            seeds: 0..,
+            distance: Default::default(),
+            observer: Default::default(),
+            weight_norm: 1.,
+            max_cell_size: Default::default(),
+        }
     }
 }
 
@@ -131,7 +206,7 @@ impl Resample for DefaultResampler {
             .observer(observer)
             .weight_norm(self.weight_norm)
             .max_cell_size(self.max_cell_size)
-            .build().unwrap();
+            .build();
         crate::traits::Resample::resample(&mut resampler, events)
     }
 }
@@ -187,6 +262,12 @@ impl CellObserve for Observer {
         info!("Median radius: {:.3}", median_radius(self.cell_radii.as_mut_slice()));
         self.cell_collector.as_ref().map(|c| c.borrow().dump_info());
     }
+}
+
+#[derive(Copy, Clone, Default, Debug)]
+struct NoObserver { }
+impl CellObserve for NoObserver {
+    fn cell_observe(&mut self, _cell: &Cell) { }
 }
 
 fn choose_seeds(events: &[Event], strategy: Strategy) -> Vec<usize> {
