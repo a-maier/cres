@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::default::Default;
 use std::rc::Rc;
-use std::ops::RangeFrom;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
@@ -145,10 +144,10 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     }
 }
 
-impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, RangeFrom<usize>> {
+impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector> {
     fn default() -> Self {
         Self {
-            seeds: 0..,
+            seeds: Default::default(),
             distance: Default::default(),
             observer: Default::default(),
             weight_norm: 1.,
