@@ -1,7 +1,7 @@
 pub use crate::{
     cres::{Cres, CresBuilder},
     converter::HepMCConverter,
-    unweight::Unweighter,
+    unweight::{Unweighter, NO_UNWEIGHTING},
 };
 
 pub type HepMCReader<'a, R> = crate::hepmc2::reader::CombinedReader<'a, R>;

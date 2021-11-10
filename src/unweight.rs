@@ -57,3 +57,14 @@ impl<R: Rng> Unweight for Unweighter<R> {
         Ok(events)
     }
 }
+
+pub struct NoUnweighter { }
+impl Unweight for NoUnweighter {
+    type Error = std::convert::Infallible;
+
+    fn unweight(&mut self, events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
+        Ok(events)
+    }
+}
+
+pub const NO_UNWEIGHTING: NoUnweighter = NoUnweighter { };
