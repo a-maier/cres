@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, hash_map::Entry};
 use std::fs::File;
+use std::path::Path;
 use std::io::BufWriter;
 use std::rc::Rc;
 
@@ -26,6 +27,12 @@ pub struct Writer<T> {
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     #[builder(default)]
     compression: Option<Compression>
+}
+
+impl WriterBuilder<File> {
+    pub fn to_filename<P: AsRef<Path>>(self, path: P) -> Result<Self, std::io::Error> {
+        Ok(self.writer(File::create(path.as_ref())?))
+    }
 }
 
 impl<E, R, T: std::io::Write> Write<R> for Writer<T>
