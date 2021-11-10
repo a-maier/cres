@@ -72,18 +72,19 @@ fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
     }
 }
 
-pub struct HepMCConverter {
+#[derive(Copy, Clone, Debug)]
+pub struct ClusteringConverter {
     jet_def: JetDefinition,
     ptweight: N64
 }
 
-impl HepMCConverter {
+impl ClusteringConverter {
     pub fn new(jet_def: JetDefinition, ptweight: N64) -> Self {
         Self{jet_def, ptweight}
     }
 }
 
-impl TryConvert<hepmc2::Event, Event> for HepMCConverter {
+impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
     type Error = std::convert::Infallible;
 
     fn try_convert(&mut self, event: hepmc2::Event) -> Result<Event, Self::Error> {
@@ -117,6 +118,42 @@ impl TryConvert<hepmc2::Event, Event> for HepMCConverter {
         for (_type, ps) in &mut res.outgoing_by_pid {
             ps.sort_unstable_by_key(|p| pt_norm_sq(p, self.ptweight));
             ps.reverse()
+        }
+        Ok(res)
+    }
+
+}
+
+
+#[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Converter {}
+
+impl Converter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl TryConvert<hepmc2::Event, Event> for Converter {
+    type Error = std::convert::Infallible;
+
+    fn try_convert(&mut self, event: hepmc2::Event) -> Result<Event, Self::Error> {
+        let mut res = Event::new();
+        res.weight = n64(*event.weights.first().unwrap());
+        for vx in event.vertices {
+            let outgoing = vx
+                .particles_out
+                .into_iter()
+                .filter(|p| p.status == OUTGOING_STATUS);
+            for out in outgoing {
+                let p = [
+                    n64(out.p[0]),
+                    n64(out.p[1]),
+                    n64(out.p[2]),
+                    n64(out.p[3]),
+                ];
+                res.add_outgoing(out.id, p.into())
+            }
         }
         Ok(res)
     }

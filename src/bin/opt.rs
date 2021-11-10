@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use cres::compression::Compression;
-use cres::converter::JetAlgorithm;
+use cres::hepmc2::converter::JetAlgorithm;
 use cres::resampler::{Strategy, UnknownStrategy};
 
 use lazy_static::lazy_static;
@@ -109,7 +109,7 @@ pub(crate) struct JetDefinition {
     pub jetpt: f64,
 }
 
-impl std::convert::From<JetDefinition> for cres::converter::JetDefinition {
+impl std::convert::From<JetDefinition> for cres::hepmc2::converter::JetDefinition {
     fn from(j: JetDefinition) -> Self {
         Self {
             jetalgorithm: j.jetalgorithm,

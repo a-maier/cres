@@ -8,6 +8,7 @@ use crate::opt::Opt;
 use anyhow::{Context, Result};
 use cres::{
     prelude::*,
+    hepmc2,
     resampler::DefaultResamplerBuilder,
     cell_collector::CellCollector,
     VERSION, GIT_REV, GIT_BRANCH
@@ -39,7 +40,7 @@ fn main() -> Result<()> {
 
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
-    let writer = HepMCWriterBuilder::default()
+    let writer = hepmc2::WriterBuilder::default()
         .to_filename(&opt.outfile).with_context(
             || format!("Failed to open {:?} for writing", opt.outfile)
         )?
@@ -49,8 +50,8 @@ fn main() -> Result<()> {
         .build()?;
 
     let mut cres = CresBuilder {
-        reader: HepMCReader::from_filenames(opt.infiles.iter().rev())?,
-        converter: HepMCConverter::new(opt.jet_def.into(), n64(opt.ptweight)),
+        reader: hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?,
+        converter: hepmc2::ClusteringConverter::new(opt.jet_def.into(), n64(opt.ptweight)),
         resampler,
         unweighter: Unweighter::new(opt.unweight.minweight, rng),
         writer

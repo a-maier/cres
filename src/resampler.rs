@@ -265,7 +265,7 @@ impl CellObserve for Observer {
 }
 
 #[derive(Copy, Clone, Default, Debug)]
-struct NoObserver { }
+pub struct NoObserver { }
 impl CellObserve for NoObserver {
     fn cell_observe(&mut self, _cell: &Cell) { }
 }
