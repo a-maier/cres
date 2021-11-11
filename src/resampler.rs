@@ -99,7 +99,11 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    pub fn seeds<SS>(self, seeds: SS) -> ResamplerBuilder<D, O, SS> {
+    pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS>
+    where
+        SS: SelectSeeds<Iter=T>,
+        T: Iterator<Item=usize>,
+    {
         ResamplerBuilder {
             seeds,
             distance: self.distance,
@@ -109,7 +113,9 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S> {
+    pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S>
+    where DD: Distance + Send + Sync
+    {
         ResamplerBuilder {
             seeds: self.seeds,
             distance,
@@ -119,7 +125,9 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
-    pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S> {
+    pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S>
+    where OO: ObserveCell
+    {
         ResamplerBuilder {
             seeds: self.seeds,
             distance: self.distance,
