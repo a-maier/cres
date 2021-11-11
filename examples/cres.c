@@ -6,11 +6,13 @@
  * ```
  * in the directory containing `Cargo.toml`.
  *
- * Then copy the compiled libraries (`libcres.a` and `libcres.so` on linux)
- * to a directory where they can be found by your C compiler.
+ * Then copy the compiled libraries (`libcres.a` and `libcres.so` on
+ * linux) and the generated header `build/cres.h` to a directory where
+ * they can be found by your C compiler.
+ *
  * Now compile the example. For gcc use
  * ```
- * gcc -o cres -I. examples/cres.c -lcres -lm
+ * gcc -o cres examples/cres.c -lcres -lm
  * ```
  * or similar for clang.
  *
@@ -48,6 +50,8 @@ int main(int argc, char** argv) {
   opt.weight_norm = 1.;
   double inf = INFINITY;
   opt.max_cell_size = &inf;
+
+  opt.distance = NULL;
 
   res = cres_run(&opt);
   if(res != 0) cres_print_last_err();
