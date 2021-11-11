@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
    *
    * differences in transverse momentum are enhanced by τ = opt.ptweight
    *
-   * see `custom_distance.c` for an example of a user-defined distance
+   * see `user_distance.c` for an example of a user-defined distance
    */
   opt.distance = NULL;
   opt.ptweight = 0.;

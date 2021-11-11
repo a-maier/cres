@@ -124,7 +124,6 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
     if !opt.distance.is_null() {
         let distance = unsafe { *opt.distance };
         debug!("Using custom distance function {:?}", distance);
-        println!("{:?}", distance);
         let resampler = resampler
             .distance(distance)
             .build();
