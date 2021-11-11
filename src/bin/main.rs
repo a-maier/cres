@@ -29,6 +29,7 @@ use structopt::StructOpt;
 use cres::cell::Cell;
 use cres::event::Event;
 use cres::distance::EuclWithScaledPt;
+use cres::{VERSION, GIT_REV, GIT_BRANCH};
 // use cres::parser::parse_event;
 
 fn median_radius(radii: &mut [N64]) -> N64 {
@@ -60,6 +61,7 @@ fn run_main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
+    info!("cres {} rev {} ({})", VERSION, GIT_REV, GIT_BRANCH);
 
     debug!("settings: {:?}", opt);
 
