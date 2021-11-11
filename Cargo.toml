@@ -37,13 +37,15 @@ thiserror = "1.0.30"
 anyhow = "1.0.44"
 derive_builder = "0.10.2"
 
-[build-dependencies]
-vergen = "5"
-
 [lib]
 name = "cres"
 path = "src/lib.rs"
+crate-type =["lib", "staticlib", "cdylib"]
 
 [[bin]]
 name = "cres"
 path = "src/bin/main.rs"
+
+[build-dependencies]
+cbindgen = "0.20"
+vergen = "5"

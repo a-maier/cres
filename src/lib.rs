@@ -14,6 +14,7 @@ pub mod unweight;
 pub mod seeds;
 pub mod prelude;
 pub mod hepmc2;
+pub mod c_api;
 
 use lazy_static::lazy_static;
 
