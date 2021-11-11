@@ -71,8 +71,8 @@ where
             let mut hepmc_event = hepmc_event.map_err(
                 |err| ReadErr(err)
             )?;
-            if hepmc_id < event.id {
-                for _ in hepmc_id..event.id {
+            if hepmc_id < event.id() {
+                for _ in hepmc_id..event.id() {
                     let (_id, ev) = hepmc_events.next().unwrap();
                     hepmc_event = ev.map_err(
                         |err| ReadErr(err)
@@ -89,7 +89,7 @@ where
             writer.write(&hepmc_event)?;
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to
-                    .get(&event.id)
+                    .get(&event.id())
                     .map(|v: &Vec<usize>| v.as_slice())
                     .unwrap_or_default();
                 for cellnum in cellnums {

@@ -18,7 +18,6 @@ use env_logger::Env;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use structopt::StructOpt;
-use noisy_float::prelude::*;
 
 fn main() -> Result<()> {
     let opt = Opt::from_args();
@@ -51,7 +50,7 @@ fn main() -> Result<()> {
 
     let mut cres = CresBuilder {
         reader: hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?,
-        converter: hepmc2::ClusteringConverter::new(opt.jet_def.into(), n64(opt.ptweight)),
+        converter: hepmc2::ClusteringConverter::new(opt.jet_def.into()),
         resampler,
         unweighter: Unweighter::new(opt.unweight.minweight, rng),
         writer

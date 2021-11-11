@@ -2,8 +2,8 @@ use noisy_float::prelude::*;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Default)]
 pub struct FourVector{
+    pt: N64,
     p: [N64; 4],
-    pt: N64
 }
 
 impl FourVector {

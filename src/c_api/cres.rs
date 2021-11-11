@@ -11,7 +11,6 @@ use std::os::raw::{c_char, c_double};
 
 use anyhow::{anyhow, Error};
 use log::debug;
-use noisy_float::prelude::*;
 use rand::prelude::*;
 
 
@@ -119,7 +118,7 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         reader: hepmc2::Reader::from_filenames(infiles.iter().rev().map(
             |f| OsStr::from_bytes(f.to_bytes())
         ))?,
-        converter: hepmc2::ClusteringConverter::new(opt.jet_def.into(), n64(opt.ptweight)),
+        converter: hepmc2::ClusteringConverter::new(opt.jet_def.into()),
         resampler,
         unweighter: Unweighter::new(0., thread_rng()),
         writer

@@ -1,8 +1,7 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
-use crate::event::Event;
-use crate::distance::pt_norm_sq;
+use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
 use jetty::{anti_kt_f, cambridge_aachen_f, cluster_if, kt_f, PseudoJet};
@@ -75,22 +74,24 @@ fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
 #[derive(Copy, Clone, Debug)]
 pub struct ClusteringConverter {
     jet_def: JetDefinition,
-    ptweight: N64
 }
 
 impl ClusteringConverter {
-    pub fn new(jet_def: JetDefinition, ptweight: N64) -> Self {
-        Self{jet_def, ptweight}
+    pub fn new(jet_def: JetDefinition) -> Self {
+        Self{jet_def}
     }
 }
 
-impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
+impl TryConvert<(hepmc2::Event, EventBuilder), Event> for ClusteringConverter {
     type Error = std::convert::Infallible;
 
-    fn try_convert(&mut self, event: hepmc2::Event) -> Result<Event, Self::Error> {
-        let mut res = Event::new();
+    fn try_convert(
+        &mut self,
+        ev: (hepmc2::Event, EventBuilder)
+    ) -> Result<Event, Self::Error> {
         let mut partons = Vec::new();
-        res.weight = n64(*event.weights.first().unwrap());
+        let (event, mut builder) = ev;
+        builder.weight(n64(*event.weights.first().unwrap()));
         for vx in event.vertices {
             let outgoing = vx
                 .particles_out
@@ -106,20 +107,16 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
                         n64(out.p[2]),
                         n64(out.p[3]),
                     ];
-                    res.add_outgoing(out.id, p.into())
+                    builder.add_outgoing(out.id, p.into());
                 }
             }
         }
         let jets = cluster(partons, &self.jet_def);
         for jet in jets {
             let p = [jet.e(), jet.px(), jet.py(), jet.pz()];
-            res.add_outgoing(PID_JET, p.into());
+            builder.add_outgoing(PID_JET, p.into());
         }
-        for (_type, ps) in &mut res.outgoing_by_pid {
-            ps.sort_unstable_by_key(|p| pt_norm_sq(p, self.ptweight));
-            ps.reverse()
-        }
-        Ok(res)
+        Ok(builder.build())
     }
 
 }
@@ -134,12 +131,15 @@ impl Converter {
     }
 }
 
-impl TryConvert<hepmc2::Event, Event> for Converter {
+impl TryConvert<(hepmc2::Event, EventBuilder), Event> for Converter {
     type Error = std::convert::Infallible;
 
-    fn try_convert(&mut self, event: hepmc2::Event) -> Result<Event, Self::Error> {
-        let mut res = Event::new();
-        res.weight = n64(*event.weights.first().unwrap());
+    fn try_convert(
+        &mut self,
+        ev: (hepmc2::Event, EventBuilder)
+    ) -> Result<Event, Self::Error> {
+        let (event, mut builder) = ev;
+        builder.weight(n64(*event.weights.first().unwrap()));
         for vx in event.vertices {
             let outgoing = vx
                 .particles_out
@@ -152,10 +152,9 @@ impl TryConvert<hepmc2::Event, Event> for Converter {
                     n64(out.p[2]),
                     n64(out.p[3]),
                 ];
-                res.add_outgoing(out.id, p.into())
+                builder.add_outgoing(out.id, p.into());
             }
         }
-        Ok(res)
+        Ok(builder.build())
     }
-
 }

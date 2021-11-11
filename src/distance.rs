@@ -20,8 +20,8 @@ pub struct EuclWithScaledPt {
 impl Distance for EuclWithScaledPt {
     fn distance(&self, ev1: &Event, ev2: &Event) -> N64 {
         let mut dist = n64(0.);
-        let out1 = &ev1.outgoing_by_pid;
-        let out2 = &ev2.outgoing_by_pid;
+        let out1 = ev1.outgoing();
+        let out2 = ev2.outgoing();
         let mut idx1 = 0;
         let mut idx2 = 0;
         while idx1 < out1.len() && idx2 < out2.len() {
