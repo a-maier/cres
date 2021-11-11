@@ -12,7 +12,7 @@
  *
  * note that this function has be thread-safe and must never return NaN!
  *
- * this function is just a simple example
+ * this function is just for demonstration
  * and doesn't make much sense physically
  */
 double my_distance(

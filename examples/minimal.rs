@@ -1,5 +1,6 @@
 // minimal example for cell resampling
 // run with `cargo run --release --example minimal -- IN.hepmc OUT.hepmc`
+// set the environment variable `RUST_LOG=info` for command-line output
 use std::error::Error;
 
 use cres::prelude::*;
