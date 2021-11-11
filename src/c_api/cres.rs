@@ -24,7 +24,7 @@ pub struct Opt {
     ptweight: c_double,
     jet_def: JetDefinition,
     weight_norm: c_double,
-    max_cell_size: *mut c_double,
+    max_cell_size: c_double,
 }
 
 #[repr(C)]
@@ -116,12 +116,9 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         .build()?;
 
     // TODO: seeds, observer
-    let mut resampler = ResamplerBuilder::default()
-            .weight_norm(opt.weight_norm);
-    if !opt.max_cell_size.is_null() {
-        let max_cell_size = unsafe{ *opt.max_cell_size as f64 };
-        resampler = resampler.max_cell_size(Some(max_cell_size));
-    }
+    let resampler = ResamplerBuilder::default()
+        .weight_norm(opt.weight_norm)
+        .max_cell_size(Some(opt.max_cell_size as f64));
 
     // TODO: code duplication
     if !opt.distance.is_null() {

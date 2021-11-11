@@ -39,20 +39,34 @@ int main(int argc, char** argv) {
   if(res != 0) cres_print_last_err();
 
   Opt opt;
-  opt.infiles = argv + 1;
+  /* all but the first and last command line arguments are the input files */
   opt.n_infiles = argc - 2;
+  opt.infiles = argv + 1;
+  /* and the last command line arguments is the output file */
   opt.outfile = argv[argc - 1];
 
-  opt.ptweight = 0.;
+  /* settings for jet clustering */
   opt.jet_def.algorithm = AntiKt;
   opt.jet_def.radius = 0.4;
   opt.jet_def.min_pt = 30.;
+  /* factor between total cross section and sum of weights */
   opt.weight_norm = 1.;
-  double inf = INFINITY;
-  opt.max_cell_size = &inf;
+  /* maximum cell size, INFIINITY means effectively unlimited */
+  opt.max_cell_size = INFINITY;
 
+  /* distance function
+   *
+   * `NULL` means the standard distance function described in
+   * https://arxiv.org/abs/2109.07851
+   *
+   * differences in transverse momentum are enhanced by τ = opt.ptweight
+   *
+   * see `custom_distance.c` for an example of a user-defined distance
+   */
   opt.distance = NULL;
+  opt.ptweight = 0.;
 
+  /* build and run the resampler */
   res = cres_run(&opt);
   if(res != 0) cres_print_last_err();
   return res;
