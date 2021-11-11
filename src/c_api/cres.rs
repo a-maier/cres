@@ -1,8 +1,9 @@
-use crate::prelude::{CresBuilder, Unweighter};
+use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::hepmc2;
-use crate::resampler::DefaultResamplerBuilder;
-use crate::seeds::Strategy;
+use crate::distance::EuclWithScaledPt;
+use crate::resampler::ResamplerBuilder;
 use crate::c_api::error::LAST_ERROR;
+use crate::c_api::distance::DistanceFn;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
@@ -11,8 +12,7 @@ use std::os::raw::{c_char, c_double};
 
 use anyhow::{anyhow, Error};
 use log::debug;
-use rand::prelude::*;
-
+use noisy_float::prelude::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -20,6 +20,7 @@ pub struct Opt {
     infiles: *mut *mut c_char,
     n_infiles: usize,
     outfile: *mut c_char,
+    distance: *mut DistanceFn,
     ptweight: c_double,
     jet_def: JetDefinition,
     weight_norm: c_double,
@@ -85,7 +86,7 @@ pub extern "C" fn cres_run(opt: &Opt) -> i32 {
 }
 
 fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
-    debug!("Settings: {:?}", opt);
+    debug!("Settings: {:#?}", opt);
 
     let infiles: Vec<_> = unsafe {
         let names = std::slice::from_raw_parts(opt.infiles, opt.n_infiles);
@@ -97,33 +98,63 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         CStr::from_ptr(opt.outfile)
     };
     let outfile = OsStr::from_bytes(outfile.to_bytes());
-    debug!("Will write output to {:?}", infiles);
+    debug!("Will write output to {:?}", outfile);
     let outfile = std::fs::File::create(outfile)?;
+
+    let reader = hepmc2::Reader::from_filenames(infiles.iter().rev().map(
+        |f| OsStr::from_bytes(f.to_bytes())
+    ))?;
+
+    let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+
+    // TODO: unweighting
+    let unweighter = NO_UNWEIGHTING;
 
     let writer = hepmc2::WriterBuilder::default()
         .writer(outfile)
         .weight_norm(opt.weight_norm)
         .build()?;
 
-    let mut resampler = DefaultResamplerBuilder::default();
+    // TODO: seeds, observer
+    let mut resampler = ResamplerBuilder::default()
+            .weight_norm(opt.weight_norm);
     if !opt.max_cell_size.is_null() {
         let max_cell_size = unsafe{ *opt.max_cell_size as f64 };
-        resampler.max_cell_size(Some(max_cell_size));
+        resampler = resampler.max_cell_size(Some(max_cell_size));
     }
-    resampler.strategy(Strategy::Next)
-        .weight_norm(opt.weight_norm);
-    let resampler = resampler.build()?;
 
-    let mut cres = CresBuilder {
-        reader: hepmc2::Reader::from_filenames(infiles.iter().rev().map(
-            |f| OsStr::from_bytes(f.to_bytes())
-        ))?,
-        converter: hepmc2::ClusteringConverter::new(opt.jet_def.into()),
-        resampler,
-        unweighter: Unweighter::new(0., thread_rng()),
-        writer
-    }.build();
-    debug!("Starting resampler");
-    cres.run()?;
+    // TODO: code duplication
+    if !opt.distance.is_null() {
+        let distance = unsafe { *opt.distance };
+        debug!("Using custom distance function {:?}", distance);
+        println!("{:?}", distance);
+        let resampler = resampler
+            .distance(distance)
+            .build();
+        let mut cres = CresBuilder {
+            reader,
+            converter,
+            resampler,
+            unweighter,
+            writer
+        }.build();
+        debug!("Starting resampler");
+        cres.run()?;
+    } else {
+        debug!("Using built-in distance function");
+        let resampler = resampler.distance(
+            EuclWithScaledPt::new(n64(opt.ptweight))
+        ).build();
+        let mut cres = CresBuilder {
+            reader,
+            converter,
+            resampler,
+            unweighter,
+            writer
+        }.build();
+        debug!("Starting resampler");
+        cres.run()?;
+    }
+
     Ok(())
 }
