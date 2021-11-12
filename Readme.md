@@ -72,3 +72,28 @@ The most important options are
   otherwise. Finally, all event weights are rescaled to exactly
   preserve the original sum of weights. The seed for unweighting can
   be chosen with the `--seed` option.
+
+Environment variables
+---------------------
+
+The `CRES_LOG` environment variable allows fine-grained control over
+the command line output. For example, to see the debugging output of
+the jet clustering, set
+
+    CRES_LOG=jetty=debug,cres=info
+
+See the [`env_logger` crate](https://crates.io/crates/env_logger/) for a
+comprehensive documentation.
+
+By default, `cres` uses all available cores. For small event samples,
+limiting the number of threads can be faster. You can set the number
+of threads with the `RAYON_NUM_THREADS` environment variable.
+
+Use as a library
+----------------
+
+For full flexibility like custom distance functions `cres` can be used
+as a library from Rust and C. For examples, see the `examples`
+subdirectory. The Rust API is documented on
+[docs.rs](https://docs.rs/crate/cres/). The C API is still limited and
+only available on unixoid platforms.

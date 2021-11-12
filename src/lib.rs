@@ -21,14 +21,12 @@
 
 /// Automatic input decompression
 pub mod auto_decompress;
-/// C API
 pub mod c_api;
 /// Definition of event cells
 pub mod cell;
 pub mod cell_collector;
 /// Output compression
 pub mod compression;
-/// Main cell resampler class
 pub mod cres;
 /// Distance functions
 pub mod distance;

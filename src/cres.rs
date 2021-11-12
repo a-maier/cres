@@ -1,16 +1,23 @@
 //! Main cell resampling functionality
 //!
-//! The usual workflow is to construct a [Cres](cres::Cres) object
-//! from a [CresBuilder](cres::CresBuilder).
+//! The usual workflow is to construct a [Cres] object from a
+//! [CresBuilder].
 //!
 //! This requires
-//! 1. A reader for the input events (see e.g. [hepmc2::Reader])
-//! 2. A converter to the internal format (e.g. [hepmc2::ClusteringConverter])
-//! 3. A [Resampler](traits::Resample)
-//! 4. An [Unweighter](traits::Unweight) (e.g. [NO_UNWEIGHTING](unweight::NO_UNWEIGHTING))
-//! 5. A [Writer](traits::Write) (e.g. [hepmc2::Writer])
+//! 1. A reader for the input events
+//!    (e.g. [hepmc2::Reader](crate::hepmc2::Reader)).
+//! 2. A converter to the internal format
+//!    (e.g. [hepmc2::ClusteringConverter](crate::hepmc2::ClusteringConverter))
 //!
-//! Finally, call [Cres::run](cres::Cres::run).
+//!    Each input event is passed to the converter together with an
+//!    [EventBuilder](crate::event::EventBuilder) object, which should be used
+//!    to build an [Event](crate::event::Event).
+//! 3. A [Resampler](crate::traits::Resample).
+//! 4. An [Unweighter](crate::traits::Unweight)
+//!    (e.g. [NO_UNWEIGHTING](crate::unweight::NO_UNWEIGHTING)).
+//! 5. A [Writer](crate::traits::Write) (e.g. [hepmc2::Writer](crate::hepmc2::Writer)).
+//!
+//! Finally, call [Cres::run].
 //!
 //! # Example
 //!

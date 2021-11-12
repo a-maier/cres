@@ -82,7 +82,7 @@ pub trait ObserveCell {
 
 /// Progress indicator, e.g. a progress bar
 pub trait Progress {
-    /// Advance the progress by `i'
+    /// Advance the progress by `i`
     fn inc(&self, i: u64);
     /// Signal that we are done
     fn finish(&self);

@@ -26,7 +26,7 @@ pub enum Strategy {
     LeastNegative,
     /// Select events with the most negative weight first
     MostNegative,
-    /// Take negative-weight events in the order passed to `select_seeds`
+    /// Take negative-weight events in the order passed to [select_seeds](SelectSeeds::select_seeds)
     Next,
 }
 
