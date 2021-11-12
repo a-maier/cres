@@ -51,8 +51,8 @@ use std::convert::From;
 use std::iter::Iterator;
 
 use log::info;
-use thiserror::Error;
 use rayon::prelude::*;
+use thiserror::Error;
 
 use crate::event::{Event, EventBuilder};
 use crate::traits::*;
@@ -131,11 +131,11 @@ pub enum CresError<E1, E2, E3, E4, E5, E6> {
 
 impl<R, C, S, U, W, E, Ev> Cres<R, C, S, U, W>
 where
-    R: Iterator<Item=Result<Ev, E>> + Rewind,
+    R: Iterator<Item = Result<Ev, E>> + Rewind,
     C: TryConvert<(Ev, EventBuilder), Event>,
     S: Resample,
     U: Unweight,
-    W: Write<R>
+    W: Write<R>,
 {
     /// Run the cell resampler
     ///
@@ -146,27 +146,41 @@ where
     /// 3. Apply cell resampling
     /// 4. Unweight
     /// 5. Write out events
-    pub fn run(&mut self) -> Result<(), CresError<E, <R as Rewind>::Error, C::Error, S::Error, U::Error, W::Error>> {
+    pub fn run(
+        &mut self,
+    ) -> Result<
+        (),
+        CresError<
+            E,
+            <R as Rewind>::Error,
+            C::Error,
+            S::Error,
+            U::Error,
+            W::Error,
+        >,
+    > {
         use CresError::*;
 
         self.reader.rewind().map_err(RewindErr)?;
 
         let converter = &mut self.converter;
-        let events: Result<Vec<_>, _> = (&mut self.reader).enumerate().map(
-            |(id, ev)| match ev {
+        let events: Result<Vec<_>, _> = (&mut self.reader)
+            .enumerate()
+            .map(|(id, ev)| match ev {
                 Ok(ev) => {
                     let builder = EventBuilder::new(id);
                     converter.try_convert((ev, builder)).map_err(ConversionErr)
-                },
-                Err(err) => Err(ReadErr(err))
-            }
-        ).collect();
+                }
+                Err(err) => Err(ReadErr(err)),
+            })
+            .collect();
         let events = events?;
         info!("Read {} events", events.len());
 
         let events = self.resampler.resample(events).map_err(ResamplingErr)?;
 
-        let mut events = self.unweighter.unweight(events).map_err(UnweightErr)?;
+        let mut events =
+            self.unweighter.unweight(events).map_err(UnweightErr)?;
         events.par_sort_unstable();
 
         self.reader.rewind().map_err(RewindErr)?;

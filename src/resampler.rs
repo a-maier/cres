@@ -5,10 +5,10 @@ use std::rc::Rc;
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt};
-use crate::traits::Resample;
 use crate::event::Event;
 use crate::progress_bar::{Progress, ProgressBar};
-use crate::seeds::{Strategy, StrategicSelector};
+use crate::seeds::{StrategicSelector, Strategy};
+use crate::traits::Resample;
 use crate::traits::{ObserveCell, SelectSeeds};
 
 use derive_builder::Builder;
@@ -19,7 +19,7 @@ use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 
 /// Main resampling class
-pub struct Resampler<D, O, S>  {
+pub struct Resampler<D, O, S> {
     seeds: S,
     distance: D,
     observer: O,
@@ -40,8 +40,8 @@ impl<D, O, S> Resampler<D, O, S> {
 impl<D, O, S, T> Resample for Resampler<D, O, S>
 where
     D: Distance + Send + Sync,
-    S: SelectSeeds<Iter=T>,
-    T: Iterator<Item=usize>,
+    S: SelectSeeds<Iter = T>,
+    T: Iterator<Item = usize>,
     O: ObserveCell,
 {
     type Error = std::convert::Infallible;
@@ -51,7 +51,10 @@ where
     /// For each seed, we construct a cell as described in
     /// [arXiv:2109.07851](https://arxiv.org/abs/2109.07851).
     /// Seeds with non-negative weight are ignored.
-    fn resample(&mut self, events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
+    fn resample(
+        &mut self,
+        events: Vec<Event>,
+    ) -> Result<Vec<Event>, Self::Error> {
         self.print_xs(&events);
 
         let nneg_weight = events.iter().filter(|e| e.weight < 0.).count();
@@ -60,26 +63,26 @@ where
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
 
         let seeds = self.seeds.select_seeds(&events);
-        let mut events: Vec<_> = events.into_par_iter().map(|e| (n64(0.), e)).collect();
+        let mut events: Vec<_> =
+            events.into_par_iter().map(|e| (n64(0.), e)).collect();
         for seed in seeds.take(nneg_weight) {
-            if seed >= events.len() { break }
+            if seed >= events.len() {
+                break;
+            }
             progress.inc(1);
-            if events[seed].1.weight > 0. { continue }
-            let mut cell = Cell::new(
-                &mut events,
-                seed,
-                &self.distance,
-                max_cell_size
-            );
+            if events[seed].1.weight > 0. {
+                continue;
+            }
+            let mut cell =
+                Cell::new(&mut events, seed, &self.distance, max_cell_size);
             cell.resample();
             self.observer.observe_cell(&cell);
         }
         progress.finish();
         self.observer.finish();
 
-        let events: Vec<_> = events.into_par_iter().map(
-            |(_dist, event)| event
-        ).collect();
+        let events: Vec<_> =
+            events.into_par_iter().map(|(_dist, event)| event).collect();
         Ok(events)
     }
 }
@@ -108,8 +111,8 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     /// Define how and in which order to choose cell seeds
     pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS>
     where
-        SS: SelectSeeds<Iter=T>,
-        T: Iterator<Item=usize>,
+        SS: SelectSeeds<Iter = T>,
+        T: Iterator<Item = usize>,
     {
         ResamplerBuilder {
             seeds,
@@ -122,7 +125,8 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
 
     /// Define the distance between events
     pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S>
-    where DD: Distance + Send + Sync
+    where
+        DD: Distance + Send + Sync,
     {
         ResamplerBuilder {
             seeds: self.seeds,
@@ -135,7 +139,8 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
 
     /// Callback that will be applied to each constructed cell after resampling
     pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S>
-    where OO: ObserveCell
+    where
+        OO: ObserveCell,
     {
         ResamplerBuilder {
             seeds: self.seeds,
@@ -159,7 +164,10 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     /// Set a maximum cell radius
     ///
     /// The default is `None`, meaning unlimited cell size.
-    pub fn max_cell_size(self, max_cell_size: Option<f64>) -> ResamplerBuilder<D, O, S> {
+    pub fn max_cell_size(
+        self,
+        max_cell_size: Option<f64>,
+    ) -> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             max_cell_size,
             ..self
@@ -167,7 +175,9 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     }
 }
 
-impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector> {
+impl Default
+    for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector>
+{
     fn default() -> Self {
         Self {
             seeds: Default::default(),
@@ -196,8 +206,10 @@ pub struct DefaultResampler {
 impl Resample for DefaultResampler {
     type Error = std::convert::Infallible;
 
-    fn resample(&mut self, events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
-
+    fn resample(
+        &mut self,
+        events: Vec<Event>,
+    ) -> Result<Vec<Event>, Self::Error> {
         let observer = Observer {
             cell_collector: self.cell_collector.clone(),
             ..Default::default()
@@ -253,7 +265,9 @@ impl ObserveCell for Observer {
             cell.weight_sum()
         );
         self.cell_radii.push(cell.radius());
-        if cell.weight_sum() < 0. { self.nneg += 1 }
+        if cell.weight_sum() < 0. {
+            self.nneg += 1
+        }
         if let Some(c) = &self.cell_collector {
             c.borrow_mut().collect(cell, &mut self.rng)
         }
@@ -261,17 +275,22 @@ impl ObserveCell for Observer {
 
     fn finish(&mut self) {
         info!("Created {} cells", self.cell_radii.len());
-        if self.nneg > 0 { warn!("{} cells had negative weight!", self.nneg); }
-        info!("Median radius: {:.3}", median_radius(self.cell_radii.as_mut_slice()));
+        if self.nneg > 0 {
+            warn!("{} cells had negative weight!", self.nneg);
+        }
+        info!(
+            "Median radius: {:.3}",
+            median_radius(self.cell_radii.as_mut_slice())
+        );
         self.cell_collector.as_ref().map(|c| c.borrow().dump_info());
     }
 }
 
 #[derive(Copy, Clone, Default, Debug)]
-pub struct NoObserver { }
+pub struct NoObserver {}
 impl ObserveCell for NoObserver {
-    fn observe_cell(&mut self, _cell: &Cell) { }
+    fn observe_cell(&mut self, _cell: &Cell) {}
 }
 
 /// Default cell observer doing nothing
-pub const NO_OBSERVER: NoObserver = NoObserver { };
+pub const NO_OBSERVER: NoObserver = NoObserver {};

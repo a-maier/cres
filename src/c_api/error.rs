@@ -3,7 +3,7 @@ use anyhow::{anyhow, Error};
 use std::cell::RefCell;
 use std::os::raw::c_char;
 
-thread_local!{
+thread_local! {
     pub(crate) static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);
 }
 
@@ -14,13 +14,13 @@ thread_local!{
 /// this function will do nothing.
 #[no_mangle]
 pub extern "C" fn cres_print_last_err() {
-    let _ = std::panic::catch_unwind(
-        || LAST_ERROR.with(
-            |e| if let Some(err) = &*e.borrow() {
+    let _ = std::panic::catch_unwind(|| {
+        LAST_ERROR.with(|e| {
+            if let Some(err) = &*e.borrow() {
                 eprintln!("{}", err);
             }
-        )
-    );
+        })
+    });
 }
 
 /// Copy the last `cres` error message to the provided buffer.
@@ -33,25 +33,22 @@ pub extern "C" fn cres_print_last_err() {
 ///   required buffer size.
 #[no_mangle]
 #[must_use]
-pub extern "C" fn cres_get_last_err(buf: * mut c_char, buflen: usize) -> i32 {
-    match std::panic::catch_unwind(
-        || cres_last_err_internal(buf, buflen)
-    ) {
+pub extern "C" fn cres_get_last_err(buf: *mut c_char, buflen: usize) -> i32 {
+    match std::panic::catch_unwind(|| cres_last_err_internal(buf, buflen)) {
         Ok(i) => i,
         Err(err) => {
-            LAST_ERROR.with(|e| *e.borrow_mut() = Some(anyhow!("panic: {:?}", err)));
+            LAST_ERROR
+                .with(|e| *e.borrow_mut() = Some(anyhow!("panic: {:?}", err)));
             -1
         }
     }
 }
 
-fn cres_last_err_internal(buf: * mut c_char, buflen: usize) -> i32 {
-    let err = LAST_ERROR.with(
-        |e| {
-            let e: &Option<_> = &e.borrow();
-            e.as_ref().map(|e| e.to_string())
-        }
-    );
+fn cres_last_err_internal(buf: *mut c_char, buflen: usize) -> i32 {
+    let err = LAST_ERROR.with(|e| {
+        let e: &Option<_> = &e.borrow();
+        e.as_ref().map(|e| e.to_string())
+    });
     if let Some(msg) = err {
         let msg_len = msg.as_bytes().len();
         if buflen == 0 {
@@ -60,9 +57,9 @@ fn cres_last_err_internal(buf: * mut c_char, buflen: usize) -> i32 {
         let len = std::cmp::min(msg_len, (buflen as usize) - 1);
         unsafe {
             std::ptr::copy_nonoverlapping(
-                msg.as_bytes().as_ptr() as * const c_char,
+                msg.as_bytes().as_ptr() as *const c_char,
                 buf,
-                len
+                len,
             );
             *buf.add(len) = 0;
         }

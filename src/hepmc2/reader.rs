@@ -2,14 +2,14 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use crate::auto_decompress::auto_decompress;
-use crate::traits::{TryClone, Rewind};
+use crate::traits::{Rewind, TryClone};
 
 use hepmc2::reader::{LineParseError, Reader};
 use log::info;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ReadError<E>{
+pub enum ReadError<E> {
     #[error("Error cloning reader for source {1}: {0}")]
     CloneErr(E, usize),
     #[error("Error reading HepMC record from source {1}: {0}")]
@@ -43,7 +43,8 @@ impl<'a, R: TryClone + Read + Seek + 'a> CombinedReader<'a, R> {
 impl CombinedReader<'static, crate::file::File> {
     /// Construct a new reader reading from the given files
     pub fn from_files<I>(sources: I) -> Self
-    where I: IntoIterator<Item=std::fs::File>
+    where
+        I: IntoIterator<Item = std::fs::File>,
     {
         Self::new(sources.into_iter().map(crate::file::File).collect())
     }
@@ -51,13 +52,12 @@ impl CombinedReader<'static, crate::file::File> {
     /// Construct a new reader reading from the files with the given names
     pub fn from_filenames<P, I>(sources: P) -> Result<Self, std::io::Error>
     where
-        P: IntoIterator<Item=I>,
-        I: AsRef<Path>
+        P: IntoIterator<Item = I>,
+        I: AsRef<Path>,
     {
         use crate::file::File;
-        let sources: Result<Vec<File>, _> = sources.into_iter()
-            .map(File::open)
-            .collect();
+        let sources: Result<Vec<File>, _> =
+            sources.into_iter().map(File::open).collect();
         Ok(Self::new(sources?))
     }
 }
@@ -89,7 +89,9 @@ impl<'a, R: TryClone + Read + Seek + 'a> Iterator for CombinedReader<'a, R> {
         } else if let Some(next_source) = self.next_sources.pop() {
             let clone = match next_source.try_clone() {
                 Ok(clone) => clone,
-                Err(err) => return Some(Err(ReadError::CloneErr(err, nsource)))
+                Err(err) => {
+                    return Some(Err(ReadError::CloneErr(err, nsource)))
+                }
             };
             self.previous_sources.push(clone);
             info!(

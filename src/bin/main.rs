@@ -1,20 +1,17 @@
 mod opt;
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::opt::Opt;
 
 use anyhow::{Context, Result};
 use cres::{
-    prelude::*,
-    hepmc2,
-    resampler::DefaultResamplerBuilder,
-    cell_collector::CellCollector,
-    VERSION, GIT_REV, GIT_BRANCH
+    cell_collector::CellCollector, hepmc2, prelude::*,
+    resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
 };
-use log::{info, debug};
 use env_logger::Env;
+use log::{debug, info};
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use structopt::StructOpt;
@@ -28,21 +25,24 @@ fn main() -> Result<()> {
     debug!("settings: {:?}", opt);
 
     let mut resampler = DefaultResamplerBuilder::default();
-    resampler.max_cell_size(opt.max_cell_size)
+    resampler
+        .max_cell_size(opt.max_cell_size)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
         .weight_norm(opt.weight_norm);
     if opt.dumpcells {
-        resampler.cell_collector(Some(Rc::new(RefCell::new(CellCollector::new()))));
+        resampler
+            .cell_collector(Some(Rc::new(RefCell::new(CellCollector::new()))));
     }
     let resampler = resampler.build()?;
 
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let writer = hepmc2::WriterBuilder::default()
-        .to_filename(&opt.outfile).with_context(
-            || format!("Failed to open {:?} for writing", opt.outfile)
-        )?
+        .to_filename(&opt.outfile)
+        .with_context(|| {
+            format!("Failed to open {:?} for writing", opt.outfile)
+        })?
         .weight_norm(opt.weight_norm)
         .cell_collector(resampler.cell_collector())
         .compression(opt.compression)
@@ -53,8 +53,9 @@ fn main() -> Result<()> {
         converter: hepmc2::ClusteringConverter::new(opt.jet_def.into()),
         resampler,
         unweighter: Unweighter::new(opt.unweight.minweight, rng),
-        writer
-    }.build();
+        writer,
+    }
+    .build();
     cres.run()?;
     info!("done");
     Ok(())

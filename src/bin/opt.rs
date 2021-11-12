@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::fmt::{self, Display};
+use std::path::PathBuf;
 
 use cres::compression::Compression;
 use cres::hepmc2::converter::JetAlgorithm;
@@ -37,8 +37,9 @@ pub(crate) enum ParseCompressionErr {
     UnsupportedLevel(String, String),
 }
 
-lazy_static!{
-    static ref COMPRESSION_RE: Regex = Regex::new(r#"^(?P<algo>[[:alpha:]]+)(?P<lvl>_\d+)?$"#).unwrap();
+lazy_static! {
+    static ref COMPRESSION_RE: Regex =
+        Regex::new(r#"^(?P<algo>[[:alpha:]]+)(?P<lvl>_\d+)?$"#).unwrap();
 }
 
 const GZIP_DEFAULT_LEVEL: u8 = 6;
@@ -54,7 +55,7 @@ fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
     let captures = if let Some(captures) = captures {
         captures
     } else {
-        return Err(UnknownAlgorithm(s.to_owned()))
+        return Err(UnknownAlgorithm(s.to_owned()));
     };
     let algo = &captures["algo"];
     let lvl_str = &captures.name("lvl");
@@ -65,40 +66,47 @@ fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
             } else {
                 Ok(Bzip2)
             }
-        },
+        }
         "gzip" | "gz" => {
             if let Some(lvl_str) = lvl_str {
                 match lvl_str.as_str()[1..].parse::<u8>() {
                     Ok(lvl) if lvl <= 9 => Ok(Gzip(lvl)),
-                    _ => Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+                    _ => Err(UnsupportedLevel(
+                        algo.into(),
+                        lvl_str.as_str().to_owned(),
+                    )),
                 }
             } else {
                 Ok(Gzip(GZIP_DEFAULT_LEVEL))
             }
-        },
+        }
         "lz4" => {
             if let Some(lvl_str) = lvl_str {
                 match lvl_str.as_str()[1..].parse::<u8>() {
                     Ok(lvl) if lvl <= 16 => Ok(Lz4(lvl)),
-                    _ => Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+                    _ => Err(UnsupportedLevel(
+                        algo.into(),
+                        lvl_str.as_str().to_owned(),
+                    )),
                 }
             } else {
                 Ok(Lz4(LZ4_DEFAULT_LEVEL))
             }
-        },
+        }
         "zstd" | "zstandard" => {
             if let Some(lvl_str) = lvl_str {
                 match lvl_str.as_str()[1..].parse::<u8>() {
                     Ok(lvl) if lvl <= 19 => Ok(Zstd(lvl)),
-                    _ => Err(UnsupportedLevel(algo.into(), lvl_str.as_str().to_owned()))
+                    _ => Err(UnsupportedLevel(
+                        algo.into(),
+                        lvl_str.as_str().to_owned(),
+                    )),
                 }
             } else {
                 Ok(Zstd(ZSTD_DEFAULT_LEVEL))
             }
         }
-        _ => {
-            Err(UnknownAlgorithm (s.to_string()))
-        },
+        _ => Err(UnknownAlgorithm(s.to_string())),
     }
 }
 
@@ -119,7 +127,9 @@ pub(crate) struct JetDefinition {
     pub jetpt: f64,
 }
 
-impl std::convert::From<JetDefinition> for cres::hepmc2::converter::JetDefinition {
+impl std::convert::From<JetDefinition>
+    for cres::hepmc2::converter::JetDefinition
+{
     fn from(j: JetDefinition) -> Self {
         Self {
             algorithm: j.jetalgorithm,
@@ -154,12 +164,21 @@ pub(crate) struct Opt {
     pub(crate) unweight: UnweightOpt,
 
     ///
-    #[structopt(long, default_value = "0.", help = "Weight of transverse momentum
-when calculating particle momentum distances.\n")]
+    #[structopt(
+        long,
+        default_value = "0.",
+        help = "Weight of transverse momentum
+when calculating particle momentum distances.\n"
+    )]
     pub(crate) ptweight: f64,
 
-    #[structopt(short = "n", long, default_value = "1.", help = "Factor between cross section and sum of weights:
-σ = weight_norm * Σ(weights)")]
+    #[structopt(
+        short = "n",
+        long,
+        default_value = "1.",
+        help = "Factor between cross section and sum of weights:
+σ = weight_norm * Σ(weights)"
+    )]
     pub(crate) weight_norm: f64,
 
     /// Whether to dump selected cells of interest
@@ -194,7 +213,8 @@ Possible values with increasing amount of output are
     )]
     pub(crate) strategy: Strategy,
 
-    #[structopt(long,
+    #[structopt(
+        long,
         help = "Maximum cell size. Limiting the cell size can cause
 left-over negative-weight events."
     )]

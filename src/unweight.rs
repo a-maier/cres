@@ -15,7 +15,6 @@ pub struct Unweighter<R> {
 }
 
 impl<R> Unweighter<R> {
-
     /// Construct new unweighter for events with weight < `min_wt`
     pub fn new(min_wt: f64, rng: R) -> Self {
         Self { min_wt, rng }
@@ -32,7 +31,10 @@ impl<R: Rng> Unweight for Unweighter<R> {
     ///
     /// Finally, all event weights are rescaled uniformly to preserve
     /// the total sun of weights.
-    fn unweight(&mut self, mut events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
+    fn unweight(
+        &mut self,
+        mut events: Vec<Event>,
+    ) -> Result<Vec<Event>, Self::Error> {
         let min_wt = self.min_wt;
         if min_wt == 0. || events.is_empty() {
             return Ok(events);
@@ -69,14 +71,17 @@ impl<R: Rng> Unweight for Unweighter<R> {
 }
 
 /// Disable unweighting
-pub struct NoUnweighter { }
+pub struct NoUnweighter {}
 impl Unweight for NoUnweighter {
     type Error = std::convert::Infallible;
 
-    fn unweight(&mut self, events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
+    fn unweight(
+        &mut self,
+        events: Vec<Event>,
+    ) -> Result<Vec<Event>, Self::Error> {
         Ok(events)
     }
 }
 
 /// Disable unweighting
-pub const NO_UNWEIGHTING: NoUnweighter = NoUnweighter { };
+pub const NO_UNWEIGHTING: NoUnweighter = NoUnweighter {};

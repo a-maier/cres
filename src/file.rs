@@ -1,6 +1,6 @@
+use std::fs::{Metadata, Permissions};
 use std::io::{Read, Result, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::fs::{Metadata, Permissions};
 
 use crate::traits::TryClone;
 
@@ -24,7 +24,6 @@ impl TryClone for File {
 }
 
 impl File {
-
     pub fn open<P: AsRef<Path>>(path: P) -> Result<File> {
         std::fs::File::open(path).map(Self)
     }

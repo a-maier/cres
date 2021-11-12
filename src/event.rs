@@ -1,7 +1,7 @@
 use crate::four_vector::FourVector;
 
-use std::default::Default;
 use std::convert::From;
+use std::default::Default;
 
 use noisy_float::prelude::*;
 
@@ -22,7 +22,7 @@ impl EventBuilder {
         Self {
             id,
             weight: n64(0.),
-            outgoing_by_pid: Vec::new()
+            outgoing_by_pid: Vec::new(),
         }
     }
 
@@ -31,7 +31,7 @@ impl EventBuilder {
         Self {
             id,
             weight: n64(0.),
-            outgoing_by_pid: Vec::with_capacity(cap)
+            outgoing_by_pid: Vec::with_capacity(cap),
         }
     }
 
@@ -56,7 +56,7 @@ impl EventBuilder {
         Event {
             id: self.id,
             weight: self.weight,
-            outgoing_by_pid
+            outgoing_by_pid,
         }
     }
 }
@@ -67,13 +67,15 @@ impl From<EventBuilder> for Event {
     }
 }
 
-fn compress_outgoing(mut out: Vec<(i32, FourVector)>) -> Vec<(i32, Vec<FourVector>)> {
+fn compress_outgoing(
+    mut out: Vec<(i32, FourVector)>,
+) -> Vec<(i32, Vec<FourVector>)> {
     out.sort_unstable_by(|a, b| b.cmp(a));
-    let mut outgoing_by_pid : Vec<(i32, Vec<_>)> = Vec::new();
+    let mut outgoing_by_pid: Vec<(i32, Vec<_>)> = Vec::new();
     for (id, p) in out {
         match outgoing_by_pid.last_mut() {
             Some((pid, v)) if *pid == id => v.push(p),
-            _ => outgoing_by_pid.push((id, vec![p]))
+            _ => outgoing_by_pid.push((id, vec![p])),
         }
     }
     outgoing_by_pid
@@ -107,7 +109,9 @@ impl Event {
 
     /// Access the outgoing particle momenta with the given particle id
     pub fn outgoing_with_pid(&self, pid: i32) -> &[FourVector] {
-        let idx = self.outgoing_by_pid.binary_search_by(|probe| pid.cmp(&probe.0));
+        let idx = self
+            .outgoing_by_pid
+            .binary_search_by(|probe| pid.cmp(&probe.0));
         if let Ok(idx) = idx {
             &self.outgoing_by_pid[idx].1
         } else {

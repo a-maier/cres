@@ -1,10 +1,10 @@
-use std::env;
 use std::default::Default;
+use std::env;
 use std::fs::DirBuilder;
 use std::path::PathBuf;
 
 use cbindgen::Language;
-use vergen::{Config, ShaKind, vergen};
+use vergen::{vergen, Config, ShaKind};
 
 fn main() {
     let mut cfg = Config::default();
@@ -14,30 +14,26 @@ fn main() {
     if cfg!(target_family = "unix") {
         write_c_header()
     }
-
 }
 
 fn write_c_header() {
     let mut out = PathBuf::from("build");
-    DirBuilder::new()
-        .recursive(true)
-        .create(&out).unwrap();
+    DirBuilder::new().recursive(true).create(&out).unwrap();
     out.push("cres.h");
     let out = out;
 
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let mut config = cbindgen::Config{
+    let mut config = cbindgen::Config {
         cpp_compat: true,
         ..Default::default()
     };
-    config.function.must_use = Some(
-        "__attribute__((warn_unused_result))".to_string()
-    );
+    config.function.must_use =
+        Some("__attribute__((warn_unused_result))".to_string());
     cbindgen::Builder::new()
         .with_config(config)
         .with_header(
-"/** C API for cres
+            "/** C API for cres
  *
  * See `examples/cres.c` and `examples/user_distance.c` for for usage.
  * The main function is `cres_run`.
@@ -48,7 +44,7 @@ fn write_c_header() {
  *
  * License: GPL 3.0 or later
  * Author: Andreas Maier <andreas.martin.maier@desy.de>
-*/"
+*/",
         )
         .with_crate(crate_dir)
         .with_language(Language::C)

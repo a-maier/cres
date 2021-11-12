@@ -53,7 +53,7 @@ impl TypeSet {
             pid: self.pid,
             momenta: self.momenta.as_ptr(),
             n_momenta: self.momenta.len(),
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }

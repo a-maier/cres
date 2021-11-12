@@ -1,14 +1,14 @@
-use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
-use crate::hepmc2;
-use crate::distance::EuclWithScaledPt;
-use crate::resampler::ResamplerBuilder;
-use crate::c_api::error::LAST_ERROR;
 use crate::c_api::distance::DistanceFn;
+use crate::c_api::error::LAST_ERROR;
+use crate::distance::EuclWithScaledPt;
+use crate::hepmc2;
+use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
+use crate::resampler::ResamplerBuilder;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
-use std::os::unix::ffi::OsStrExt;
 use std::os::raw::{c_char, c_double};
+use std::os::unix::ffi::OsStrExt;
 
 use anyhow::{anyhow, Error};
 use log::debug;
@@ -103,16 +103,15 @@ impl From<JetAlgorithm> for hepmc2::converter::JetAlgorithm {
 #[no_mangle]
 #[must_use]
 pub extern "C" fn cres_run(opt: &Opt) -> i32 {
-    match std::panic::catch_unwind(
-        || cres_run_internal(opt)
-    ) {
+    match std::panic::catch_unwind(|| cres_run_internal(opt)) {
         Ok(Ok(())) => 0,
         Ok(Err(err)) => {
             LAST_ERROR.with(|e| *e.borrow_mut() = Some(err));
             1
-        },
+        }
         Err(err) => {
-            LAST_ERROR.with(|e| *e.borrow_mut() = Some(anyhow!("panic: {:?}", err)));
+            LAST_ERROR
+                .with(|e| *e.borrow_mut() = Some(anyhow!("panic: {:?}", err)));
             -1
         }
     }
@@ -127,16 +126,17 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
     };
     debug!("Will read input from {:?}", infiles);
 
-    let outfile = unsafe {
-        CStr::from_ptr(opt.outfile)
-    };
+    let outfile = unsafe { CStr::from_ptr(opt.outfile) };
     let outfile = OsStr::from_bytes(outfile.to_bytes());
     debug!("Will write output to {:?}", outfile);
     let outfile = std::fs::File::create(outfile)?;
 
-    let reader = hepmc2::Reader::from_filenames(infiles.iter().rev().map(
-        |f| OsStr::from_bytes(f.to_bytes())
-    ))?;
+    let reader = hepmc2::Reader::from_filenames(
+        infiles
+            .iter()
+            .rev()
+            .map(|f| OsStr::from_bytes(f.to_bytes())),
+    )?;
 
     let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
 
@@ -157,30 +157,30 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
     if !opt.distance.is_null() {
         let distance = unsafe { *opt.distance };
         debug!("Using custom distance function {:?}", distance);
+        let resampler = resampler.distance(distance).build();
+        let mut cres = CresBuilder {
+            reader,
+            converter,
+            resampler,
+            unweighter,
+            writer,
+        }
+        .build();
+        debug!("Starting resampler");
+        cres.run()?;
+    } else {
+        debug!("Using built-in distance function");
         let resampler = resampler
-            .distance(distance)
+            .distance(EuclWithScaledPt::new(n64(opt.ptweight)))
             .build();
         let mut cres = CresBuilder {
             reader,
             converter,
             resampler,
             unweighter,
-            writer
-        }.build();
-        debug!("Starting resampler");
-        cres.run()?;
-    } else {
-        debug!("Using built-in distance function");
-        let resampler = resampler.distance(
-            EuclWithScaledPt::new(n64(opt.ptweight))
-        ).build();
-        let mut cres = CresBuilder {
-            reader,
-            converter,
-            resampler,
-            unweighter,
-            writer
-        }.build();
+            writer,
+        }
+        .build();
         debug!("Starting resampler");
         cres.run()?;
     }

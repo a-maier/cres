@@ -5,7 +5,7 @@ use noisy_float::prelude::*;
 /// The zero component is the energy/time component. The remainder are
 /// the spatial components
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Default)]
-pub struct FourVector{
+pub struct FourVector {
     pt: N64,
     p: [N64; 4],
 }
@@ -51,7 +51,10 @@ impl FourVector {
 
 impl std::convert::From<[N64; 4]> for FourVector {
     fn from(p: [N64; 4]) -> FourVector {
-        let mut res = FourVector{p, pt: std::default::Default::default()};
+        let mut res = FourVector {
+            p,
+            pt: std::default::Default::default(),
+        };
         res.update_pt();
         res
     }

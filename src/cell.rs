@@ -1,9 +1,9 @@
-use crate::event::Event;
 use crate::distance::Distance;
+use crate::event::Event;
 
+use log::{debug, trace};
 use noisy_float::prelude::*;
 use rayon::prelude::*;
-use log::{debug, trace};
 
 /// A cell
 ///
@@ -26,17 +26,16 @@ impl<'a> Cell<'a> {
         seed_idx: usize,
         distance: &F,
         max_size: N64,
-    ) -> Self
-    {
+    ) -> Self {
         let mut weight_sum = events[seed_idx].1.weight;
         debug_assert!(weight_sum < 0.);
         debug!("Cell seed with weight {:e}", weight_sum);
         let mut members = vec![seed_idx];
         let seed = events[seed_idx].1.clone();
 
-        events.par_iter_mut().for_each(
-            |(dist, e)| *dist = distance.distance(e, &seed)
-        );
+        events
+            .par_iter_mut()
+            .for_each(|(dist, e)| *dist = distance.distance(e, &seed));
 
         let mut candidates: Vec<_> = (0..events.len()).collect();
         candidates.swap_remove(seed_idx);
@@ -53,15 +52,22 @@ impl<'a> Cell<'a> {
                     events[idx].0,
                     events[idx].1.weight
                 );
-                if events[idx].0 > max_size { break }
+                if events[idx].0 > max_size {
+                    break;
+                }
                 weight_sum += events[idx].1.weight;
                 members.push(idx);
             } else {
-                break
+                break;
             };
         }
         let radius = events[*members.last().unwrap()].0;
-        Self{events, members, weight_sum, radius}
+        Self {
+            events,
+            members,
+            weight_sum,
+            radius,
+        }
     }
 
     /// Resample
@@ -94,7 +100,10 @@ impl<'a> Cell<'a> {
 
     /// Number of negative-weight events in cell
     pub fn nneg_weights(&self) -> usize {
-        self.members.iter().filter(|&&idx| self.events[idx].1.weight < 0.).count()
+        self.members
+            .iter()
+            .filter(|&&idx| self.events[idx].1.weight < 0.)
+            .count()
     }
 
     /// Cell radius
@@ -110,7 +119,9 @@ impl<'a> Cell<'a> {
     }
 
     /// Iterator over (distance, cell member)
-    pub fn iter(&'a self) -> Box<dyn std::iter::Iterator<Item=&'a (N64, Event)> + 'a> {
-        Box::new(self.members.iter().map(move |idx| & self.events[*idx]))
+    pub fn iter(
+        &'a self,
+    ) -> Box<dyn std::iter::Iterator<Item = &'a (N64, Event)> + 'a> {
+        Box::new(self.members.iter().map(move |idx| &self.events[*idx]))
     }
 }

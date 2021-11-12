@@ -16,7 +16,7 @@ const FALLBACK_SIZE: usize = 8;
 /// The distance function defined in [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct EuclWithScaledPt {
-    pt_weight: N64
+    pt_weight: N64,
 }
 
 impl Distance for EuclWithScaledPt {
@@ -69,7 +69,7 @@ impl EuclWithScaledPt {
     /// See [arXiv:2109.07851](https://arxiv.org/abs/2109.07851) for a
     /// definition of τ
     pub fn new(pt_weight: N64) -> Self {
-        EuclWithScaledPt{pt_weight}
+        EuclWithScaledPt { pt_weight }
     }
 
     fn pt_norm(&self, p: &[FourVector]) -> N64 {
@@ -109,7 +109,11 @@ impl EuclWithScaledPt {
             .sum()
     }
 
-    fn norm_ordered_paired_distance(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
+    fn norm_ordered_paired_distance(
+        &self,
+        p1: &[FourVector],
+        p2: &[FourVector],
+    ) -> N64 {
         if p1.len() > p2.len() {
             return self.norm_ordered_paired_distance(p2, p1);
         }

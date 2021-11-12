@@ -84,7 +84,7 @@ pub struct ClusteringConverter {
 impl ClusteringConverter {
     /// Construct a new converter using the given jet clustering
     pub fn new(jet_def: JetDefinition) -> Self {
-        Self{jet_def}
+        Self { jet_def }
     }
 }
 
@@ -93,7 +93,7 @@ impl TryConvert<(hepmc2::Event, EventBuilder), Event> for ClusteringConverter {
 
     fn try_convert(
         &mut self,
-        ev: (hepmc2::Event, EventBuilder)
+        ev: (hepmc2::Event, EventBuilder),
     ) -> Result<Event, Self::Error> {
         let mut partons = Vec::new();
         let (event, mut builder) = ev;
@@ -124,7 +124,6 @@ impl TryConvert<(hepmc2::Event, EventBuilder), Event> for ClusteringConverter {
         }
         Ok(builder.build())
     }
-
 }
 
 /// Straightforward conversion of HepMC events to internal format
@@ -142,7 +141,7 @@ impl TryConvert<(hepmc2::Event, EventBuilder), Event> for Converter {
 
     fn try_convert(
         &mut self,
-        ev: (hepmc2::Event, EventBuilder)
+        ev: (hepmc2::Event, EventBuilder),
     ) -> Result<Event, Self::Error> {
         let (event, mut builder) = ev;
         builder.weight(n64(*event.weights.first().unwrap()));

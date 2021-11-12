@@ -1,5 +1,5 @@
-use crate::event::Event;
 use crate::cell::Cell;
+use crate::event::Event;
 
 pub use crate::distance::Distance;
 pub use crate::seeds::SelectSeeds;
@@ -49,7 +49,8 @@ pub trait Unweight {
 pub trait Write<Reader> {
     type Error;
 
-    fn write(&mut self, r: &mut Reader, e: &[Event]) -> Result<(), Self::Error>;
+    fn write(&mut self, r: &mut Reader, e: &[Event])
+        -> Result<(), Self::Error>;
 }
 
 /// Try to clone this object
@@ -58,7 +59,9 @@ pub trait Write<Reader> {
 pub trait TryClone {
     type Error;
 
-    fn try_clone(&self) -> Result<Self, Self::Error> where Self: Sized;
+    fn try_clone(&self) -> Result<Self, Self::Error>
+    where
+        Self: Sized;
 }
 
 impl<T: Clone> TryClone for T {
@@ -77,7 +80,7 @@ pub trait ObserveCell {
     ///
     /// For example, this can be used to write out statistics.
     /// The default is to do nothing.
-    fn finish(&mut self) { }
+    fn finish(&mut self) {}
 }
 
 /// Progress indicator, e.g. a progress bar
