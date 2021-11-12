@@ -1,6 +1,6 @@
 //! C API
 //!
-//! See the generated header `build/cres.h` for documentation.
+//! See the generated header `cres.h` for documentation.
 pub mod cres;
 pub mod distance;
 pub mod error;

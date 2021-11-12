@@ -1,6 +1,5 @@
 use std::default::Default;
 use std::env;
-use std::fs::DirBuilder;
 use std::path::PathBuf;
 
 use cbindgen::Language;
@@ -17,10 +16,10 @@ fn main() {
 }
 
 fn write_c_header() {
-    let mut out = PathBuf::from("build");
-    DirBuilder::new().recursive(true).create(&out).unwrap();
-    out.push("cres.h");
-    let out = out;
+    let out: PathBuf = [
+        env::var("OUT_DIR").unwrap().as_str(),
+        "cres.h"
+    ].iter().collect();
 
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 

@@ -7,7 +7,7 @@
  * in the directory containing `Cargo.toml`.
  *
  * Then copy the compiled libraries (`libcres.a` and `libcres.so` on
- * linux) and the generated header `build/cres.h` to a directory where
+ * linux) and the generated header `cres.h` to a directory where
  * they can be found by your C compiler.
  *
  * Now compile the example. For gcc use
