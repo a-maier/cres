@@ -21,6 +21,7 @@
 
 /// Automatic input decompression
 pub mod auto_decompress;
+#[cfg(target_family = "unix")]
 pub mod c_api;
 /// Definition of event cells
 pub mod cell;

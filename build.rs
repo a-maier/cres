@@ -10,6 +10,13 @@ fn main() {
     *cfg.git_mut().sha_kind_mut() = ShaKind::Short;
     vergen(cfg).unwrap();
 
+    if cfg!(target_family = "unix") {
+        write_c_header()
+    }
+
+}
+
+fn write_c_header() {
     let mut out = PathBuf::from("build");
     DirBuilder::new()
         .recursive(true)
