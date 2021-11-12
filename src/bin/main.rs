@@ -20,7 +20,11 @@ fn main() -> Result<()> {
     let opt = Opt::from_args();
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
-    info!("cres {} rev {} ({})", VERSION, GIT_REV, GIT_BRANCH);
+    if let (Some(rev), Some(branch)) = (GIT_REV, GIT_BRANCH) {
+        info!("cres {} rev {} ({})", VERSION, rev, branch);
+    } else {
+        info!("cres {}", VERSION);
+    }
 
     debug!("settings: {:?}", opt);
 

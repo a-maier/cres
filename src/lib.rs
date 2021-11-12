@@ -63,5 +63,5 @@ lazy_static! {
     pub static ref VERSION_PATCH: u32 =
         env!("CARGO_PKG_VERSION_PATCH").parse().unwrap();
 }
-pub const GIT_REV: &str = env!("VERGEN_GIT_SHA_SHORT");
-pub const GIT_BRANCH: &str = env!("VERGEN_GIT_BRANCH");
+pub const GIT_REV: Option<&str> = option_env!("VERGEN_GIT_SHA_SHORT");
+pub const GIT_BRANCH: Option<&str> = option_env!("VERGEN_GIT_BRANCH");
