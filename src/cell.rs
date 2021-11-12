@@ -5,6 +5,9 @@ use noisy_float::prelude::*;
 use rayon::prelude::*;
 use log::{debug, trace};
 
+/// A cell
+///
+/// See [arXiv:2109.07851](https://arxiv.org/abs/2109.07851) for details
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Cell<'a> {
     events: &'a mut [(N64, Event)],
@@ -13,6 +16,10 @@ pub struct Cell<'a> {
     weight_sum: N64,
 }
 
+/// Construct a new cell
+///
+/// The `events` items have the form (N64, Event), where
+/// the first tuple element is used to store distances
 impl<'a> Cell<'a> {
     pub fn new<'b: 'a, F: Distance + Sync + Send>(
         events: &'b mut [(N64, Event)],
@@ -57,6 +64,10 @@ impl<'a> Cell<'a> {
         Self{events, members, weight_sum, radius}
     }
 
+    /// Resample
+    ///
+    /// This redistributes weights in such a way that all weights have
+    /// the same sign.
     pub fn resample(&mut self) {
         let orig_weight_sum = self.weight_sum();
         if orig_weight_sum == n64(0.) {
@@ -76,22 +87,29 @@ impl<'a> Cell<'a> {
         }
     }
 
+    /// Number of events in cell
     pub fn nmembers(&self) -> usize {
         self.members.len()
     }
 
+    /// Number of negative-weight events in cell
     pub fn nneg_weights(&self) -> usize {
         self.members.iter().filter(|&&idx| self.events[idx].1.weight < 0.).count()
     }
 
+    /// Cell radius
+    ///
+    /// This is the largest distance from the seed to any event in the cell.
     pub fn radius(&self) -> N64 {
         self.radius
     }
 
+    /// Sum of event weights inside the cell
     pub fn weight_sum(&self) -> N64 {
         self.weight_sum
     }
 
+    /// Iterator over (distance, cell member)
     pub fn iter(&'a self) -> Box<dyn std::iter::Iterator<Item=&'a (N64, Event)> + 'a> {
         Box::new(self.members.iter().map(move |idx| & self.events[*idx]))
     }

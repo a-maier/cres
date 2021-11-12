@@ -1,5 +1,9 @@
 use noisy_float::prelude::*;
 
+/// A basic four-vector
+///
+/// The zero component is the energy/time component. The remainder are
+/// the spatial components
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Default)]
 pub struct FourVector{
     pt: N64,
@@ -7,26 +11,31 @@ pub struct FourVector{
 }
 
 impl FourVector {
+    /// Construct a new four-vector
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// The euclidean norm \sqrt{\sum v_\mu^2} with \mu = 0,1,2,3
     pub fn euclid_norm(&self) -> N64 {
         self.euclid_norm_sq().sqrt()
     }
-
+    /// The square \sum v_\mu^2 with \mu = 0,1,2,3 of the euclidean norm
     pub fn euclid_norm_sq(&self) -> N64 {
         self.p.iter().map(|e| *e * *e).sum()
     }
 
+    /// The spatial norm \sqrt{\sum v_i^2} with i = 1,2,3
     pub fn spatial_norm(&self) -> N64 {
         self.spatial_norm_sq().sqrt()
     }
 
+    /// The square \sum v_i^2 with i = 1,2,3 of the spatial norm
     pub fn spatial_norm_sq(&self) -> N64 {
         self.p.iter().skip(1).map(|e| *e * *e).sum()
     }
 
+    /// The scalar transverse momentum
     pub fn pt(&self) -> N64 {
         self.pt
     }

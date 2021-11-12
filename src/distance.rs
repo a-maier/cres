@@ -6,12 +6,14 @@ use std::cmp::Ordering;
 use noisy_float::prelude::*;
 use permutohedron::LexicalPermutation;
 
+/// A metric (distance function) in the space of all events
 pub trait Distance {
     fn distance(&self, ev1: &Event, ev2: &Event) -> N64;
 }
 
 const FALLBACK_SIZE: usize = 8;
 
+/// The distance function defined in [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct EuclWithScaledPt {
     pt_weight: N64
@@ -62,6 +64,10 @@ impl Distance for EuclWithScaledPt {
 }
 
 impl EuclWithScaledPt {
+    /// Distance function with the given parameter τ = `pt_weight`
+    ///
+    /// See [arXiv:2109.07851](https://arxiv.org/abs/2109.07851) for a
+    /// definition of τ
     pub fn new(pt_weight: N64) -> Self {
         EuclWithScaledPt{pt_weight}
     }

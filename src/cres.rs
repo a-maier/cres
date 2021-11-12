@@ -1,22 +1,72 @@
+//! Main cell resampling functionality
+//!
+//! The usual workflow is to construct a [Cres](cres::Cres) object
+//! from a [CresBuilder](cres::CresBuilder).
+//!
+//! This requires
+//! 1. A reader for the input events (see e.g. [hepmc2::Reader])
+//! 2. A converter to the internal format (e.g. [hepmc2::ClusteringConverter])
+//! 3. A [Resampler](traits::Resample)
+//! 4. An [Unweighter](traits::Unweight) (e.g. [NO_UNWEIGHTING](unweight::NO_UNWEIGHTING))
+//! 5. A [Writer](traits::Write) (e.g. [hepmc2::Writer])
+//!
+//! Finally, call [Cres::run](cres::Cres::run).
+//!
+//! # Example
+//!
+//! ```no_run
+//!# fn cres_doc() -> Result<(), Box<dyn std::error::Error>> {
+//! use cres::prelude::*;
+//!
+//! // Define `reader`, `converter`, `resampler`, `unweighter`, `writer`
+//!# let reader = cres::hepmc2::Reader::from_filenames(vec![""])?;
+//!# let converter = cres::hepmc2::Converter::new();
+//!# let resampler = cres::resampler::ResamplerBuilder::default().build();
+//!# let writer = cres::hepmc2::WriterBuilder::default().to_filename("")?.build()?;
+//!# let unweighter = cres::unweight::NO_UNWEIGHTING;
+//!
+//! // Build the resampler
+//! let mut cres = CresBuilder {
+//!     reader,
+//!     converter,
+//!     resampler,
+//!     unweighter,
+//!     writer
+//! }.build();
+//!
+//! // Run the resampler
+//! let result = cres.run();
+//!# Ok(())
+//!# }
+//! ```
+//!
 use std::convert::From;
 use std::iter::Iterator;
 
 use log::info;
 use thiserror::Error;
+use rayon::prelude::*;
 
 use crate::event::{Event, EventBuilder};
 use crate::traits::*;
 
+/// Build a new [Cres] object
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct CresBuilder<R, C, S, U, W> {
+    /// Read in events
     pub reader: R,
+    /// Convert events into the internal format
     pub converter: C,
+    /// Resample events
     pub resampler: S,
+    /// Unweight events
     pub unweighter: U,
+    /// Write out events
     pub writer: W,
 }
 
 impl<R, C, S, U, W> CresBuilder<R, C, S, U, W> {
+    /// Construct a [Cres] object
     pub fn build(self) -> Cres<R, C, S, U, W> {
         Cres {
             reader: self.reader,
@@ -40,6 +90,7 @@ impl<R, C, S, U, W> From<Cres<R, C, S, U, W>> for CresBuilder<R, C, S, U, W> {
     }
 }
 
+/// Main cell resampler
 #[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Cres<R, C, S, U, W> {
     reader: R,
@@ -80,6 +131,15 @@ where
     W: Write<R>
 {
 
+    /// Run the cell resampler
+    ///
+    /// This goes through the following steps
+    ///
+    /// 1. Read in events
+    /// 2. Convert events into internal format
+    /// 3. Apply cell resampling
+    /// 4. Unweight
+    /// 5. Write out events
     pub fn run(&mut self) -> Result<(), CresError<E, <R as Rewind>::Error, C::Error, S::Error, U::Error, W::Error>> {
         use CresError::*;
 
@@ -104,9 +164,10 @@ where
             |err| ResamplingErr(err)
         )?;
 
-        let events = self.unweighter.unweight(events).map_err(
+        let mut events = self.unweighter.unweight(events).map_err(
             |err| UnweightErr(err)
         )?;
+        events.par_sort_unstable();
 
         self.reader.rewind().map_err(
             |err| RewindErr(err)

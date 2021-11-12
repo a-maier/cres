@@ -16,6 +16,7 @@ pub enum ReadError<E>{
     HepMCReadErr(LineParseError, usize),
 }
 
+/// Read events from one or more inputs in HepMC 2 format
 pub struct CombinedReader<'a, R: TryClone + Read + Seek + 'a> {
     next_sources: Vec<R>,
     previous_sources: Vec<R>,
@@ -27,6 +28,9 @@ fn empty_reader() -> Reader<Box<dyn BufRead>> {
 }
 
 impl<'a, R: TryClone + Read + Seek + 'a> CombinedReader<'a, R> {
+    /// Construct a new reader reading from the given sources
+    ///
+    /// To read from files, use `from_files` or `from_filenames` instead.
     pub fn new(sources: Vec<R>) -> Self {
         CombinedReader {
             next_sources: sources,
@@ -37,12 +41,14 @@ impl<'a, R: TryClone + Read + Seek + 'a> CombinedReader<'a, R> {
 }
 
 impl CombinedReader<'static, crate::file::File> {
+    /// Construct a new reader reading from the given files
     pub fn from_files<I>(sources: I) -> Self
     where I: IntoIterator<Item=std::fs::File>
     {
         Self::new(sources.into_iter().map(crate::file::File).collect())
     }
 
+    /// Construct a new reader reading from the files with the given names
     pub fn from_filenames<P, I>(sources: P) -> Result<Self, std::io::Error>
     where
         P: IntoIterator<Item=I>,
@@ -59,6 +65,7 @@ impl CombinedReader<'static, crate::file::File> {
 impl<'a, R: TryClone + Read + Seek + 'a> Rewind for CombinedReader<'a, R> {
     type Error = std::io::Error;
 
+    /// Try to rewind to the beginning
     fn rewind(&mut self) -> Result<(), Self::Error> {
         self.previous_sources.reverse();
         self.next_sources.append(&mut self.previous_sources);
@@ -73,6 +80,7 @@ impl<'a, R: TryClone + Read + Seek + 'a> Rewind for CombinedReader<'a, R> {
 impl<'a, R: TryClone + Read + Seek + 'a> Iterator for CombinedReader<'a, R> {
     type Item = Result<hepmc2::event::Event, ReadError<<R as TryClone>::Error>>;
 
+    /// Try to read the next event
     fn next(&mut self) -> Option<Self::Item> {
         let nsource = self.previous_sources.len();
         if let Some(next) = self.reader.next() {

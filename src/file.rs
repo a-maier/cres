@@ -4,7 +4,10 @@ use std::fs::{Metadata, Permissions};
 
 use crate::traits::TryClone;
 
-// Can't implement directly, use wrapper classes instead
+/// This is a newtype wrapper around [std::fs::File]
+///
+/// The only reason for this is that we cannot implement
+/// [TryClone](crate::traits::TryClone) on [std::fs::File]
 #[derive(Debug)]
 pub struct File(pub std::fs::File);
 

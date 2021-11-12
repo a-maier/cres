@@ -9,10 +9,17 @@ use std::fmt::{self, Debug, Formatter};
 use noisy_float::prelude::*;
 use log::trace;
 
+/// User-defined distance function
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct DistanceFn {
+    /// The distance function
+    ///
+    /// This has to be a *thread-safe* function that _may never return NaN_.
+    /// The first argument is a pointer to the `data` member of this struct.
+    /// The remaining arguments are the events for which we compute the distance.
     pub fun: unsafe fn(*mut c_void, &EventView, &EventView) -> c_double,
+    /// Arbitrary data used by the distance function
     pub data: *mut c_void,
 }
 

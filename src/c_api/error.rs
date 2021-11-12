@@ -7,6 +7,11 @@ thread_local!{
     pub(crate) static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);
 }
 
+/// Print the last `cres` error that occurred to the standard error output.
+///
+/// Calling this function repeatedly without any intermediate errors
+/// will always give the same output. If no errors have occurred so far,
+/// this function will do nothing.
 #[no_mangle]
 pub extern "C" fn cres_print_last_err() {
     let _ = std::panic::catch_unwind(
@@ -18,6 +23,14 @@ pub extern "C" fn cres_print_last_err() {
     );
 }
 
+/// Copy the last `cres` error message to the provided buffer.
+///
+/// # Return values
+/// -  `0`: success
+/// - `-1`: rust panic
+/// - any other non-zero: The provided buffer was too small and the
+///   error message was truncated. The return value indicates the
+///   required buffer size.
 #[no_mangle]
 #[must_use]
 pub extern "C" fn cres_get_last_err(buf: * mut c_char, buflen: usize) -> i32 {
@@ -51,9 +64,9 @@ fn cres_last_err_internal(buf: * mut c_char, buflen: usize) -> i32 {
                 buf,
                 len
             );
-            *buf.offset(1 + len as isize) = 0;
+            *buf.offset(len as isize) = 0;
         }
-        if len < msg_len {
+        if buflen <= msg_len {
             (1 + msg_len) as i32
         } else {
             0

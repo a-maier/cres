@@ -14,16 +14,38 @@ use anyhow::{anyhow, Error};
 use log::debug;
 use noisy_float::prelude::*;
 
+/// Resampling options
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Opt {
+    /// Names of input files
+    ///
+    /// Input files should be in HepMC2 format,
+    /// possibly compressed with bzip2, gzip, lz4, or zstd
     infiles: *mut *mut c_char,
+    /// Number of input files
     n_infiles: usize,
+    /// Name of HepMC output file
     outfile: *mut c_char,
+    /// Which distance function to use
+    ///
+    /// If set to `NULL`, the default distance function from
+    /// [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
+    /// is used
     distance: *mut DistanceFn,
+    /// Extra contribution to distance proportional to difference in pt
+    ///
+    /// This parameter is ignored when using a custom distance. Otherwise,
+    /// it corresponds to the τ parameter of
+    /// [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
     ptweight: c_double,
+    /// Jet definition
     jet_def: JetDefinition,
+    /// How to get from weights to the cross section: σ = `weight_norm` * (sum of weights)
     weight_norm: c_double,
+    /// Maximum cell radius
+    ///
+    /// Set to INFINITY for unlimited cell sizes
     max_cell_size: c_double,
 }
 
@@ -48,11 +70,15 @@ impl From<JetDefinition> for hepmc2::converter::JetDefinition {
     }
 }
 
+/// Jet clustering algorithms
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub enum JetAlgorithm {
+    /// The [anti-kt](https://arxiv.org/abs/0802.1189) algorithm
     AntiKt,
+    /// The [Cambridge](https://arxiv.org/abs/hep-ph/9707323)/[Aachen](https://arxiv.org/abs/hep-ph/9907280) algorithm
     CambridgeAachen,
+    /// The [kt](https://arxiv.org/abs/hep-ph/9305266) algorithm
     Kt,
 }
 
@@ -67,6 +93,13 @@ impl From<JetAlgorithm> for hepmc2::converter::JetAlgorithm {
     }
 }
 
+/// Run the cell resampler with the given options
+///
+/// # Return values
+///
+/// - `0`: success
+/// - Non-zero: an error occurred, check with `cres_get_last_err` or
+///   `cres_print_last_err`
 #[no_mangle]
 #[must_use]
 pub extern "C" fn cres_run(opt: &Opt) -> i32 {

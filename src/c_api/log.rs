@@ -7,6 +7,14 @@ use std::os::unix::ffi::OsStrExt;
 use anyhow::anyhow;
 use env_logger::Env;
 
+/// Initialise logger from environment variable
+///
+/// The name of the environment variable must be a valid utf8 string.
+///
+/// # Return values
+///
+/// - `0`: success
+/// - `-1`: rust panic, check with `cres_get_last_err` or `cres_print_last_err`
 #[no_mangle]
 #[must_use]
 pub extern "C" fn cres_logger_from_env(env_var: * const c_char) -> i32 {

@@ -17,19 +17,26 @@ use log::info;
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 
+/// Write events in HepMC 2 format
 #[derive(Builder)]
 #[builder(pattern = "owned")]
 pub struct Writer<T> {
+    /// Where to write the events
     writer: T,
+    /// Ratio between cross section and sum of event weights
+    ///
+    /// This is needed to set the cross section entry in the event record.
     #[builder(default = "1.")]
     weight_norm: f64,
     #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    /// Output compression
     #[builder(default)]
     compression: Option<Compression>
 }
 
 impl WriterBuilder<File> {
+    /// Write to the file with the given name
     pub fn to_filename<P: AsRef<Path>>(self, path: P) -> Result<Self, std::io::Error> {
         Ok(self.writer(File::create(path.as_ref())?))
     }
@@ -42,6 +49,15 @@ where
 {
     type Error = WriteError<E>;
 
+    /// Write all `events`.
+    ///
+    /// `events` has to be sorted by [id](crate::event::Event::id). The
+    /// [Cres](crate::cres::Cres) struct does this automatically.
+    ///
+    /// For each event `e` in `events`, we read events from `reader`
+    /// until the number of read events matches `e.id() + 1`. We then
+    /// adjust the weight and cross section of the last read event and
+    /// write it out.
     fn write(&mut self, reader: &mut R, events: &[Event]) -> Result<(), Self::Error> {
         use WriteError::*;
 

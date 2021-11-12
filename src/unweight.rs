@@ -8,12 +8,15 @@ use rand::{
 };
 use rayon::prelude::*;
 
+/// Standard unweighter
 pub struct Unweighter<R> {
     min_wt: f64,
     rng: R,
 }
 
 impl<R> Unweighter<R> {
+
+    /// Construct new unweighter for events with weight < `min_wt`
     pub fn new(min_wt: f64, rng: R) -> Self {
         Self { min_wt, rng }
     }
@@ -22,6 +25,13 @@ impl<R> Unweighter<R> {
 impl<R: Rng> Unweight for Unweighter<R> {
     type Error = std::convert::Infallible;
 
+    /// Unweight events
+    ///
+    /// Any event with weight |w| < `min_wt` is discarded with probability
+    /// 1 - |w| / `min_wt` and reweighted to |w| = `min_wt` otherwise.
+    ///
+    /// Finally, all event weights are rescaled uniformly to preserve
+    /// the total sun of weights.
     fn unweight(&mut self, mut events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
         let min_wt = self.min_wt;
         if min_wt == 0. || events.is_empty() {
@@ -58,6 +68,7 @@ impl<R: Rng> Unweight for Unweighter<R> {
     }
 }
 
+/// Disable unweighting
 pub struct NoUnweighter { }
 impl Unweight for NoUnweighter {
     type Error = std::convert::Infallible;
@@ -67,4 +78,5 @@ impl Unweight for NoUnweighter {
     }
 }
 
+/// Disable unweighting
 pub const NO_UNWEIGHTING: NoUnweighter = NoUnweighter { };

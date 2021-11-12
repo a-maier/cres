@@ -8,13 +8,6 @@ use jetty::{anti_kt_f, cambridge_aachen_f, cluster_if, kt_f, PseudoJet};
 use noisy_float::prelude::*;
 use thiserror::Error;
 
-#[derive(Debug, Copy, Clone)]
-pub enum JetAlgorithm {
-    AntiKt,
-    CambridgeAachen,
-    Kt,
-}
-
 #[derive(Debug, Clone, Error)]
 pub struct UnknownJetAlgorithm(String);
 
@@ -38,6 +31,17 @@ impl FromStr for JetAlgorithm {
             _ => Err(UnknownJetAlgorithm(s.to_string())),
         }
     }
+}
+
+/// Jet clustering algorithms
+#[derive(Debug, Copy, Clone)]
+pub enum JetAlgorithm {
+    /// The [anti-kt](https://arxiv.org/abs/0802.1189) algorithm
+    AntiKt,
+    /// The [Cambridge](https://arxiv.org/abs/hep-ph/9707323)/[Aachen](https://arxiv.org/abs/hep-ph/9907280) algorithm
+    CambridgeAachen,
+    /// The [kt](https://arxiv.org/abs/hep-ph/9305266) algorithm
+    Kt,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -71,12 +75,14 @@ fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
     }
 }
 
+/// Convert a HepMC event into internal format with jet clustering
 #[derive(Copy, Clone, Debug)]
 pub struct ClusteringConverter {
     jet_def: JetDefinition,
 }
 
 impl ClusteringConverter {
+    /// Construct a new converter using the given jet clustering
     pub fn new(jet_def: JetDefinition) -> Self {
         Self{jet_def}
     }
@@ -121,7 +127,7 @@ impl TryConvert<(hepmc2::Event, EventBuilder), Event> for ClusteringConverter {
 
 }
 
-
+/// Straightforward conversion of HepMC events to internal format
 #[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Converter {}
 

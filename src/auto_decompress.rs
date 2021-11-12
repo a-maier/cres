@@ -9,6 +9,15 @@ const BZIP2_MAGIC_BYTES: [u8; 3] = [b'B', b'Z', b'h'];
 const ZSTD_MAGIC_BYTES: [u8; 4] = [0x28, 0xb5, 0x2f, 0xfd];
 const LZ4_MAGIC_BYTES: [u8; 4] = [0x04, 0x22, 0x4d, 0x18];
 
+/// Automatic decompression
+///
+/// Returns a new stream that automatically decompresses the output of
+/// the original stream. Supported formats are
+/// - uncompressed
+/// - bzip2
+/// - gzip
+/// - lz4
+/// - zstd
 pub fn auto_decompress<'a, B: 'a + BufRead>(mut r: B) -> Box<dyn BufRead + 'a> {
     let bytes = match r.fill_buf() {
         Ok(bytes) => bytes,

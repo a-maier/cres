@@ -18,6 +18,7 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 
+/// Main resampling class
 pub struct Resampler<D, O, S>  {
     seeds: S,
     distance: D,
@@ -45,6 +46,11 @@ where
 {
     type Error = std::convert::Infallible;
 
+    /// Resampling
+    ///
+    /// For each seed, we construct a cell as described in
+    /// [arXiv:2109.07851](https://arxiv.org/abs/2109.07851).
+    /// Seeds with non-negative weight are ignored.
     fn resample(&mut self, events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
         self.print_xs(&events);
 
@@ -71,15 +77,14 @@ where
         progress.finish();
         self.observer.finish();
 
-        info!("Collecting and sorting events");
-        let mut events: Vec<_> = events.into_par_iter().map(
+        let events: Vec<_> = events.into_par_iter().map(
             |(_dist, event)| event
         ).collect();
-        events.par_sort_unstable();
         Ok(events)
     }
 }
 
+/// Construct a `Resampler` object
 pub struct ResamplerBuilder<D, O, S> {
     seeds: S,
     distance: D,
@@ -89,6 +94,7 @@ pub struct ResamplerBuilder<D, O, S> {
 }
 
 impl<D, O, S> ResamplerBuilder<D, O, S> {
+    /// Build the `Resampler`
     pub fn build(self) -> Resampler<D, O, S> {
         Resampler {
             seeds: self.seeds,
@@ -99,6 +105,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
+    /// Define how and in which order to choose cell seeds
     pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS>
     where
         SS: SelectSeeds<Iter=T>,
@@ -113,6 +120,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
+    /// Define the distance between events
     pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S>
     where DD: Distance + Send + Sync
     {
@@ -125,6 +133,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
+    /// Callback that will be applied to each constructed cell after resampling
     pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S>
     where OO: ObserveCell
     {
@@ -137,6 +146,9 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
+    /// Define the ratio between the cross section and the sum of weights
+    ///
+    /// The default is 1.
     pub fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             weight_norm,
@@ -144,6 +156,9 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         }
     }
 
+    /// Set a maximum cell radius
+    ///
+    /// The default is `None`, meaning unlimited cell size.
     pub fn max_cell_size(self, max_cell_size: Option<f64>) -> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             max_cell_size,
@@ -255,3 +270,6 @@ pub struct NoObserver { }
 impl ObserveCell for NoObserver {
     fn observe_cell(&mut self, _cell: &Cell) { }
 }
+
+/// Default cell observer doing nothing
+pub const NO_OBSERVER: NoObserver = NoObserver { };

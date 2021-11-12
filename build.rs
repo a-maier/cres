@@ -26,6 +26,20 @@ fn main() {
     );
     cbindgen::Builder::new()
         .with_config(config)
+        .with_header(
+"/** C API for cres
+ *
+ * See `examples/cres.c` and `examples/user_distance.c` for for usage.
+ * The main function is `cres_run`.
+ *
+ * Functions return an integer, with `0` indicating success and
+ * everything else indicating an error. Errors can be accessed with
+ * `cres_get_last_err` and `cres_print_last_err`.
+ *
+ * License: GPL 3.0 or later
+ * Author: Andreas Maier <andreas.martin.maier@desy.de>
+*/"
+        )
         .with_crate(crate_dir)
         .with_language(Language::C)
         .with_include_guard("CRES_H")

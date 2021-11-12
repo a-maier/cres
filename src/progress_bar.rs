@@ -1,7 +1,4 @@
-pub trait Progress {
-    fn inc(&self, i: u64);
-    fn finish(&self);
-}
+pub use crate::traits::Progress;
 
 impl Progress for indicatif::ProgressBar {
     fn inc(&self, i: u64) {
@@ -23,6 +20,10 @@ impl Progress for logbar::ProgressBar {
     }
 }
 
+/// The default progress bar
+///
+/// The exact format is decided a run time depending on whether we are
+/// writing to an interactive terminal or a non-interactive output.
 #[derive(Default)]
 pub struct ProgressBar {
     bar: Option<Box<dyn Progress>>,
@@ -43,6 +44,7 @@ impl Progress for ProgressBar {
 }
 
 impl ProgressBar {
+    /// A new progress bar with the given maximum progress and message
     pub fn new(len: u64, message: &str) -> Self {
         if log::max_level().to_level() != Some(log::Level::Info) {
             ProgressBar::default()
