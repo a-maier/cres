@@ -137,7 +137,6 @@ where
     U: Unweight,
     W: Write<R>
 {
-
     /// Run the cell resampler
     ///
     /// This goes through the following steps
@@ -150,9 +149,7 @@ where
     pub fn run(&mut self) -> Result<(), CresError<E, <R as Rewind>::Error, C::Error, S::Error, U::Error, W::Error>> {
         use CresError::*;
 
-        self.reader.rewind().map_err(
-            |err| RewindErr(err)
-        )?;
+        self.reader.rewind().map_err(RewindErr)?;
 
         let converter = &mut self.converter;
         let events: Result<Vec<_>, _> = (&mut self.reader).enumerate().map(
@@ -167,21 +164,13 @@ where
         let events = events?;
         info!("Read {} events", events.len());
 
-        let events = self.resampler.resample(events).map_err(
-            |err| ResamplingErr(err)
-        )?;
+        let events = self.resampler.resample(events).map_err(ResamplingErr)?;
 
-        let mut events = self.unweighter.unweight(events).map_err(
-            |err| UnweightErr(err)
-        )?;
+        let mut events = self.unweighter.unweight(events).map_err(UnweightErr)?;
         events.par_sort_unstable();
 
-        self.reader.rewind().map_err(
-            |err| RewindErr(err)
-        )?;
+        self.reader.rewind().map_err(RewindErr)?;
         let reader = &mut self.reader;
-        self.writer.write(reader, &events).map_err(
-            |err| WriteErr(err)
-        )
+        self.writer.write(reader, &events).map_err(WriteErr)
     }
 }

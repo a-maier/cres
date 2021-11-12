@@ -64,7 +64,7 @@ fn cres_last_err_internal(buf: * mut c_char, buflen: usize) -> i32 {
                 buf,
                 len
             );
-            *buf.offset(len as isize) = 0;
+            *buf.add(len) = 0;
         }
         if buflen <= msg_len {
             (1 + msg_len) as i32

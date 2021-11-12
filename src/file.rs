@@ -19,7 +19,7 @@ impl TryClone for File {
     type Error = std::io::Error;
 
     fn try_clone(&self) -> Result<Self> {
-        std::fs::File::try_clone(&self.0).map(|f| File(f))
+        std::fs::File::try_clone(&self.0).map(File)
     }
 }
 

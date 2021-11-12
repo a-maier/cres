@@ -88,7 +88,7 @@ pub struct Event {
     outgoing_by_pid: Vec<(i32, MomentumSet)>,
 }
 
-const EMPTY_SLICE: &'static [FourVector] = &[];
+const EMPTY_SLICE: &[FourVector] = &[];
 
 impl Event {
     pub fn new() -> Self {

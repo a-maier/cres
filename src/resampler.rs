@@ -198,8 +198,10 @@ impl Resample for DefaultResampler {
 
     fn resample(&mut self, events: Vec<Event>) -> Result<Vec<Event>, Self::Error> {
 
-        let mut observer = Observer::default();
-        observer.cell_collector = self.cell_collector.clone();
+        let observer = Observer {
+            cell_collector: self.cell_collector.clone(),
+            ..Default::default()
+        };
 
         let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
@@ -214,7 +216,7 @@ impl Resample for DefaultResampler {
 
 impl DefaultResampler {
     pub fn cell_collector(&self) -> Option<Rc<RefCell<CellCollector>>> {
-        self.cell_collector.as_ref().map(|c| c.clone())
+        self.cell_collector.as_ref().cloned()
     }
 }
 
@@ -253,7 +255,7 @@ impl ObserveCell for Observer {
         self.cell_radii.push(cell.radius());
         if cell.weight_sum() < 0. { self.nneg += 1 }
         if let Some(c) = &self.cell_collector {
-            c.borrow_mut().collect(&cell, &mut self.rng)
+            c.borrow_mut().collect(cell, &mut self.rng)
         }
     }
 

@@ -55,9 +55,9 @@ impl CombinedReader<'static, crate::file::File> {
         I: AsRef<Path>
     {
         use crate::file::File;
-        let sources: Result<Vec<File>, _> = sources.into_iter().map(
-            |p| File::open(p)
-        ).collect();
+        let sources: Result<Vec<File>, _> = sources.into_iter()
+            .map(File::open)
+            .collect();
         Ok(Self::new(sources?))
     }
 }
@@ -86,25 +86,23 @@ impl<'a, R: TryClone + Read + Seek + 'a> Iterator for CombinedReader<'a, R> {
         if let Some(next) = self.reader.next() {
             debug_assert!(nsource > 0);
             Some(next.map_err(|err| ReadError::HepMCReadErr(err, nsource - 1)))
-        } else {
-            if let Some(next_source) = self.next_sources.pop() {
-                let clone = match next_source.try_clone() {
-                    Ok(clone) => clone,
-                    Err(err) => return Some(Err(ReadError::CloneErr(err, nsource)))
-                };
-                self.previous_sources.push(clone);
-                info!(
-                    "Reading from source {}/{}",
-                    self.previous_sources.len(),
-                    self.previous_sources.len() + self.next_sources.len()
-                );
+        } else if let Some(next_source) = self.next_sources.pop() {
+            let clone = match next_source.try_clone() {
+                Ok(clone) => clone,
+                Err(err) => return Some(Err(ReadError::CloneErr(err, nsource)))
+            };
+            self.previous_sources.push(clone);
+            info!(
+                "Reading from source {}/{}",
+                self.previous_sources.len(),
+                self.previous_sources.len() + self.next_sources.len()
+            );
 
-                let decoder = auto_decompress(BufReader::new(next_source));
-                self.reader = Reader::from(decoder);
-                self.next()
-            } else {
-                None
-            }
+            let decoder = auto_decompress(BufReader::new(next_source));
+            self.reader = Reader::from(decoder);
+            self.next()
+        } else {
+            None
         }
     }
 }

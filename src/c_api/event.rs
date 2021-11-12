@@ -48,7 +48,7 @@ pub struct TypeSet {
 }
 
 impl TypeSet {
-    pub(crate) fn view<'a>(&'a self) -> TypeSetView<'a> {
+    pub(crate) fn view(&self) -> TypeSetView<'_> {
         TypeSetView {
             pid: self.pid,
             momenta: self.momenta.as_ptr(),

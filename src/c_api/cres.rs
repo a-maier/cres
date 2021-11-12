@@ -123,7 +123,7 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
 
     let infiles: Vec<_> = unsafe {
         let names = std::slice::from_raw_parts(opt.infiles, opt.n_infiles);
-        names.into_iter().map(|&p| CStr::from_ptr(p)).collect()
+        names.iter().map(|&p| CStr::from_ptr(p)).collect()
     };
     debug!("Will read input from {:?}", infiles);
 

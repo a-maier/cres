@@ -84,15 +84,11 @@ where
         let progress = ProgressBar::new(events.len() as u64, "events written:");
         for event in events {
             let (hepmc_id, hepmc_event) = hepmc_events.next().unwrap();
-            let mut hepmc_event = hepmc_event.map_err(
-                |err| ReadErr(err)
-            )?;
+            let mut hepmc_event = hepmc_event.map_err(ReadErr)?;
             if hepmc_id < event.id() {
                 for _ in hepmc_id..event.id() {
                     let (_id, ev) = hepmc_events.next().unwrap();
-                    hepmc_event = ev.map_err(
-                        |err| ReadErr(err)
-                    )?;
+                    hepmc_event = ev.map_err(ReadErr)?;
                 }
             }
             let old_weight = hepmc_event.weights.first().unwrap();
