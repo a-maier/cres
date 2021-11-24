@@ -20,6 +20,8 @@ main() {
     cross rustc --bin cres --target $TARGET --release
 
     cp target/$TARGET/release/cres $stage/
+    cp target/$TARGET/release/libcres.a $stage/
+    cp target/$TARGET/release/libcres.so $stage/
 
     cd $stage
     tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz *
