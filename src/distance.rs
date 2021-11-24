@@ -30,11 +30,11 @@ impl Distance for EuclWithScaledPt {
             let (t1, p1) = &out1[idx1];
             let (t2, p2) = &out2[idx2];
             match t1.cmp(t2) {
-                Ordering::Less => {
+                Ordering::Greater => {
                     dist += self.pt_norm(p1);
                     idx1 += 1;
                 }
-                Ordering::Greater => {
+                Ordering::Less => {
                     dist += self.pt_norm(p2);
                     idx2 += 1;
                 }
