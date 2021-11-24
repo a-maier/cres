@@ -19,6 +19,7 @@ main() {
 
     cross rustc --bin cres --target $TARGET --release
 
+    ls target/$TARGET/release/*
     cp target/$TARGET/release/cres $stage/
     cp target/$TARGET/release/libcres.a $stage/
     if [ -f target/$TARGET/release/libcres.so ]; then
