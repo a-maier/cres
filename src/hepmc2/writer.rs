@@ -68,7 +68,8 @@ where
     ) -> Result<(), Self::Error> {
         use WriteError::*;
 
-        let mut writer = hepmc2::Writer::try_from(&mut self.writer)?;
+        let writer = compress_writer(&mut self.writer, self.compression)?;
+        let mut writer = hepmc2::Writer::try_from(writer)?;
 
         let sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
         let xs = n64(self.weight_norm) * sum_wt;
