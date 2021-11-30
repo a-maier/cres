@@ -35,13 +35,14 @@ pub struct Writer<T> {
     compression: Option<Compression>,
 }
 
-impl WriterBuilder<File> {
+impl WriterBuilder<BufWriter<File>> {
     /// Write to the file with the given name
     pub fn to_filename<P: AsRef<Path>>(
         self,
         path: P,
     ) -> Result<Self, std::io::Error> {
-        Ok(self.writer(File::create(path.as_ref())?))
+        let file = File::create(path.as_ref())?;
+        Ok(self.writer(BufWriter::new(file)))
     }
 }
 
