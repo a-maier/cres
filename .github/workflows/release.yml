@@ -1,0 +1,52 @@
+name: release
+on:
+  push:
+    tags:
+      - '*'
+#      - '[0-9]+.[0-9]+.[0-9]+'
+
+env:
+  PROJECT: cres
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v2
+    - uses: ncipollo/release-action@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-linux:
+    name: Publish for ${{ matrix.target }}
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-gnu
+          - i686-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          target: ${{ matrix.target }}
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target ${{ matrix.target }} --release
+      - run: ci/make_tarball.sh ${{ matrix.target }}
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          file: cres.tar.gz
+          asset_name: cres-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
