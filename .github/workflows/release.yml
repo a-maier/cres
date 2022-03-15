@@ -50,3 +50,56 @@ jobs:
           asset_name: cres-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
+
+  publish-macos:
+    name: Publish for x86_64-apple-darwin
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          target: x86_64-apple-darwin
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target x86_64-apple-darwin --release
+      - run: ci/make_tarball.sh x86_64-apple-darwin
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          file: cres.tar.gz
+          asset_name: cres-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+
+  publish-windows:
+    name: Publish for ${{ matrix.target }}
+    needs: create-release
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          target: ${{ matrix.target }}
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target ${{ matrix.target }} --release
+      - run: 7z a cres.zip .\target\${{ matrix.target }}\release\cres.exe
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          file: cres.zip
+          asset_name: cres-${{ github.ref_name }}-${{ matrix.target }}.zip
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
