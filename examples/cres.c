@@ -1,6 +1,9 @@
 /* cell resampling using C
  *
- * To run this example, first compile the cres library running
+ * To run this example, first download the cres library from
+ * https://github.com/a-maier/cres/releases
+ *
+ * Alternatively, compile the library running
  * ```
  * cargo build --release
  * ```
