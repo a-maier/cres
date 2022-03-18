@@ -8,28 +8,25 @@ use noisy_float::prelude::*;
 pub type MomentumSet = Vec<FourVector>;
 
 /// Build and `Event'
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]
 pub struct EventBuilder {
-    id: usize,
     weight: N64,
 
     outgoing_by_pid: Vec<(i32, FourVector)>,
 }
 
 impl EventBuilder {
-    /// New event with the given `id`, vanishing weight and no particles
-    pub fn new(id: usize) -> Self {
+    /// New event with vanishing weight and no particles
+    pub fn new() -> Self {
         Self {
-            id,
             weight: n64(0.),
             outgoing_by_pid: Vec::new(),
         }
     }
 
-    /// New event with the given `id`, and space reserved for the given number of particles
-    pub fn with_capacity(id: usize, cap: usize) -> Self {
+    /// New event with space reserved for the given number of particles
+    pub fn with_capacity(cap: usize) -> Self {
         Self {
-            id,
             weight: n64(0.),
             outgoing_by_pid: Vec::with_capacity(cap),
         }
@@ -54,7 +51,7 @@ impl EventBuilder {
     pub fn build(self) -> Event {
         let outgoing_by_pid = compress_outgoing(self.outgoing_by_pid);
         Event {
-            id: self.id,
+            id: Default::default(),
             weight: self.weight,
             outgoing_by_pid,
         }
@@ -84,7 +81,7 @@ fn compress_outgoing(
 /// A Monte Carlo scattering event
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub struct Event {
-    id: usize,
+    pub(crate) id: usize,
     pub weight: N64,
 
     outgoing_by_pid: Vec<(i32, MomentumSet)>,

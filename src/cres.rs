@@ -8,10 +8,6 @@
 //!    (e.g. [hepmc2::Reader](crate::hepmc2::Reader)).
 //! 2. A converter to the internal format
 //!    (e.g. [hepmc2::ClusteringConverter](crate::hepmc2::ClusteringConverter))
-//!
-//!    Each input event is passed to the converter together with an
-//!    [EventBuilder](crate::event::EventBuilder) object, which should be used
-//!    to build an [Event](crate::event::Event).
 //! 3. A [Resampler](crate::traits::Resample).
 //! 4. An [Unweighter](crate::traits::Unweight)
 //!    (e.g. [NO_UNWEIGHTING](crate::unweight::NO_UNWEIGHTING)).
@@ -54,7 +50,7 @@ use log::info;
 use rayon::prelude::*;
 use thiserror::Error;
 
-use crate::event::{Event, EventBuilder};
+use crate::event::Event;
 use crate::traits::*;
 
 /// Build a new [Cres] object
@@ -132,7 +128,7 @@ pub enum CresError<E1, E2, E3, E4, E5, E6> {
 impl<R, C, S, U, W, E, Ev> Cres<R, C, S, U, W>
 where
     R: Iterator<Item = Result<Ev, E>> + Rewind,
-    C: TryConvert<(Ev, EventBuilder), Event>,
+    C: TryConvert<Ev, Event>,
     S: Resample,
     U: Unweight,
     W: Write<R>,
@@ -165,16 +161,15 @@ where
 
         let converter = &mut self.converter;
         let events: Result<Vec<_>, _> = (&mut self.reader)
-            .enumerate()
-            .map(|(id, ev)| match ev {
-                Ok(ev) => {
-                    let builder = EventBuilder::new(id);
-                    converter.try_convert((ev, builder)).map_err(ConversionErr)
-                }
+            .map(|ev| match ev {
+                Ok(ev) => converter.try_convert(ev).map_err(ConversionErr),
                 Err(err) => Err(ReadErr(err)),
             })
             .collect();
-        let events = events?;
+        let mut events = events?;
+        for (id, ev) in events.iter_mut().enumerate() {
+            ev.id = id
+        }
         info!("Read {} events", events.len());
 
         let events = self.resampler.resample(events).map_err(ResamplingErr)?;

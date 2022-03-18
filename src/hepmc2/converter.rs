@@ -88,15 +88,15 @@ impl ClusteringConverter {
     }
 }
 
-impl TryConvert<(hepmc2::Event, EventBuilder), Event> for ClusteringConverter {
+impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
     type Error = std::convert::Infallible;
 
     fn try_convert(
         &mut self,
-        ev: (hepmc2::Event, EventBuilder),
+        event: hepmc2::Event,
     ) -> Result<Event, Self::Error> {
         let mut partons = Vec::new();
-        let (event, mut builder) = ev;
+        let mut builder = EventBuilder::new();
         builder.weight(n64(*event.weights.first().unwrap()));
         for vx in event.vertices {
             let outgoing = vx
@@ -136,14 +136,14 @@ impl Converter {
     }
 }
 
-impl TryConvert<(hepmc2::Event, EventBuilder), Event> for Converter {
+impl TryConvert<hepmc2::Event, Event> for Converter {
     type Error = std::convert::Infallible;
 
     fn try_convert(
         &mut self,
-        ev: (hepmc2::Event, EventBuilder),
+        event: hepmc2::Event,
     ) -> Result<Event, Self::Error> {
-        let (event, mut builder) = ev;
+        let mut builder = EventBuilder::new();
         builder.weight(n64(*event.weights.first().unwrap()));
         for vx in event.vertices {
             let outgoing = vx
