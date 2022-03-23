@@ -62,8 +62,7 @@ impl<P, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
         dist: DF
     ) -> Self
     where
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a P, &'b P) -> D
+        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
         Self::from_iter_with_dist(nodes.into_iter(), dist)
     }
@@ -72,12 +71,11 @@ impl<P, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
 impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
     pub fn from_iter_with_dist<DF, I>(
         iter: I,
-        dist: DF
+        mut dist: DF
     ) -> Self
     where
         I: IntoIterator<Item = P>,
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a P, &'b P) -> D
+        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
         let mut nodes = Vec::from_iter(
             iter.into_iter().map(
@@ -89,27 +87,26 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
         );
         let corner_pt_idx = Self::find_corner_pt(
             nodes.iter().map(|(_, pt)| &pt.vantage_pt),
-            dist
+            &mut dist
         );
         debug!("first vantage point: {corner_pt_idx:?}");
         if let Some(pos) = corner_pt_idx {
             let last_idx = nodes.len() - 1;
             nodes.swap(pos, last_idx)
         }
-        Self::build_tree(nodes.as_mut_slice(), dist);
+        Self::build_tree(nodes.as_mut_slice(), &mut dist);
         let nodes = nodes.into_iter().map(|(_d, n)| n).collect();
         Self { nodes }
     }
 
     fn find_corner_pt<'a, I, DF>(
         iter: I,
-        dist: DF
+        dist: &mut DF
     ) -> Option<usize>
     where
         'x: 'a,
         I: IntoIterator<Item = &'a P>,
-        DF: Copy,
-        for<'b, 'c> DF: Fn(&'b P, &'c P) -> D
+        for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D
     {
         let mut iter = iter.into_iter();
         if let Some(first) = iter.next() {
@@ -144,11 +141,10 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
     //
     fn build_tree<DF>(
         pts: &mut [(D, Node<P, D>)],
-        dist: DF,
+        dist: &mut DF,
     )
     where
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a P, &'b P) -> D
+        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
         if pts.len() < 2 { return }
         // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
@@ -170,39 +166,46 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
         Self::build_tree(outside, dist);
     }
 
-    pub fn nearest_in<DF, Q>(&self, pt: &Q, dist: DF) -> Option<(&P, D)>
+    pub fn nearest_in<DF, Q>(&self, pt: &Q, mut dist: DF) -> Option<(&P, D)>
     where
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a Q, &'b P) -> D
+        for<'a, 'b> DF: FnMut(&'a Q, &'b P) -> D
     {
         debug!("Starting nearest neighbour search");
-        Self::filtered_nearest_in_subtree(self.nodes.as_slice(), pt, dist, &mut |_| true)
+        Self::filtered_nearest_in_subtree(
+            self.nodes.as_slice(),
+            pt,
+            &mut dist,
+            &mut |_| true
+        )
     }
 
     pub fn filtered_nearest_in<DF, F, Q>(
         &self,
         pt: &Q,
-        dist: DF,
+        mut dist: DF,
         mut filter: F,
     ) -> Option<(&P, D)>
     where
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a Q, &'b P) -> D,
+        for<'a, 'b> DF: FnMut(&'a Q, &'b P) -> D,
         F: FnMut(&P) -> bool,
     {
         debug!("Starting nearest neighbour search");
-        Self::filtered_nearest_in_subtree(self.nodes.as_slice(), pt, dist, &mut filter)
+        Self::filtered_nearest_in_subtree(
+            self.nodes.as_slice(),
+            pt,
+            &mut dist,
+            &mut filter
+        )
     }
 
     fn filtered_nearest_in_subtree<'a, DF, F, Q>(
         subtree: &'a [Node<P, D>],
         pt: &Q,
-        dist: DF,
+        dist: &mut DF,
         filter: &mut F,
     ) -> Option<(&'a P, D)>
     where
-        DF: Copy,
-        for<'b, 'c> DF: Fn(&'b Q, &'c P) -> D,
+        for<'b, 'c> DF: FnMut(&'b Q, &'c P) -> D,
         F: FnMut(&P) -> bool,
     {
         if let Some((vp, tree)) = subtree.split_first() {
