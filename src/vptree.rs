@@ -6,8 +6,6 @@ use std::ops::Sub;
 use log::{debug, trace};
 use num_traits::sign::Signed;
 
-use crate::sorted_multimap::SortedMultimap;
-
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct VPTree<P, D> {
     nodes: Vec<Node<P, D>>,
@@ -39,23 +37,6 @@ impl<P: Dist> VPTree<P, <P as Dist>::Output> {
     pub fn nearest(&self, pt: &P) -> Option<(&P, <P as Dist>::Output)> {
         self.nearest_in(pt, |p, q| p.dist(q))
     }
-
-    pub fn k_nearest(
-        &self,
-        pt: &P,
-        k: usize
-    ) -> SortedMultimap<<P as Dist>::Output, &P> {
-        self.k_nearest_in(pt, k, |p, q| p.dist(q))
-    }
-
-    // pub fn fill_to_k_nearest<'a, 'b: 'a>(
-    //     &'b self,
-    //     pt: &P,
-    //     k: usize,
-    //     candidates: &mut SortedMultimap<<P as Dist>::Output, &'a P>
-    // ) {
-    //     self.fill_to_k_nearest_in(pt, k, candidates, |p, q| p.dist(q))
-    // }
 }
 
 impl<P: Dist> FromIterator<P> for VPTree<P, <P as Dist>::Output> {
@@ -230,98 +211,6 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
             None
         }
     }
-
-    pub fn k_nearest_in<DF, Q>(&self, pt: &Q, k: usize, dist: DF) -> SortedMultimap<D, &P>
-    where
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a Q, &'b P) -> D
-    {
-        debug!("Starting nearest neighbour search");
-        let mut res = SortedMultimap::with_capacity(k);
-        self.fill_to_k_nearest_in(pt, k, &mut res, dist);
-        res
-    }
-
-    fn fill_to_k_nearest_in<'c, 'd: 'c, DF, Q>(
-        &'d self,
-        pt: &Q,
-        k: usize,
-        candidates: &mut SortedMultimap<D, &'c P>,
-        dist: DF,
-    )
-    where
-        DF: Copy,
-        for<'a, 'b> DF: Fn(&'a Q, &'b P) -> D
-    {
-        if candidates.len() >= k {
-            return;
-        }
-        Self::fill_to_k_nearest_in_subtree(
-            self.nodes.as_slice(),
-            pt,
-            k,
-            candidates,
-            dist
-        )
-    }
-
-    fn fill_to_k_nearest_in_subtree<'a, 'b: 'a, DF, Q>(
-        subtree: &'b [Node<P, D>],
-        pt: &Q,
-        k: usize,
-        found: &mut SortedMultimap<D, &'a P>,
-        dist: DF,
-    )
-    where
-        DF: Copy,
-        for<'c, 'd> DF: Fn(&'c Q, &'d P) -> D
-    {
-        debug_assert!(found.len() <= k);
-        if let Some((vp, tree)) = subtree.split_first() {
-            let d = dist(pt, &vp.vantage_pt);
-            if let Some(children) = &vp.children {
-                let mut subtrees = tree.split_at(children.outside_offset);
-                if d > children.radius {
-                    trace!("Looking into outer region first");
-                    std::mem::swap(&mut subtrees.0, &mut subtrees.1);
-                }
-                trace!("Looking for nearest neighbours in more promising region");
-                Self::fill_to_k_nearest_in_subtree(subtrees.0, pt, k, found, dist);
-                Self::insert_if_k_nearest(d, &vp.vantage_pt, found, k);
-                if found.len() == k && found.last().unwrap().0 < (children.radius - d).abs() {
-                    return;
-                }
-                trace!("Looking for nearest neighbours in less promising region");
-                Self::fill_to_k_nearest_in_subtree(subtrees.1, pt, k, found, dist);
-            } else {
-                Self::insert_if_k_nearest(d, &vp.vantage_pt, found, k);
-            }
-        }
-    }
-
-    fn insert_if_k_nearest<'a, 'b: 'a>(
-        d: D,
-        pt: &'b P,
-        cur_nearest: &mut SortedMultimap<D, &'a P>,
-        max_size: usize,
-    ) {
-        if cur_nearest.len() < max_size {
-            cur_nearest.insert(d, pt);
-        } else {
-            let replace = match cur_nearest.last() {
-                Some((dsub, _)) if d < *dsub => {
-                    true
-                },
-                Some(_) => false,
-                None => unreachable!()
-            };
-            if replace {
-                cur_nearest.pop_largest();
-                cur_nearest.insert(d, pt);
-            }
-        }
-    }
-
 }
 
 impl<P: Copy + Default + PartialOrd + Signed + Sub<Output = P>> Dist for P {
@@ -370,18 +259,6 @@ mod tests {
         assert_eq!(tree.nearest(&2), Some((&2, 0)));
         assert_eq!(tree.nearest(&5), Some((&3, 2)));
         assert_eq!(tree.nearest(&-5), Some((&0, 5)));
-    }
-
-    #[test]
-    fn k_nearest() {
-        log_init();
-
-        let tree = VPTree::<i32, i32>::from_iter([0, 1, 2, 3]);
-        debug!("{tree:#?}");
-        assert_eq!(
-            tree.k_nearest(&2, 3),
-            SortedMultimap::from([(0, &2), (1, &1), (1, &3)])
-        )
     }
 
 }
