@@ -228,8 +228,10 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
                     },
                     _ => { }
                 };
-                if nearest.unwrap().1 < (children.radius - d).abs() {
-                    return nearest;
+                if let Some((_, dn)) = nearest {
+                    if dn < (children.radius - d).abs() {
+                        return nearest;
+                    }
                 }
                 trace!("Looking for nearest neighbour in less promising region");
                 match Self::filtered_nearest_in_subtree(subtrees.1, pt, dist, filter) {
