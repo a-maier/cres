@@ -55,6 +55,8 @@ pub mod traits;
 pub mod unweight;
 
 mod bisect;
+mod vptree;
+mod sorted_multimap;
 
 use lazy_static::lazy_static;
 
