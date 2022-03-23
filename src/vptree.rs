@@ -217,35 +217,42 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
             };
             if let Some(children) = &vp.children {
                 let mut subtrees = tree.split_at(children.outside_offset);
+                let mut nearest_in_sub = |sub| Self::filtered_nearest_in_subtree(
+                    sub,
+                    pt,
+                    dist,
+                    filter,
+                );
                 if d > children.radius {
                     std::mem::swap(&mut subtrees.0, &mut subtrees.1);
                     trace!("Looking into outer region first");
                 }
                 trace!("Looking for nearest neighbour in more promising region");
-                match Self::filtered_nearest_in_subtree(subtrees.0, pt, dist, filter) {
-                    res @ Some((_, dsub)) if dsub < d || nearest.is_none() => {
-                        nearest = res
-                    },
-                    _ => { }
-                };
+                nearest = Self::nearer(nearest, nearest_in_sub(subtrees.0));
                 if let Some((_, dn)) = nearest {
                     if dn < (children.radius - d).abs() {
                         return nearest;
                     }
                 }
                 trace!("Looking for nearest neighbour in less promising region");
-                match Self::filtered_nearest_in_subtree(subtrees.1, pt, dist, filter) {
-                    nearer @ Some((_, dsub)) if dsub < d || nearest.is_none() => {
-                        nearer
-                    },
-                    _ => nearest
-                }
-
+                Self::nearer(nearest, nearest_in_sub(subtrees.1))
             } else {
                 nearest
             }
         } else {
             None
+        }
+    }
+
+    fn nearer<'a>(a: Option<(&'a P, D)>, b: Option<(&'a P, D)>) -> Option<(&'a P, D)> {
+        match (a, b) {
+            (Some((_, d1)), Some((_, d2))) => if d1 <= d2 {
+                a
+            } else {
+                b
+            },
+            (None, Some(_)) => b,
+            _ => a,
         }
     }
 }
