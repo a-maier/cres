@@ -37,6 +37,17 @@ impl<P: Dist> VPTree<P, <P as Dist>::Output> {
     pub fn nearest(&self, pt: &P) -> Option<(&P, <P as Dist>::Output)> {
         self.nearest_in(pt, |p, q| p.dist(q))
     }
+
+    pub fn filtered_nearest<F>(
+        &self,
+        pt: &P,
+        filter: F,
+    ) -> Option<(&P, <P as Dist>::Output)>
+    where
+        F: FnMut(&P) -> bool
+    {
+        self.filtered_nearest_in(pt, |p, q| p.dist(q), filter)
+    }
 }
 
 impl<P: Dist> FromIterator<P> for VPTree<P, <P as Dist>::Output> {
@@ -165,21 +176,42 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
         for<'a, 'b> DF: Fn(&'a Q, &'b P) -> D
     {
         debug!("Starting nearest neighbour search");
-        Self::nearest_in_subtree(self.nodes.as_slice(), pt, dist)
+        Self::filtered_nearest_in_subtree(self.nodes.as_slice(), pt, dist, &mut |_| true)
     }
 
-    fn nearest_in_subtree<'a, DF, Q>(
+    pub fn filtered_nearest_in<DF, F, Q>(
+        &self,
+        pt: &Q,
+        dist: DF,
+        mut filter: F,
+    ) -> Option<(&P, D)>
+    where
+        DF: Copy,
+        for<'a, 'b> DF: Fn(&'a Q, &'b P) -> D,
+        F: FnMut(&P) -> bool,
+    {
+        debug!("Starting nearest neighbour search");
+        Self::filtered_nearest_in_subtree(self.nodes.as_slice(), pt, dist, &mut filter)
+    }
+
+    fn filtered_nearest_in_subtree<'a, DF, F, Q>(
         subtree: &'a [Node<P, D>],
         pt: &Q,
-        dist: DF
+        dist: DF,
+        filter: &mut F,
     ) -> Option<(&'a P, D)>
     where
         DF: Copy,
-        for<'b, 'c> DF: Fn(&'b Q, &'c P) -> D
+        for<'b, 'c> DF: Fn(&'b Q, &'c P) -> D,
+        F: FnMut(&P) -> bool,
     {
         if let Some((vp, tree)) = subtree.split_first() {
             let d = dist(pt, &vp.vantage_pt);
-            let mut nearest = Some((&vp.vantage_pt, d));
+            let mut nearest = if filter(&vp.vantage_pt) {
+                Some((&vp.vantage_pt, d))
+            } else {
+                None
+            };
             if let Some(children) = &vp.children {
                 let mut subtrees = tree.split_at(children.outside_offset);
                 if d > children.radius {
@@ -187,8 +219,8 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
                     trace!("Looking into outer region first");
                 }
                 trace!("Looking for nearest neighbour in more promising region");
-                match Self::nearest_in_subtree(subtrees.0, pt, dist) {
-                    res @ Some((_, dsub)) if dsub < d => {
+                match Self::filtered_nearest_in_subtree(subtrees.0, pt, dist, filter) {
+                    res @ Some((_, dsub)) if dsub < d || nearest.is_none() => {
                         nearest = res
                     },
                     _ => { }
@@ -197,9 +229,9 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
                     return nearest;
                 }
                 trace!("Looking for nearest neighbour in less promising region");
-                match Self::nearest_in_subtree(subtrees.1, pt, dist) {
-                    nearest @ Some((_, dsub)) if dsub < d => {
-                        nearest
+                match Self::filtered_nearest_in_subtree(subtrees.1, pt, dist, filter) {
+                    nearer @ Some((_, dsub)) if dsub < d || nearest.is_none() => {
+                        nearer
                     },
                     _ => nearest
                 }
@@ -259,6 +291,20 @@ mod tests {
         assert_eq!(tree.nearest(&2), Some((&2, 0)));
         assert_eq!(tree.nearest(&5), Some((&3, 2)));
         assert_eq!(tree.nearest(&-5), Some((&0, 5)));
+    }
+
+    #[test]
+    fn nearest_filtered() {
+        log_init();
+
+        let tree = VPTree::<i32, i32>::from_iter([0]);
+        debug!("{tree:#?}");
+        assert_eq!(tree.filtered_nearest(&-1, |p| *p != 0), None);
+        assert_eq!(tree.filtered_nearest(&-1, |p| *p == 0), Some((&0, 1)));
+
+        let tree = VPTree::<i32, i32>::from_iter([0, 1]);
+        debug!("{tree:#?}");
+        assert_eq!(tree.filtered_nearest(&0, |p| *p > 0), Some((&1, 1)));
     }
 
 }
