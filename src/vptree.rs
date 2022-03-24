@@ -14,8 +14,15 @@ pub struct VPTree<P, D> {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 struct Node<P, D> {
     vantage_pt: P,
-    cached_dist: (P, D),
+    cache: Cache<P, D>,
     children: Option<Children<D>>
+}
+
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
+struct Cache<P, D> {
+    pt: P,
+    dist: D,
+    used: bool,
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
@@ -37,17 +44,6 @@ impl<P: Dist + Copy + PartialEq> VPTree<P, <P as Dist>::Output> {
 
     pub fn nearest(&mut self, pt: &P) -> Option<(&P, <P as Dist>::Output)> {
         self.nearest_in(pt, |p, q| p.dist(q))
-    }
-
-    pub fn filtered_nearest<F>(
-        &mut self,
-        pt: &P,
-        filter: F,
-    ) -> Option<(&P, <P as Dist>::Output)>
-    where
-        F: FnMut(&P) -> bool
-    {
-        self.filtered_nearest_in(pt, |p, q| p.dist(q), filter)
     }
 }
 
@@ -82,7 +78,12 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
             iter.into_iter().map(
                 |vantage_pt| {
                     // reserve first element for storing distances
-                    (Default::default(), Node{ vantage_pt, children: None, cached_dist: (vantage_pt, Default::default()) })
+                    let cache = Cache {
+                        pt: vantage_pt,
+                        dist: Default::default(),
+                        used: false,
+                    };
+                    (Default::default(), Node{ vantage_pt, children: None, cache })
                 }
             )
         );
@@ -172,74 +173,69 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
         debug!("Starting nearest neighbour search");
-        Self::filtered_nearest_in_subtree(
+        let idx = Self::nearest_in_subtree(
             self.nodes.as_mut_slice(),
-            pt,
+            *pt,
             &mut dist,
-            &mut |_| true
-        )
+            0
+        );
+        if let Some((idx, d)) = idx {
+            trace!("nearest is at index {idx}");
+            self.nodes[idx].cache.used = true;
+            Some((&self.nodes[idx].vantage_pt, d))
+        } else {
+            None
+        }
     }
 
-    pub fn filtered_nearest_in<DF, F>(
-        &mut self,
-        pt: &P,
-        mut dist: DF,
-        mut filter: F,
-    ) -> Option<(&P, D)>
-    where
-        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D,
-        F: FnMut(&P) -> bool,
-    {
-        debug!("Starting nearest neighbour search");
-        Self::filtered_nearest_in_subtree(
-            self.nodes.as_mut_slice(),
-            pt,
-            &mut dist,
-            &mut filter
-        )
-    }
-
-    fn filtered_nearest_in_subtree<'a, DF, F>(
+    fn nearest_in_subtree<'a, DF>(
         subtree: &'a mut [Node<P, D>],
-        pt: &P,
+        pt: P,
         dist: &mut DF,
-        filter: &mut F,
-    ) -> Option<(&'a P, D)>
+        idx: usize,
+    ) -> Option<(usize, D)>
     where
         for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D,
-        F: FnMut(&P) -> bool,
     {
-        if let Some((vp, tree)) = subtree.split_first_mut() {
-            if *pt != vp.cached_dist.0 {
-                vp.cached_dist = (*pt, dist(pt, &vp.vantage_pt));
+        trace!("node at position {idx}");
+        if let Some((node, tree)) = subtree.split_first_mut() {
+            if pt != node.cache.pt {
+                node.cache = Cache{
+                    pt,
+                    dist: dist(&pt, &node.vantage_pt),
+                    used: false
+                };
             };
-            let d = vp.cached_dist.1;
-            let mut nearest = if filter(&vp.vantage_pt) {
-                Some((&vp.vantage_pt, d))
-            } else {
+            let d = node.cache.dist;
+            let mut nearest = if node.cache.used || pt == node.vantage_pt {
+                trace!("excluding {idx}");
                 None
+            } else {
+                Some((idx, d))
             };
-            if let Some(children) = &vp.children {
+            if let Some(children) = &node.children {
                 let mut subtrees = tree.split_at_mut(children.outside_offset);
-                let mut nearest_in_sub = |sub| Self::filtered_nearest_in_subtree(
+                let mut offsets = (1, children.outside_offset + 1);
+                let mut nearest_in_sub = |sub, idx| Self::nearest_in_subtree(
                     sub,
                     pt,
                     dist,
-                    filter,
+                    idx
                 );
                 if d > children.radius {
                     std::mem::swap(&mut subtrees.0, &mut subtrees.1);
+                    std::mem::swap(&mut offsets.0, &mut offsets.1);
                     trace!("Looking into outer region first");
                 }
                 trace!("Looking for nearest neighbour in more promising region");
-                nearest = Self::nearer(nearest, nearest_in_sub(subtrees.0));
+                nearest = Self::nearer(nearest, nearest_in_sub(subtrees.0, idx + offsets.0));
                 if let Some((_, dn)) = nearest {
                     if dn < (children.radius - d).abs() {
                         return nearest;
                     }
                 }
                 trace!("Looking for nearest neighbour in less promising region");
-                Self::nearer(nearest, nearest_in_sub(subtrees.1))
+                Self::nearer(nearest, nearest_in_sub(subtrees.1, idx + offsets.1))
             } else {
                 nearest
             }
@@ -248,14 +244,14 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         }
     }
 
-    fn nearer<'a>(a: Option<(&'a P, D)>, b: Option<(&'a P, D)>) -> Option<(&'a P, D)> {
-        match (a, b) {
-            (Some((_, d1)), Some((_, d2))) => if d1 <= d2 {
+    fn nearer<T>(a: Option<(T, D)>, b: Option<(T, D)>) -> Option<(T, D)> {
+        match (&a, &b) {
+            (&Some((_, d1)), &Some((_, d2))) => if d1 <= d2 {
                 a
             } else {
                 b
             },
-            (None, Some(_)) => b,
+            (&None, &Some(_)) => b,
             _ => a,
         }
     }
@@ -289,14 +285,14 @@ mod tests {
         let mut tree = VPTree::from_iter([0]);
         debug!("{tree:#?}");
         assert_eq!(tree.nearest(&-1), Some((&0, 1)));
-        assert_eq!(tree.nearest(&0), Some((&0, 0)));
+        assert_eq!(tree.nearest(&0), None);
         assert_eq!(tree.nearest(&1), Some((&0, 1)));
 
         let mut tree = VPTree::from_iter([0, 1]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&0), Some((&0, 0)));
-        assert_eq!(tree.nearest(&1), Some((&1, 0)));
+        assert_eq!(tree.nearest(&0), Some((&1, 1)));
         assert_eq!(tree.nearest(&2), Some((&1, 1)));
+        assert_eq!(tree.nearest(&2), Some((&0, 2)));
 
         let mut tree = VPTree::from_iter([0, 1, 4]);
         debug!("{tree:#?}");
@@ -304,23 +300,9 @@ mod tests {
 
         let mut tree = VPTree::from_iter([0, 1, 2, 3]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&2), Some((&2, 0)));
+        assert_eq!(tree.nearest(&2), Some((&3, 1)));
         assert_eq!(tree.nearest(&5), Some((&3, 2)));
         assert_eq!(tree.nearest(&-5), Some((&0, 5)));
-    }
-
-    #[test]
-    fn nearest_filtered() {
-        log_init();
-
-        let mut tree = VPTree::<i32, i32>::from_iter([0]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.filtered_nearest(&-1, |p| *p != 0), None);
-        assert_eq!(tree.filtered_nearest(&-1, |p| *p == 0), Some((&0, 1)));
-
-        let mut tree = VPTree::<i32, i32>::from_iter([0, 1]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.filtered_nearest(&0, |p| *p > 0), Some((&1, 1)));
     }
 
 }
