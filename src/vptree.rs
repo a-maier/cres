@@ -1,4 +1,4 @@
-use std::cmp::PartialOrd;
+use std::cmp::{PartialEq, PartialOrd};
 use std::default::Default;
 use std::iter::FromIterator;
 use std::ops::Sub;
@@ -14,6 +14,7 @@ pub struct VPTree<P, D> {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 struct Node<P, D> {
     vantage_pt: P,
+    cached_dist: (P, D),
     children: Option<Children<D>>
 }
 
@@ -29,17 +30,17 @@ pub trait Dist<P = Self> {
     fn dist(&self, p: &P) -> Self::Output;
 }
 
-impl<P: Dist> VPTree<P, <P as Dist>::Output> {
+impl<P: Dist + Copy + PartialEq> VPTree<P, <P as Dist>::Output> {
     pub fn new(nodes: Vec<P>) -> Self {
         Self::from_iter(nodes.into_iter())
     }
 
-    pub fn nearest(&self, pt: &P) -> Option<(&P, <P as Dist>::Output)> {
+    pub fn nearest(&mut self, pt: &P) -> Option<(&P, <P as Dist>::Output)> {
         self.nearest_in(pt, |p, q| p.dist(q))
     }
 
     pub fn filtered_nearest<F>(
-        &self,
+        &mut self,
         pt: &P,
         filter: F,
     ) -> Option<(&P, <P as Dist>::Output)>
@@ -50,13 +51,13 @@ impl<P: Dist> VPTree<P, <P as Dist>::Output> {
     }
 }
 
-impl<P: Dist> FromIterator<P> for VPTree<P, <P as Dist>::Output> {
+impl<P: Dist + Copy + PartialEq> FromIterator<P> for VPTree<P, <P as Dist>::Output> {
     fn from_iter<I: IntoIterator<Item=P>>(iter: I) -> Self {
         Self::from_iter_with_dist(iter, |p, q| p.dist(q))
     }
 }
 
-impl<P, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
+impl<P: Copy + PartialEq, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
     pub fn new_with_dist<DF>(
         nodes: Vec<P>,
         dist: DF
@@ -68,7 +69,7 @@ impl<P, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
     }
 }
 
-impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
+impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
     pub fn from_iter_with_dist<DF, I>(
         iter: I,
         mut dist: DF
@@ -81,7 +82,7 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
             iter.into_iter().map(
                 |vantage_pt| {
                     // reserve first element for storing distances
-                    (Default::default(), Node{ vantage_pt, children: None })
+                    (Default::default(), Node{ vantage_pt, children: None, cached_dist: (vantage_pt, Default::default()) })
                 }
             )
         );
@@ -166,57 +167,60 @@ impl<'x, P: 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
         Self::build_tree(outside, dist);
     }
 
-    pub fn nearest_in<DF, Q>(&self, pt: &Q, mut dist: DF) -> Option<(&P, D)>
+    pub fn nearest_in<DF>(&mut self, pt: &P, mut dist: DF) -> Option<(&P, D)>
     where
-        for<'a, 'b> DF: FnMut(&'a Q, &'b P) -> D
+        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
         debug!("Starting nearest neighbour search");
         Self::filtered_nearest_in_subtree(
-            self.nodes.as_slice(),
+            self.nodes.as_mut_slice(),
             pt,
             &mut dist,
             &mut |_| true
         )
     }
 
-    pub fn filtered_nearest_in<DF, F, Q>(
-        &self,
-        pt: &Q,
+    pub fn filtered_nearest_in<DF, F>(
+        &mut self,
+        pt: &P,
         mut dist: DF,
         mut filter: F,
     ) -> Option<(&P, D)>
     where
-        for<'a, 'b> DF: FnMut(&'a Q, &'b P) -> D,
+        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D,
         F: FnMut(&P) -> bool,
     {
         debug!("Starting nearest neighbour search");
         Self::filtered_nearest_in_subtree(
-            self.nodes.as_slice(),
+            self.nodes.as_mut_slice(),
             pt,
             &mut dist,
             &mut filter
         )
     }
 
-    fn filtered_nearest_in_subtree<'a, DF, F, Q>(
-        subtree: &'a [Node<P, D>],
-        pt: &Q,
+    fn filtered_nearest_in_subtree<'a, DF, F>(
+        subtree: &'a mut [Node<P, D>],
+        pt: &P,
         dist: &mut DF,
         filter: &mut F,
     ) -> Option<(&'a P, D)>
     where
-        for<'b, 'c> DF: FnMut(&'b Q, &'c P) -> D,
+        for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D,
         F: FnMut(&P) -> bool,
     {
-        if let Some((vp, tree)) = subtree.split_first() {
-            let d = dist(pt, &vp.vantage_pt);
+        if let Some((vp, tree)) = subtree.split_first_mut() {
+            if *pt != vp.cached_dist.0 {
+                vp.cached_dist = (*pt, dist(pt, &vp.vantage_pt));
+            };
+            let d = vp.cached_dist.1;
             let mut nearest = if filter(&vp.vantage_pt) {
                 Some((&vp.vantage_pt, d))
             } else {
                 None
             };
             if let Some(children) = &vp.children {
-                let mut subtrees = tree.split_at(children.outside_offset);
+                let mut subtrees = tree.split_at_mut(children.outside_offset);
                 let mut nearest_in_sub = |sub| Self::filtered_nearest_in_subtree(
                     sub,
                     pt,
@@ -278,27 +282,27 @@ mod tests {
     fn nearest() {
         log_init();
 
-        let tree = VPTree::<i32, i32>::from_iter([]);
+        let mut tree = VPTree::<i32, i32>::from_iter([]);
         debug!("{tree:#?}");
         assert_eq!(tree.nearest(&0), None);
 
-        let tree = VPTree::from_iter([0]);
+        let mut tree = VPTree::from_iter([0]);
         debug!("{tree:#?}");
         assert_eq!(tree.nearest(&-1), Some((&0, 1)));
         assert_eq!(tree.nearest(&0), Some((&0, 0)));
         assert_eq!(tree.nearest(&1), Some((&0, 1)));
 
-        let tree = VPTree::from_iter([0, 1]);
+        let mut tree = VPTree::from_iter([0, 1]);
         debug!("{tree:#?}");
         assert_eq!(tree.nearest(&0), Some((&0, 0)));
         assert_eq!(tree.nearest(&1), Some((&1, 0)));
         assert_eq!(tree.nearest(&2), Some((&1, 1)));
 
-        let tree = VPTree::from_iter([0, 1, 4]);
+        let mut tree = VPTree::from_iter([0, 1, 4]);
         debug!("{tree:#?}");
         assert_eq!(tree.nearest(&3), Some((&4, 1)));
 
-        let tree = VPTree::from_iter([0, 1, 2, 3]);
+        let mut tree = VPTree::from_iter([0, 1, 2, 3]);
         debug!("{tree:#?}");
         assert_eq!(tree.nearest(&2), Some((&2, 0)));
         assert_eq!(tree.nearest(&5), Some((&3, 2)));
@@ -309,12 +313,12 @@ mod tests {
     fn nearest_filtered() {
         log_init();
 
-        let tree = VPTree::<i32, i32>::from_iter([0]);
+        let mut tree = VPTree::<i32, i32>::from_iter([0]);
         debug!("{tree:#?}");
         assert_eq!(tree.filtered_nearest(&-1, |p| *p != 0), None);
         assert_eq!(tree.filtered_nearest(&-1, |p| *p == 0), Some((&0, 1)));
 
-        let tree = VPTree::<i32, i32>::from_iter([0, 1]);
+        let mut tree = VPTree::<i32, i32>::from_iter([0, 1]);
         debug!("{tree:#?}");
         assert_eq!(tree.filtered_nearest(&0, |p| *p > 0), Some((&1, 1)));
     }
