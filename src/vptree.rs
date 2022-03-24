@@ -1,6 +1,6 @@
 use std::cmp::{PartialEq, PartialOrd};
 use std::default::Default;
-use std::iter::FromIterator;
+use std::iter::{Iterator, FromIterator};
 use std::ops::Sub;
 
 use log::{debug, trace};
@@ -42,7 +42,7 @@ impl<P: Dist + Copy + PartialEq> VPTree<P, <P as Dist>::Output> {
         Self::from_iter(nodes.into_iter())
     }
 
-    pub fn nearest(&mut self, pt: &P) -> Option<(&P, <P as Dist>::Output)> {
+    pub fn nearest(&mut self, pt: &P) -> NearestNeighbourIt<'_, P, <P as Dist>::Output, impl for<'b, 'c> FnMut(&'b P, &'c P) -> <P as Dist>::Output>  {
         self.nearest_in(pt, |p, q| p.dist(q))
     }
 }
@@ -168,7 +168,18 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         Self::build_tree(outside, dist);
     }
 
-    pub fn nearest_in<DF>(&mut self, pt: &P, mut dist: DF) -> Option<(&P, D)>
+    pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIt<'_, P, D, DF>
+    where
+        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
+    {
+        NearestNeighbourIt{
+            tree: self,
+            pt: *pt,
+            dist
+        }
+    }
+
+    fn nearest_in_impl<DF>(&mut self, pt: &P, mut dist: DF) -> Option<(P, D)>
     where
         for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
@@ -182,7 +193,7 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         if let Some((idx, d)) = idx {
             trace!("nearest is at index {idx}");
             self.nodes[idx].cache.used = true;
-            Some((&self.nodes[idx].vantage_pt, d))
+            Some((self.nodes[idx].vantage_pt, d))
         } else {
             None
         }
@@ -265,6 +276,25 @@ impl<P: Copy + Default + PartialOrd + Signed + Sub<Output = P>> Dist for P {
     }
 }
 
+pub struct NearestNeighbourIt<'a, P, D, DF> {
+    pt: P,
+    dist: DF,
+    tree: &'a mut VPTree<P, D>
+}
+
+impl<'a, P, D, DF> Iterator for NearestNeighbourIt<'a, P, D, DF>
+where
+    P: Copy + PartialEq,
+    D: Copy + Default + PartialOrd + Signed + Sub,
+    for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D,
+{
+    type Item = (P, D);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.tree.nearest_in_impl(&self.pt, &mut self.dist)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,29 +310,30 @@ mod tests {
 
         let mut tree = VPTree::<i32, i32>::from_iter([]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&0), None);
+        assert_eq!(tree.nearest(&0).next(), None);
 
-        let mut tree = VPTree::from_iter([0]);
+        let mut tree = VPTree::<i32, i32>::from_iter([0]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&-1), Some((&0, 1)));
-        assert_eq!(tree.nearest(&0), None);
-        assert_eq!(tree.nearest(&1), Some((&0, 1)));
+        assert_eq!(tree.nearest(&-1).next(), Some((0, 1)));
+        assert_eq!(tree.nearest(&0).next(), None);
+        assert_eq!(tree.nearest(&1).next(), Some((0, 1)));
 
-        let mut tree = VPTree::from_iter([0, 1]);
+        let mut tree = VPTree::<i32, i32>::from_iter([0, 1]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&0), Some((&1, 1)));
-        assert_eq!(tree.nearest(&2), Some((&1, 1)));
-        assert_eq!(tree.nearest(&2), Some((&0, 2)));
+        assert_eq!(tree.nearest(&0).next(), Some((1, 1)));
+        let mut nearest = tree.nearest(&2);
+        assert_eq!(nearest.next(), Some((1, 1)));
+        assert_eq!(nearest.next(), Some((0, 2)));
 
-        let mut tree = VPTree::from_iter([0, 1, 4]);
+        let mut tree = VPTree::<i32, i32>::from_iter([0, 1, 4]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&3), Some((&4, 1)));
+        assert_eq!(tree.nearest(&3).next(), Some((4, 1)));
 
-        let mut tree = VPTree::from_iter([0, 1, 2, 3]);
+        let mut tree = VPTree::<i32, i32>::from_iter([0, 1, 2, 3]);
         debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&2), Some((&3, 1)));
-        assert_eq!(tree.nearest(&5), Some((&3, 2)));
-        assert_eq!(tree.nearest(&-5), Some((&0, 5)));
+        assert_eq!(tree.nearest(&2).next(), Some((3, 1)));
+        assert_eq!(tree.nearest(&5).next(), Some((3, 2)));
+        assert_eq!(tree.nearest(&-5).next(), Some((0, 5)));
     }
 
 }
