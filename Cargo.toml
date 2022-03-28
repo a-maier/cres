@@ -35,7 +35,7 @@ regex = "1.5"
 lazy_static = "1.4"
 thiserror = "1.0"
 anyhow = "1.0"
-derive_builder = "0.10"
+derive_builder = "0.11"
 
 [lib]
 name = "cres"
@@ -47,5 +47,5 @@ name = "cres"
 path = "src/bin/main.rs"
 
 [build-dependencies]
-cbindgen = "0.20"
+cbindgen = "0.21"
 vergen = "7"
