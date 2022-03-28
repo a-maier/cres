@@ -5,9 +5,9 @@ use cres::compression::Compression;
 use cres::hepmc2::converter::JetAlgorithm;
 use cres::seeds::Strategy;
 
+use clap::Parser;
 use lazy_static::lazy_static;
 use regex::Regex;
-use structopt::StructOpt;
 use thiserror::Error;
 
 fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
@@ -20,7 +20,7 @@ fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub struct UnknownStrategy(pub String);
 
 impl Display for UnknownStrategy {
@@ -110,19 +110,19 @@ fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
     }
 }
 
-#[derive(Debug, Copy, Clone, StructOpt)]
+#[derive(Debug, Copy, Clone, Parser)]
 pub(crate) struct JetDefinition {
     /// Jet algorithm
-    #[structopt(
-        short = "a",
+    #[clap(
+        short = 'a',
         long,
         help = "Jet algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'"
     )]
     pub jetalgorithm: JetAlgorithm,
     /// Jet radius parameter
-    #[structopt(short = "R", long)]
+    #[clap(short = 'R', long)]
     pub jetradius: f64,
-    #[structopt(short = "p", long)]
+    #[clap(short = 'p', long)]
     /// Minimum jet transverse momentum
     pub jetpt: f64,
 }
@@ -139,32 +139,32 @@ impl std::convert::From<JetDefinition>
     }
 }
 
-#[derive(Debug, Copy, Clone, StructOpt)]
+#[derive(Debug, Copy, Clone, Parser)]
 pub(crate) struct UnweightOpt {
     /// Weight below which events are unweighted
-    #[structopt(short = "w", long, default_value = "0.")]
+    #[clap(short = 'w', long, default_value = "0.")]
     pub(crate) minweight: f64,
 
     /// Random number generator seed for unweighting
-    #[structopt(short, long, default_value = "0")]
+    #[clap(short, long, default_value = "0")]
     pub(crate) seed: u64,
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "cres", about = "Make event weights positive")]
+#[derive(Debug, Parser)]
+#[clap(name = "cres", about = "Make event weights positive")]
 pub(crate) struct Opt {
     /// Output file
-    #[structopt(long, short, parse(from_os_str))]
+    #[clap(long, short, parse(from_os_str))]
     pub(crate) outfile: PathBuf,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub(crate) jet_def: JetDefinition,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub(crate) unweight: UnweightOpt,
 
     ///
-    #[structopt(
+    #[clap(
         long,
         default_value = "0.",
         help = "Weight of transverse momentum
@@ -172,8 +172,8 @@ when calculating particle momentum distances.\n"
     )]
     pub(crate) ptweight: f64,
 
-    #[structopt(
-        short = "n",
+    #[clap(
+        short = 'n',
         long,
         default_value = "1.",
         help = "Factor between cross section and sum of weights:
@@ -182,10 +182,10 @@ when calculating particle momentum distances.\n"
     pub(crate) weight_norm: f64,
 
     /// Whether to dump selected cells of interest
-    #[structopt(short = "d", long)]
+    #[clap(short = 'd', long)]
     pub(crate) dumpcells: bool,
 
-    #[structopt(short = "c", long, parse(try_from_str = parse_compr),
+    #[clap(short = 'c', long, parse(try_from_str = parse_compr),
                 help = "Compress output file.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
@@ -193,7 +193,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
 
     /// Verbosity level
-    #[structopt(
+    #[clap(
         short,
         long,
         default_value = "Info",
@@ -203,7 +203,7 @@ Possible values with increasing amount of output are
     )]
     pub(crate) loglevel: String,
 
-    #[structopt(
+    #[clap(
         long, default_value = "most_negative",
         parse(try_from_str = parse_strategy),
         help = "Strategy for choosing cell seeds. Possible values are
@@ -213,7 +213,7 @@ Possible values with increasing amount of output are
     )]
     pub(crate) strategy: Strategy,
 
-    #[structopt(
+    #[clap(
         long,
         help = "Maximum cell size. Limiting the cell size can cause
 left-over negative-weight events."
@@ -221,6 +221,6 @@ left-over negative-weight events."
     pub(crate) max_cell_size: Option<f64>,
 
     /// Input files
-    #[structopt(name = "INFILES", parse(from_os_str))]
+    #[clap(name = "INFILES", parse(from_os_str))]
     pub(crate) infiles: Vec<PathBuf>,
 }

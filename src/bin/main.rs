@@ -6,6 +6,7 @@ use std::rc::Rc;
 use crate::opt::Opt;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use cres::{
     cell_collector::CellCollector, hepmc2, prelude::*,
     resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
@@ -14,10 +15,9 @@ use env_logger::Env;
 use log::{debug, info};
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
-use structopt::StructOpt;
 
 fn main() -> Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
     if let (Some(rev), Some(branch)) = (GIT_REV, GIT_BRANCH) {
