@@ -213,6 +213,15 @@ Possible values with increasing amount of output are
     )]
     pub(crate) strategy: Strategy,
 
+    #[clap(short, long, default_value_t,
+    help ="Number of threads.
+
+If set to 0, a default number of threads is chosen.
+The default can be set with the `RAYON_NUM_THREADS` environment
+variable."
+    )]
+    pub(crate) threads: usize,
+
     #[clap(
         long,
         help = "Maximum cell size. Limiting the cell size can cause

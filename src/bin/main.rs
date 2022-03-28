@@ -20,6 +20,11 @@ fn main() -> Result<()> {
     let opt = Opt::parse();
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
+
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(opt.threads)
+        .build_global()?;
+
     if let (Some(rev), Some(branch)) = (GIT_REV, GIT_BRANCH) {
         info!("cres {} rev {} ({})", VERSION, rev, branch);
     } else {
