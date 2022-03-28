@@ -52,6 +52,8 @@ pub mod traits;
 /// Unweighting
 pub mod unweight;
 
+mod bisect;
+
 use lazy_static::lazy_static;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
