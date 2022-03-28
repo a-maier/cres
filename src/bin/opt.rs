@@ -151,7 +151,7 @@ pub(crate) struct UnweightOpt {
 }
 
 #[derive(Debug, Parser)]
-#[clap(name = "cres", about = "Make event weights positive")]
+#[clap(about, author, version)]
 pub(crate) struct Opt {
     /// Output file
     #[clap(long, short, parse(from_os_str))]
