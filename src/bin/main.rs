@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         info!("cres {}", VERSION);
     }
 
-    debug!("settings: {:?}", opt);
+    debug!("settings: {:#?}", opt);
 
     let mut resampler = DefaultResamplerBuilder::default();
     resampler
