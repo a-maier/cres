@@ -149,14 +149,31 @@ impl CellCollector {
         result
     }
 
-    pub fn combine(mut self, mut other: Self, rng: &mut impl Rng) -> Self {
-        self.largest_by_members.append(&mut other.largest_by_members);
+    pub fn combine(mut self, other: Self, rng: &mut impl Rng) -> Self {
+        info!("combining {} + {} cell observations", self.count, other.count);
+        self.largest_by_members.extend(
+            other.largest_by_members.into_iter().map(
+                |((n, id), ev)| ((n, id + self.count), ev)
+            )
+        );
         truncate(&mut self.largest_by_members, NCELLS);
-        self.largest_by_radius.append(&mut other.largest_by_radius);
+        self.largest_by_radius.extend(
+            other.largest_by_radius.into_iter().map(
+                |((r, id), ev)| ((r, id + self.count), ev)
+            )
+        );
         truncate(&mut self.largest_by_radius, NCELLS);
-        self.largest_by_weight.append(&mut other.largest_by_weight);
+        self.largest_by_weight.extend(
+            other.largest_by_weight.into_iter().map(
+                |((w, id), ev)| ((w, id + self.count), ev)
+            )
+        );
         truncate(&mut self.largest_by_weight, NCELLS);
-        self.random.append(&mut other.random);
+        self.random.extend(
+            other.random.into_iter().map(
+                |(id, ev)| (id + self.count, ev)
+            )
+        );
         while self.random.len() > NCELLS {
             let distr = Uniform::from(0..self.random.len());
             let idx = distr.sample(rng);
