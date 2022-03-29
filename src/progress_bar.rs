@@ -26,7 +26,7 @@ impl Progress for logbar::ProgressBar {
 /// writing to an interactive terminal or a non-interactive output.
 #[derive(Default)]
 pub struct ProgressBar {
-    bar: Option<Box<dyn Progress>>,
+    bar: Option<Box<dyn Progress + Send + Sync>>,
 }
 
 impl Progress for ProgressBar {
