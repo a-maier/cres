@@ -75,7 +75,7 @@ impl<T: Clone> TryClone for T {
 /// Callback after resampling a cell
 pub trait ObserveCell {
     /// Look at the new cell
-    fn observe_cell(&mut self, cell: &Cell);
+    fn observe_cell(&self, cell: &Cell);
     /// Called after the resampling is completed
     ///
     /// For example, this can be used to write out statistics.

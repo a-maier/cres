@@ -19,6 +19,7 @@ use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
 use thiserror::Error;
+use thread_local::ThreadLocal;
 
 #[derive(Debug, Error)]
 pub enum ResamplingError{
@@ -49,9 +50,9 @@ impl<D, O, S> Resampler<D, O, S> {
 impl<D, O, S, T> Resample for Resampler<D, O, S>
 where
     D: Distance + Send + Sync,
-    S: SelectSeeds<Iter = T>,
+    S: SelectSeeds<Iter = T> + Send + Sync,
     T: Iterator<Item = usize>,
-    O: ObserveCell,
+    O: ObserveCell + Send + Sync,
 {
     type Error = ResamplingError;
 
@@ -81,7 +82,7 @@ where
         );
         debug_assert_eq!(parts.len(), self.num_partitions as usize);
 
-        for part in parts {
+        parts.into_par_iter().for_each(|part| {
             let seeds = self.seeds.select_seeds(&part);
             let mut events: Vec<(N64, Event)> = part.par_iter_mut()
                 .map(|e| (n64(0.), std::mem::take(e)))
@@ -102,7 +103,7 @@ where
             for (lhs, rhs) in part.iter_mut().zip(events.into_iter()) {
                 *lhs = rhs.1;
             }
-        }
+        });
         progress.finish();
         self.observer.finish();
 
@@ -251,20 +252,37 @@ impl Resample for DefaultResampler {
         &mut self,
         events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
-        let observer = Observer {
-            cell_collector: self.cell_collector.clone(),
+
+        let observer_data = ObserverData {
+            cell_collector: self.cell_collector.clone().map(
+                |c| c.borrow().clone()
+            ),
             ..Default::default()
+        };
+        let observer = Observer {
+            central: observer_data,
+            threaded: Default::default()
         };
 
         let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
-            .observer(observer)
             .num_partitions(self.num_partitions)
             .weight_norm(self.weight_norm)
             .max_cell_size(self.max_cell_size)
+            .observer(observer)
             .build();
-        crate::traits::Resample::resample(&mut resampler, events)
+        let events = crate::traits::Resample::resample(
+            &mut resampler,
+            events
+        )?;
+
+        if let Some(c) = self.cell_collector.as_mut() {
+            c.replace(
+                resampler.observer.central.cell_collector.unwrap()
+            );
+        }
+        Ok(events)
     }
 }
 
@@ -279,15 +297,21 @@ fn median_radius(radii: &mut [N64]) -> N64 {
     radii[radii.len() / 2]
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Default)]
 struct Observer {
+    central: ObserverData,
+    threaded: ThreadLocal<RefCell<ObserverData>>
+}
+
+#[derive(Clone, Debug)]
+struct ObserverData {
     cell_radii: Vec<N64>,
     rng: Xoshiro256Plus,
-    cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    cell_collector: Option<CellCollector>,
     nneg: u64,
 }
 
-impl std::default::Default for Observer {
+impl std::default::Default for ObserverData {
     fn default() -> Self {
         Self {
             cell_radii: Vec::new(),
@@ -299,39 +323,65 @@ impl std::default::Default for Observer {
 }
 
 impl ObserveCell for Observer {
-    fn observe_cell(&mut self, cell: &Cell) {
+    fn observe_cell(&self, cell: &Cell) {
         debug!(
             "New cell with {} events, radius {}, and weight {:e}",
             cell.nmembers(),
             cell.radius(),
             cell.weight_sum()
         );
-        self.cell_radii.push(cell.radius());
+        let mut data = self.threaded.get_or(
+            || RefCell::new(self.central.clone())
+        ).borrow_mut();
+        data.cell_radii.push(cell.radius());
         if cell.weight_sum() < 0. {
-            self.nneg += 1
+            data.nneg += 1
         }
-        if let Some(c) = &self.cell_collector {
-            c.borrow_mut().collect(cell, &mut self.rng)
+        let mut cell_collector = std::mem::take(&mut data.cell_collector);
+        if let Some(c) = &mut cell_collector {
+            c.collect(cell, &mut data.rng)
         }
+        data.cell_collector = cell_collector;
     }
 
     fn finish(&mut self) {
-        info!("Created {} cells", self.cell_radii.len());
-        if self.nneg > 0 {
-            warn!("{} cells had negative weight!", self.nneg);
+        let data = std::mem::take(&mut self.threaded);
+        let res = data.into_iter()
+            .map(|c| c.into_inner())
+            .reduce(|acc, c| acc.combine(c));
+        if let Some(mut res) = res {
+            info!("Created {} cells", res.cell_radii.len());
+            if res.nneg > 0 {
+                warn!("{} cells had negative weight!", res.nneg);
+            }
+            info!(
+                "Median radius: {:.3}",
+                median_radius(res.cell_radii.as_mut_slice())
+            );
+            res.cell_collector.as_ref().map(|c| c.dump_info());
+            self.central = res;
         }
-        info!(
-            "Median radius: {:.3}",
-            median_radius(self.cell_radii.as_mut_slice())
-        );
-        self.cell_collector.as_ref().map(|c| c.borrow().dump_info());
+    }
+}
+
+impl ObserverData {
+    pub fn combine(mut self, mut other: Self) -> Self {
+        self.cell_radii.append(&mut other.cell_radii);
+        self.nneg += other.nneg;
+        self.cell_collector = match (self.cell_collector, other.cell_collector) {
+            (Some(c1), Some(c2)) => Some(c1.combine(c2, &mut self.rng)),
+            (Some(c), None) => Some(c),
+            (None, Some(c)) => Some(c),
+            (None, None) => None
+        };
+        self
     }
 }
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct NoObserver {}
 impl ObserveCell for NoObserver {
-    fn observe_cell(&mut self, _cell: &Cell) {}
+    fn observe_cell(&self, _cell: &Cell) {}
 }
 
 /// Default cell observer doing nothing

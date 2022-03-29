@@ -148,4 +148,31 @@ impl CellCollector {
         }
         result
     }
+
+    pub fn combine(mut self, mut other: Self, rng: &mut impl Rng) -> Self {
+        self.largest_by_members.append(&mut other.largest_by_members);
+        truncate(&mut self.largest_by_members, NCELLS);
+        self.largest_by_radius.append(&mut other.largest_by_radius);
+        truncate(&mut self.largest_by_radius, NCELLS);
+        self.largest_by_weight.append(&mut other.largest_by_weight);
+        truncate(&mut self.largest_by_weight, NCELLS);
+        self.random.append(&mut other.random);
+        while self.random.len() > NCELLS {
+            let distr = Uniform::from(0..self.random.len());
+            let idx = distr.sample(rng);
+            self.random.swap_remove(idx);
+        }
+        self.count += other.count;
+        self
+    }
+}
+
+fn truncate<K: Ord, V>(map: &mut BTreeMap<K, V>, n: usize) {
+    let mut count = 0;
+    map.retain(
+        |_, _| {
+            count += 1;
+            count <= n
+        }
+    );
 }

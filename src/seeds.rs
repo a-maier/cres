@@ -16,7 +16,7 @@ pub trait SelectSeeds {
     /// The return value should be an iterator over the indices of the
     /// seeds in `events`, in the order in which cells are to be
     /// constructed.
-    fn select_seeds(&mut self, events: &[Event]) -> Self::Iter;
+    fn select_seeds(&self, events: &[Event]) -> Self::Iter;
 }
 
 /// Strategy for seeds selection
@@ -52,7 +52,7 @@ impl StrategicSelector {
 impl SelectSeeds for StrategicSelector {
     type Iter = std::vec::IntoIter<usize>;
 
-    fn select_seeds(&mut self, events: &[Event]) -> Self::Iter {
+    fn select_seeds(&self, events: &[Event]) -> Self::Iter {
         use Strategy::*;
         let mut neg_weight: Vec<_> = events
             .par_iter()
