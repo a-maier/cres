@@ -1,5 +1,6 @@
 use std::fmt::{self, Display};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use cres::compression::Compression;
 use cres::hepmc2::converter::JetAlgorithm;
@@ -203,6 +204,15 @@ Possible values with increasing amount of output are
     )]
     pub(crate) loglevel: String,
 
+    #[clap(long, default_value = "1", validator = is_power_of_two,
+        help = "Number of partitions.
+
+The input event sample is split into the given number of partitions,
+which has to be a power of two. Each partition is resampled
+separately."
+    )]
+    pub(crate) partitions: u32,
+
     #[clap(
         long, default_value = "most_negative",
         parse(try_from_str = parse_strategy),
@@ -232,4 +242,15 @@ left-over negative-weight events."
     /// Input files
     #[clap(name = "INFILES", parse(from_os_str))]
     pub(crate) infiles: Vec<PathBuf>,
+}
+
+fn is_power_of_two(s: &str) -> Result<(), String> {
+    match u32::from_str(s) {
+        Ok(n) => if n.is_power_of_two() {
+            Ok(())
+        } else {
+            Err("has to be a power of two".to_string())
+        }
+        Err(err) => Err(err.to_string())
+    }
 }

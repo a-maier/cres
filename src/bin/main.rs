@@ -36,6 +36,7 @@ fn main() -> Result<()> {
     let mut resampler = DefaultResamplerBuilder::default();
     resampler
         .max_cell_size(opt.max_cell_size)
+        .num_partitions(opt.partitions)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
         .weight_norm(opt.weight_norm);

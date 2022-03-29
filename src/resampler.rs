@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::default::Default;
 use std::rc::Rc;
 
+use crate::bisect::circle_partition;
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt};
@@ -17,12 +18,20 @@ use noisy_float::prelude::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 use rayon::prelude::*;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ResamplingError{
+    #[error("Number of partitions is {0}, but has to be a power of two")]
+    NPartition(u32)
+}
 
 /// Main resampling class
 pub struct Resampler<D, O, S> {
     seeds: S,
     distance: D,
     observer: O,
+    num_partitions: u32,
     weight_norm: f64,
     max_cell_size: Option<f64>,
 }
@@ -44,7 +53,7 @@ where
     T: Iterator<Item = usize>,
     O: ObserveCell,
 {
-    type Error = std::convert::Infallible;
+    type Error = ResamplingError;
 
     /// Resampling
     ///
@@ -53,36 +62,50 @@ where
     /// Seeds with non-negative weight are ignored.
     fn resample(
         &mut self,
-        events: Vec<Event>,
+        mut events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
+        if !self.num_partitions.is_power_of_two() {
+            return Err(ResamplingError::NPartition(self.num_partitions))
+        }
         self.print_xs(&events);
 
         let nneg_weight = events.iter().filter(|e| e.weight < 0.).count();
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
 
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
+        let depth = log2(self.num_partitions);
+        let parts = circle_partition(
+            &mut events,
+            |e1, e2| (&self.distance).distance(e1, e2),
+            depth
+        );
+        debug_assert_eq!(parts.len(), self.num_partitions as usize);
 
-        let seeds = self.seeds.select_seeds(&events);
-        let mut events: Vec<_> =
-            events.into_par_iter().map(|e| (n64(0.), e)).collect();
-        for seed in seeds.take(nneg_weight) {
-            if seed >= events.len() {
-                break;
+        for part in parts {
+            let seeds = self.seeds.select_seeds(&part);
+            let mut events: Vec<(N64, Event)> = part.par_iter_mut()
+                .map(|e| (n64(0.), std::mem::take(e)))
+                .collect();
+            for seed in seeds.take(nneg_weight) {
+                if seed >= events.len() {
+                    break;
+                }
+                progress.inc(1);
+                if events[seed].1.weight > 0. {
+                    continue;
+                }
+                let mut cell =
+                    Cell::new(&mut events, seed, &self.distance, max_cell_size);
+                cell.resample();
+                self.observer.observe_cell(&cell);
             }
-            progress.inc(1);
-            if events[seed].1.weight > 0. {
-                continue;
+            for (lhs, rhs) in part.iter_mut().zip(events.into_iter()) {
+                *lhs = rhs.1;
             }
-            let mut cell =
-                Cell::new(&mut events, seed, &self.distance, max_cell_size);
-            cell.resample();
-            self.observer.observe_cell(&cell);
         }
         progress.finish();
         self.observer.finish();
 
-        let events: Vec<_> =
-            events.into_par_iter().map(|(_dist, event)| event).collect();
         Ok(events)
     }
 }
@@ -93,6 +116,7 @@ pub struct ResamplerBuilder<D, O, S> {
     distance: D,
     observer: O,
     weight_norm: f64,
+    num_partitions: u32,
     max_cell_size: Option<f64>,
 }
 
@@ -103,6 +127,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
             seeds: self.seeds,
             distance: self.distance,
             observer: self.observer,
+            num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
@@ -118,6 +143,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
             seeds,
             distance: self.distance,
             observer: self.observer,
+            num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
@@ -132,6 +158,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
             seeds: self.seeds,
             distance,
             observer: self.observer,
+            num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
@@ -146,6 +173,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
             seeds: self.seeds,
             distance: self.distance,
             observer,
+            num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
@@ -157,6 +185,16 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     pub fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             weight_norm,
+            ..self
+        }
+    }
+
+    /// Define the number of partitions into which events should be split
+    ///
+    /// The default number of partitions is 1.
+    pub fn num_partitions(self, num_partitions: u32) -> ResamplerBuilder<D, O, S> {
+        ResamplerBuilder {
+            num_partitions,
             ..self
         }
     }
@@ -184,6 +222,7 @@ impl Default
             distance: Default::default(),
             observer: Default::default(),
             weight_norm: 1.,
+            num_partitions: 1,
             max_cell_size: Default::default(),
         }
     }
@@ -199,12 +238,14 @@ pub struct DefaultResampler {
     strategy: Strategy,
     #[builder(default)]
     max_cell_size: Option<f64>,
+    #[builder(default = "1")]
+    num_partitions: u32,
     #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
 }
 
 impl Resample for DefaultResampler {
-    type Error = std::convert::Infallible;
+    type Error = ResamplingError;
 
     fn resample(
         &mut self,
@@ -219,6 +260,7 @@ impl Resample for DefaultResampler {
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
             .observer(observer)
+            .num_partitions(self.num_partitions)
             .weight_norm(self.weight_norm)
             .max_cell_size(self.max_cell_size)
             .build();
@@ -294,3 +336,29 @@ impl ObserveCell for NoObserver {
 
 /// Default cell observer doing nothing
 pub const NO_OBSERVER: NoObserver = NoObserver {};
+
+const fn log2(n: u32) -> u32 {
+    u32::BITS - n.leading_zeros() - 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn tst_log2of0() {
+        log2(0);
+    }
+
+    #[test]
+    fn tst_log2() {
+        assert_eq!(log2(1), 0);
+        for n in 2..=3 {
+            assert_eq!(log2(n), 1);
+        }
+        for n in 4..=7 {
+            assert_eq!(log2(n), 2);
+        }
+    }
+}
