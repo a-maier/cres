@@ -42,7 +42,7 @@ impl<P: Dist + Copy + PartialEq> VPTree<P, <P as Dist>::Output> {
         Self::from_iter(nodes.into_iter())
     }
 
-    pub fn nearest(&mut self, pt: &P) -> NearestNeighbourIt<'_, P, <P as Dist>::Output, impl for<'b, 'c> FnMut(&'b P, &'c P) -> <P as Dist>::Output>  {
+    pub fn nearest(&mut self, pt: &P) -> NearestNeighbourIter<'_, P, <P as Dist>::Output, impl for<'b, 'c> FnMut(&'b P, &'c P) -> <P as Dist>::Output>  {
         self.nearest_in(pt, |p, q| p.dist(q))
     }
 }
@@ -168,11 +168,11 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         Self::build_tree(outside, dist);
     }
 
-    pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIt<'_, P, D, DF>
+    pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIter<'_, P, D, DF>
     where
         for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
     {
-        NearestNeighbourIt{
+        NearestNeighbourIter{
             tree: self,
             pt: *pt,
             dist
@@ -276,13 +276,13 @@ impl<P: Copy + Default + PartialOrd + Signed + Sub<Output = P>> Dist for P {
     }
 }
 
-pub struct NearestNeighbourIt<'a, P, D, DF> {
+pub struct NearestNeighbourIter<'a, P, D, DF> {
     pt: P,
     dist: DF,
     tree: &'a mut VPTree<P, D>
 }
 
-impl<'a, P, D, DF> Iterator for NearestNeighbourIt<'a, P, D, DF>
+impl<'a, P, D, DF> Iterator for NearestNeighbourIter<'a, P, D, DF>
 where
     P: Copy + PartialEq,
     D: Copy + Default + PartialOrd + Signed + Sub,
