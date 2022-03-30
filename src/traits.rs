@@ -4,6 +4,8 @@ use crate::event::Event;
 pub use crate::distance::Distance;
 pub use crate::seeds::SelectSeeds;
 
+use noisy_float::prelude::*;
+
 /// Rewind to the beginning of a stream
 pub trait Rewind {
     type Error;
@@ -89,4 +91,35 @@ pub trait Progress {
     fn inc(&self, i: u64);
     /// Signal that we are done
     fn finish(&self);
+}
+
+/// Nearest neighbour search for indexed points
+pub trait NeighbourSearch {
+    /// Iterator over nearest neighbours
+    ///
+    /// This has to implement `Iterator<Item = (usize, N64)>`, where
+    /// the first tuple element is the index of the nearest neighbour
+    /// and the second one the distance.  At the moment it is
+    /// unfortunately impossible to enforce this constraint at the
+    /// trait level.
+    type Iter;
+
+    /// Return nearest neighbours in order for the point with the given index
+    fn nearest_in<D>(
+        self,
+        point: &usize,
+        d: D
+    ) -> Self::Iter
+    where
+        D: Fn(&usize, &usize) -> N64 + Send + Sync;
+}
+
+/// Data structure to hold information for nearest-neighbour searches
+pub trait NeighbourData {
+    /// Initialise nearest neighbour search
+    ///
+    /// The arguments are the number of points and a function
+    /// returning the distance given the indices of two points
+    fn new_with_dist<D>(npoints: usize, d: D) -> Self
+    where D: Fn(&usize, &usize) -> N64;
 }

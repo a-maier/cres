@@ -39,6 +39,8 @@ pub mod file;
 pub mod four_vector;
 /// HepMC2 interface
 pub mod hepmc2;
+/// Implementation of naive nearest neighbour search
+pub mod naive_neighbour_search;
 /// Most important exports
 pub mod prelude;
 /// Progress bar

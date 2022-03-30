@@ -11,6 +11,12 @@ pub trait Distance {
     fn distance(&self, ev1: &Event, ev2: &Event) -> N64;
 }
 
+impl<D> Distance for &D where D: Distance {
+    fn distance(&self, ev1: &Event, ev2: &Event) -> N64 {
+        (*self).distance(ev1, ev2)
+    }
+}
+
 const FALLBACK_SIZE: usize = 8;
 
 /// The distance function defined in [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)

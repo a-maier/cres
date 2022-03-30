@@ -9,8 +9,9 @@ use crate::distance::{Distance, EuclWithScaledPt};
 use crate::event::Event;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
-use crate::traits::Resample;
-use crate::traits::{ObserveCell, SelectSeeds};
+use crate::traits::{NeighbourData, NeighbourSearch, ObserveCell, Resample, SelectSeeds};
+
+use crate::naive_neighbour_search::NaiveNeighbourSearch;
 
 use derive_builder::Builder;
 use log::{debug, info, warn};
@@ -82,26 +83,29 @@ where
         );
         debug_assert_eq!(parts.len(), self.num_partitions as usize);
 
-        parts.into_par_iter().for_each(|part| {
-            let seeds = self.seeds.select_seeds(&part);
-            let mut events: Vec<(N64, Event)> = part.par_iter_mut()
-                .map(|e| (n64(0.), std::mem::take(e)))
-                .collect();
+        parts.into_par_iter().for_each(|events| {
+            let seeds = self.seeds.select_seeds(&events);
+            let mut neighbour_search = NaiveNeighbourSearch::new_with_dist(
+                events.len(),
+                |&i, &j| (&self.distance).distance(&events[i], &events[j])
+            );
             for seed in seeds.take(nneg_weight) {
                 if seed >= events.len() {
                     break;
                 }
                 progress.inc(1);
-                if events[seed].1.weight > 0. {
+                if events[seed].weight > 0. {
                     continue;
                 }
-                let mut cell =
-                    Cell::new(&mut events, seed, &self.distance, max_cell_size);
+                let mut cell = Cell::new(
+                    events,
+                    seed,
+                    &self.distance,
+                    &mut neighbour_search,
+                    max_cell_size
+                );
                 cell.resample();
                 self.observer.observe_cell(&cell);
-            }
-            for (lhs, rhs) in part.iter_mut().zip(events.into_iter()) {
-                *lhs = rhs.1;
             }
         });
         progress.finish();

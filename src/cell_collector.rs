@@ -42,34 +42,34 @@ impl CellCollector {
         let weight = cell.weight_sum();
         if count < NCELLS {
             self.first
-                .push((count, cell.iter().map(|(_d, e)| e.id()).collect()));
+                .push((count, cell.iter().map(|e| e.id()).collect()));
             self.random
-                .push((count, cell.iter().map(|(_d, e)| e.id()).collect()));
+                .push((count, cell.iter().map(|e| e.id()).collect()));
             self.largest_by_radius.insert(
                 (r, count),
-                cell.iter().map(|(_d, e)| e.id()).collect(),
+                cell.iter().map(|e| e.id()).collect(),
             );
             self.largest_by_members.insert(
                 (nmembers, count),
-                cell.iter().map(|(_d, e)| e.id()).collect(),
+                cell.iter().map(|e| e.id()).collect(),
             );
             self.largest_by_weight.insert(
                 (weight, count),
-                cell.iter().map(|(_d, e)| e.id()).collect(),
+                cell.iter().map(|e| e.id()).collect(),
             );
         } else {
             let (smallest_r, n) =
                 *self.largest_by_radius.keys().next().unwrap();
             if r > smallest_r {
                 self.largest_by_radius.remove(&(smallest_r, n)).unwrap();
-                let events = cell.iter().map(|(_d, e)| e.id()).collect();
+                let events = cell.iter().map(|e| e.id()).collect();
                 self.largest_by_radius.insert((r, count), events);
             }
             let (least_members, n) =
                 *self.largest_by_members.keys().next().unwrap();
             if nmembers > least_members {
                 self.largest_by_members.remove(&(least_members, n)).unwrap();
-                let events = cell.iter().map(|(_d, e)| e.id()).collect();
+                let events = cell.iter().map(|e| e.id()).collect();
                 self.largest_by_members.insert((nmembers, count), events);
             }
             let (smallest_weight, n) =
@@ -78,13 +78,13 @@ impl CellCollector {
                 self.largest_by_weight
                     .remove(&(smallest_weight, n))
                     .unwrap();
-                let events = cell.iter().map(|(_d, e)| e.id()).collect();
+                let events = cell.iter().map(|e| e.id()).collect();
                 self.largest_by_weight.insert((weight, count), events);
             }
             let distr = Uniform::from(0..=count);
             let idx = distr.sample(&mut rng);
             if idx < self.random.len() {
-                let events = cell.iter().map(|(_d, e)| e.id()).collect();
+                let events = cell.iter().map(|e| e.id()).collect();
                 self.random[idx] = (count, events);
             }
         }
