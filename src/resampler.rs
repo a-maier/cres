@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::default::Default;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::bisect::circle_partition;
@@ -9,7 +10,13 @@ use crate::distance::{Distance, EuclWithScaledPt};
 use crate::event::Event;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
-use crate::traits::{NeighbourData, NeighbourSearch, ObserveCell, Resample, SelectSeeds};
+use crate::traits::{
+    NeighbourData,
+    NeighbourSearch,
+    ObserveCell,
+    Resample,
+    SelectSeeds
+};
 
 use crate::naive_neighbour_search::NaiveNeighbourSearch;
 
@@ -29,16 +36,17 @@ pub enum ResamplingError{
 }
 
 /// Main resampling class
-pub struct Resampler<D, O, S> {
+pub struct Resampler<D, N, O, S> {
     seeds: S,
     distance: D,
+    neighbour_search: PhantomData<N>,
     observer: O,
     num_partitions: u32,
     weight_norm: f64,
     max_cell_size: Option<f64>,
 }
 
-impl<D, O, S> Resampler<D, O, S> {
+impl<D, N, O, S> Resampler<D, N, O, S> {
     fn print_xs(&self, events: &[Event]) {
         let xs: N64 = events.iter().map(|e| e.weight).sum();
         let xs = n64(self.weight_norm) * xs;
@@ -48,9 +56,12 @@ impl<D, O, S> Resampler<D, O, S> {
     }
 }
 
-impl<D, O, S, T> Resample for Resampler<D, O, S>
+impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
+    N: NeighbourData,
+    for <'x> &'x mut N: NeighbourSearch,
+    for <'x> <&'x mut N as NeighbourSearch>::Iter: Iterator<Item=(usize, N64)>,
     S: SelectSeeds<Iter = T> + Send + Sync,
     T: Iterator<Item = usize>,
     O: ObserveCell + Send + Sync,
@@ -85,7 +96,7 @@ where
 
         parts.into_par_iter().for_each(|events| {
             let seeds = self.seeds.select_seeds(&events);
-            let mut neighbour_search = NaiveNeighbourSearch::new_with_dist(
+            let mut neighbour_search = N::new_with_dist(
                 events.len(),
                 |&i, &j| (&self.distance).distance(&events[i], &events[j])
             );
@@ -97,6 +108,7 @@ where
                 if events[seed].weight > 0. {
                     continue;
                 }
+
                 let mut cell = Cell::new(
                     events,
                     seed,
@@ -116,21 +128,23 @@ where
 }
 
 /// Construct a `Resampler` object
-pub struct ResamplerBuilder<D, O, S> {
+pub struct ResamplerBuilder<D, O, S, N=NaiveNeighbourSearch> {
     seeds: S,
     distance: D,
+    neighbour_search: PhantomData<N>,
     observer: O,
     weight_norm: f64,
     num_partitions: u32,
     max_cell_size: Option<f64>,
 }
 
-impl<D, O, S> ResamplerBuilder<D, O, S> {
+impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     /// Build the `Resampler`
-    pub fn build(self) -> Resampler<D, O, S> {
+    pub fn build(self) -> Resampler<D, N, O, S> {
         Resampler {
             seeds: self.seeds,
             distance: self.distance,
+            neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
@@ -139,7 +153,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     }
 
     /// Define how and in which order to choose cell seeds
-    pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS>
+    pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS, N>
     where
         SS: SelectSeeds<Iter = T>,
         T: Iterator<Item = usize>,
@@ -147,6 +161,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
         ResamplerBuilder {
             seeds,
             distance: self.distance,
+            neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
@@ -155,13 +170,14 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     }
 
     /// Define the distance between events
-    pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S>
+    pub fn distance<DD>(self, distance: DD) -> ResamplerBuilder<DD, O, S, N>
     where
         DD: Distance + Send + Sync,
     {
         ResamplerBuilder {
             seeds: self.seeds,
             distance,
+            neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
@@ -170,13 +186,14 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     }
 
     /// Callback that will be applied to each constructed cell after resampling
-    pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S>
+    pub fn observer<OO>(self, observer: OO) -> ResamplerBuilder<D, OO, S, N>
     where
         OO: ObserveCell,
     {
         ResamplerBuilder {
             seeds: self.seeds,
             distance: self.distance,
+            neighbour_search: PhantomData,
             observer,
             num_partitions: self.num_partitions,
             weight_norm: self.weight_norm,
@@ -187,7 +204,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     /// Define the ratio between the cross section and the sum of weights
     ///
     /// The default is 1.
-    pub fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S> {
+    pub fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S, N> {
         ResamplerBuilder {
             weight_norm,
             ..self
@@ -197,7 +214,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     /// Define the number of partitions into which events should be split
     ///
     /// The default number of partitions is 1.
-    pub fn num_partitions(self, num_partitions: u32) -> ResamplerBuilder<D, O, S> {
+    pub fn num_partitions(self, num_partitions: u32) -> ResamplerBuilder<D, O, S, N> {
         ResamplerBuilder {
             num_partitions,
             ..self
@@ -210,7 +227,7 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     pub fn max_cell_size(
         self,
         max_cell_size: Option<f64>,
-    ) -> ResamplerBuilder<D, O, S> {
+    ) -> ResamplerBuilder<D, O, S, N> {
         ResamplerBuilder {
             max_cell_size,
             ..self
@@ -218,13 +235,14 @@ impl<D, O, S> ResamplerBuilder<D, O, S> {
     }
 }
 
-impl Default
-    for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector>
+impl<N> Default
+    for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector, N>
 {
     fn default() -> Self {
         Self {
             seeds: Default::default(),
             distance: Default::default(),
+            neighbour_search: PhantomData,
             observer: Default::default(),
             weight_norm: 1.,
             num_partitions: 1,
@@ -234,7 +252,7 @@ impl Default
 }
 
 #[derive(Builder)]
-pub struct DefaultResampler {
+pub struct DefaultResampler<N=NaiveNeighbourSearch> {
     #[builder(default = "1.")]
     weight_norm: f64,
     #[builder(default = "0.")]
@@ -247,9 +265,16 @@ pub struct DefaultResampler {
     num_partitions: u32,
     #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    #[builder(default)]
+    neighbour_search: PhantomData<N>,
 }
 
-impl Resample for DefaultResampler {
+impl<N> Resample for DefaultResampler<N>
+where
+    N: NeighbourData,
+    for <'x> &'x mut N: NeighbourSearch,
+    for <'x> <&'x mut N as NeighbourSearch>::Iter: Iterator<Item=(usize, N64)>,
+{
     type Error = ResamplingError;
 
     fn resample(
@@ -268,7 +293,8 @@ impl Resample for DefaultResampler {
             threaded: Default::default()
         };
 
-        let mut resampler = ResamplerBuilder::default()
+        let resampler: ResamplerBuilder<_,_,_,N> = ResamplerBuilder::default();
+        let mut resampler = resampler
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
             .num_partitions(self.num_partitions)
