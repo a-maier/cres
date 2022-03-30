@@ -53,6 +53,8 @@ pub mod seeds;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
+/// Nearest neighbour search using a vantage point tree
+pub mod vptree_neighbour_search;
 
 mod bisect;
 mod vptree;

@@ -6,7 +6,7 @@ use std::rc::Rc;
 use crate::bisect::circle_partition;
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
-use crate::distance::{Distance, EuclWithScaledPt};
+use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::event::Event;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
@@ -60,8 +60,8 @@ impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
     N: NeighbourData,
-    for <'x> &'x mut N: NeighbourSearch,
-    for <'x> <&'x mut N as NeighbourSearch>::Iter: Iterator<Item=(usize, N64)>,
+    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
     S: SelectSeeds<Iter = T> + Send + Sync,
     T: Iterator<Item = usize>,
     O: ObserveCell + Send + Sync,
@@ -98,7 +98,7 @@ where
             let seeds = self.seeds.select_seeds(&events);
             let mut neighbour_search = N::new_with_dist(
                 events.len(),
-                |&i, &j| (&self.distance).distance(&events[i], &events[j])
+                PtDistance::new(&self.distance, &events)
             );
             for seed in seeds.take(nneg_weight) {
                 if seed >= events.len() {
@@ -272,8 +272,8 @@ pub struct DefaultResampler<N=NaiveNeighbourSearch> {
 impl<N> Resample for DefaultResampler<N>
 where
     N: NeighbourData,
-    for <'x> &'x mut N: NeighbourSearch,
-    for <'x> <&'x mut N as NeighbourSearch>::Iter: Iterator<Item=(usize, N64)>,
+    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
 {
     type Error = ResamplingError;
 
@@ -316,7 +316,7 @@ where
     }
 }
 
-impl DefaultResampler {
+impl<N> DefaultResampler<N> {
     pub fn cell_collector(&self) -> Option<Rc<RefCell<CellCollector>>> {
         self.cell_collector.as_ref().cloned()
     }

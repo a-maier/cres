@@ -1,4 +1,4 @@
-use crate::traits::{NeighbourData, NeighbourSearch};
+use crate::traits::{Distance, NeighbourData, NeighbourSearch};
 
 use noisy_float::prelude::*;
 use rayon::prelude::*;
@@ -9,19 +9,19 @@ pub struct NaiveNeighbourSearch {
     dist: Vec<(usize, N64)>
 }
 
-impl<'a> NeighbourSearch for &'a mut NaiveNeighbourSearch {
+impl<'a, D> NeighbourSearch<D> for &'a mut NaiveNeighbourSearch
+where D: Distance<usize> + Send + Sync
+{
     type Iter = NaiveNeighbourIter<'a>;
 
-    fn nearest_in<D>(
+    fn nearest_in(
         self,
         point: &usize,
         d: D
     ) -> Self::Iter
-    where
-        D: Fn(&usize, &usize) -> N64 + Send + Sync
     {
         self.dist.par_iter_mut().for_each(|(id, dist)| {
-            *dist = d(id, point);
+            *dist = d.distance(id, point);
         });
         NaiveNeighbourIter::new(&self.dist, *point)
     }
@@ -29,7 +29,7 @@ impl<'a> NeighbourSearch for &'a mut NaiveNeighbourSearch {
 
 impl NeighbourData for NaiveNeighbourSearch {
     fn new_with_dist<D>(npoints: usize, _d: D) -> Self
-    where D: FnMut(&usize, &usize) -> N64
+    where D: Distance<usize>
     {
         Self {
             dist: Vec::from_iter((0..npoints).map(|id| (id, n64(0.))))

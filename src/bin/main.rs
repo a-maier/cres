@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cres::{
     cell_collector::CellCollector, hepmc2, prelude::*,
+    naive_neighbour_search::NaiveNeighbourSearch,
     resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
@@ -33,7 +34,7 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
-    let mut resampler = DefaultResamplerBuilder::default();
+    let mut resampler = DefaultResamplerBuilder::<NaiveNeighbourSearch>::default();
     resampler
         .max_cell_size(opt.max_cell_size)
         .num_partitions(opt.partitions)

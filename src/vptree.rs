@@ -1,78 +1,57 @@
 use std::cmp::{PartialEq, PartialOrd};
 use std::default::Default;
 use std::iter::{Iterator, FromIterator};
-use std::ops::Sub;
 
 use log::{debug, trace};
-use num_traits::sign::Signed;
+use noisy_float::prelude::*;
+
+use crate::traits::Distance;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-pub struct VPTree<P, D> {
-    nodes: Vec<Node<P, D>>,
+pub struct VPTree<P> {
+    nodes: Vec<Node<P>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-struct Node<P, D> {
+struct Node<P> {
     vantage_pt: P,
-    cache: Cache<P, D>,
-    children: Option<Children<D>>
+    cache: Cache<P>,
+    children: Option<Children>
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-struct Cache<P, D> {
+struct Cache<P> {
     pt: P,
-    dist: D,
+    dist: N64,
     used: bool,
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-struct Children<D> {
-    radius: D,
+struct Children {
+    radius: N64,
     outside_offset: usize,
 }
 
-pub trait Dist<P = Self> {
-    type Output: Copy + Default + PartialOrd + Signed + Sub;
-
-    fn dist(&self, p: &P) -> Self::Output;
-}
-
-impl<P: Dist + Copy + PartialEq> VPTree<P, <P as Dist>::Output> {
-    pub fn new(nodes: Vec<P>) -> Self {
-        Self::from_iter(nodes.into_iter())
-    }
-
-    pub fn nearest(&mut self, pt: &P) -> NearestNeighbourIter<'_, P, <P as Dist>::Output, impl for<'b, 'c> FnMut(&'b P, &'c P) -> <P as Dist>::Output>  {
-        self.nearest_in(pt, |p, q| p.dist(q))
-    }
-}
-
-impl<P: Dist + Copy + PartialEq> FromIterator<P> for VPTree<P, <P as Dist>::Output> {
-    fn from_iter<I: IntoIterator<Item=P>>(iter: I) -> Self {
-        Self::from_iter_with_dist(iter, |p, q| p.dist(q))
-    }
-}
-
-impl<P: Copy + PartialEq, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
-    pub fn new_with_dist<DF>(
+impl<P: Copy + PartialEq> VPTree<P> {
+    pub fn new<DF>(
         nodes: Vec<P>,
         dist: DF
     ) -> Self
     where
-        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
+        DF: Distance<P>
     {
         Self::from_iter_with_dist(nodes.into_iter(), dist)
     }
 }
 
-impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub> VPTree<P, D> {
+impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
     pub fn from_iter_with_dist<DF, I>(
         iter: I,
-        mut dist: DF
+        dist: DF
     ) -> Self
     where
         I: IntoIterator<Item = P>,
-        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
+        DF: Distance<P>
     {
         let mut nodes = Vec::from_iter(
             iter.into_iter().map(
@@ -89,31 +68,31 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         );
         let corner_pt_idx = Self::find_corner_pt(
             nodes.iter().map(|(_, pt)| &pt.vantage_pt),
-            &mut dist
+            & dist
         );
         debug!("first vantage point: {corner_pt_idx:?}");
         if let Some(pos) = corner_pt_idx {
             let last_idx = nodes.len() - 1;
             nodes.swap(pos, last_idx)
         }
-        Self::build_tree(nodes.as_mut_slice(), &mut dist);
+        Self::build_tree(nodes.as_mut_slice(), & dist);
         let nodes = nodes.into_iter().map(|(_d, n)| n).collect();
         Self { nodes }
     }
 
     fn find_corner_pt<'a, I, DF>(
         iter: I,
-        dist: &mut DF
+        dist: & DF
     ) -> Option<usize>
     where
         'x: 'a,
         I: IntoIterator<Item = &'a P>,
-        for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D
+        DF: Distance<P>
     {
         let mut iter = iter.into_iter();
         if let Some(first) = iter.next() {
-            let max = iter.enumerate().max_by(
-                |(_, a), (_, b)| dist(&first, a).partial_cmp(&dist(&first, b)).unwrap()
+            let max = iter.enumerate().max_by_key(
+                |(_, a)| dist.distance(&first, a)
             );
             if let Some((pos, _)) = max {
                 Some(pos + 1)
@@ -142,11 +121,11 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
     //    sets.
     //
     fn build_tree<DF>(
-        pts: &mut [(D, Node<P, D>)],
-        dist: &mut DF,
+        pts: &mut [(N64, Node<P>)],
+        dist: & DF,
     )
     where
-        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
+        DF: Distance<P>
     {
         if pts.len() < 2 { return }
         // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
@@ -155,7 +134,7 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         pts.swap(0, pts.len() - 1);
         let (vp, pts) = pts.split_first_mut().unwrap();
         for (d, pt) in pts.iter_mut() {
-            *d = dist(&vp.1.vantage_pt, &pt.vantage_pt)
+            *d = dist.distance(&vp.1.vantage_pt, &pt.vantage_pt)
         }
         pts.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         let median_idx = pts.len() / 2;
@@ -168,9 +147,9 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         Self::build_tree(outside, dist);
     }
 
-    pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIter<'_, P, D, DF>
+    pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIter<'_, P, DF>
     where
-        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
+        DF: Distance<P>
     {
         NearestNeighbourIter{
             tree: self,
@@ -179,15 +158,15 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         }
     }
 
-    fn nearest_in_impl<DF>(&mut self, pt: &P, mut dist: DF) -> Option<(P, D)>
+    fn nearest_in_impl<DF>(&mut self, pt: &P, dist: DF) -> Option<(P, N64)>
     where
-        for<'a, 'b> DF: FnMut(&'a P, &'b P) -> D
+        DF: Distance<P>
     {
         debug!("Starting nearest neighbour search");
         let idx = Self::nearest_in_subtree(
             self.nodes.as_mut_slice(),
             *pt,
-            &mut dist,
+            & dist,
             0
         );
         if let Some((idx, d)) = idx {
@@ -200,20 +179,20 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
     }
 
     fn nearest_in_subtree<'a, DF>(
-        subtree: &'a mut [Node<P, D>],
+        subtree: &'a mut [Node<P>],
         pt: P,
-        dist: &mut DF,
+        dist: &DF,
         idx: usize,
-    ) -> Option<(usize, D)>
+    ) -> Option<(usize, N64)>
     where
-        for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D,
+        DF: Distance<P>
     {
         trace!("node at position {idx}");
         if let Some((node, tree)) = subtree.split_first_mut() {
             if pt != node.cache.pt {
                 node.cache = Cache{
                     pt,
-                    dist: dist(&pt, &node.vantage_pt),
+                    dist: dist.distance(&pt, &node.vantage_pt),
                     used: false
                 };
             };
@@ -227,7 +206,7 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
             if let Some(children) = &node.children {
                 let mut subtrees = tree.split_at_mut(children.outside_offset);
                 let mut offsets = (1, children.outside_offset + 1);
-                let mut nearest_in_sub = |sub, idx| Self::nearest_in_subtree(
+                let nearest_in_sub = |sub, idx| Self::nearest_in_subtree(
                     sub,
                     pt,
                     dist,
@@ -255,7 +234,7 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
         }
     }
 
-    fn nearer<T>(a: Option<(T, D)>, b: Option<(T, D)>) -> Option<(T, D)> {
+    fn nearer<T>(a: Option<(T, N64)>, b: Option<(T, N64)>) -> Option<(T, N64)> {
         match (&a, &b) {
             (&Some((_, d1)), &Some((_, d2))) => if d1 <= d2 {
                 a
@@ -268,72 +247,20 @@ impl<'x, P: Copy + PartialEq + 'x, D: Copy + Default + PartialOrd + Signed + Sub
     }
 }
 
-impl<P: Copy + Default + PartialOrd + Signed + Sub<Output = P>> Dist for P {
-    type Output = Self;
-
-    fn dist(&self, p: &P) -> Self::Output {
-        (*self - *p).abs()
-    }
-}
-
-pub struct NearestNeighbourIter<'a, P, D, DF> {
+pub struct NearestNeighbourIter<'a, P, DF> {
     pt: P,
     dist: DF,
-    tree: &'a mut VPTree<P, D>
+    tree: &'a mut VPTree<P>
 }
 
-impl<'a, P, D, DF> Iterator for NearestNeighbourIter<'a, P, D, DF>
+impl<'a, P, DF> Iterator for NearestNeighbourIter<'a, P, DF>
 where
     P: Copy + PartialEq,
-    D: Copy + Default + PartialOrd + Signed + Sub,
-    for<'b, 'c> DF: FnMut(&'b P, &'c P) -> D,
+    DF: Distance<P>,
 {
-    type Item = (P, D);
+    type Item = (P, N64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.tree.nearest_in_impl(&self.pt, &mut self.dist)
+        self.tree.nearest_in_impl(&self.pt, &self.dist)
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use log::debug;
-
-    fn log_init() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
-    #[test]
-    fn nearest() {
-        log_init();
-
-        let mut tree = VPTree::<i32, i32>::from_iter([]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&0).next(), None);
-
-        let mut tree = VPTree::<i32, i32>::from_iter([0]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&-1).next(), Some((0, 1)));
-        assert_eq!(tree.nearest(&0).next(), None);
-        assert_eq!(tree.nearest(&1).next(), Some((0, 1)));
-
-        let mut tree = VPTree::<i32, i32>::from_iter([0, 1]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&0).next(), Some((1, 1)));
-        let mut nearest = tree.nearest(&2);
-        assert_eq!(nearest.next(), Some((1, 1)));
-        assert_eq!(nearest.next(), Some((0, 2)));
-
-        let mut tree = VPTree::<i32, i32>::from_iter([0, 1, 4]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&3).next(), Some((4, 1)));
-
-        let mut tree = VPTree::<i32, i32>::from_iter([0, 1, 2, 3]);
-        debug!("{tree:#?}");
-        assert_eq!(tree.nearest(&2).next(), Some((3, 1)));
-        assert_eq!(tree.nearest(&5).next(), Some((3, 2)));
-        assert_eq!(tree.nearest(&-5).next(), Some((0, 5)));
-    }
-
 }

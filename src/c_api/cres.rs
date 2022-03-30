@@ -4,6 +4,7 @@ use crate::distance::EuclWithScaledPt;
 use crate::hepmc2;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::ResamplerBuilder;
+use crate::naive_neighbour_search::NaiveNeighbourSearch;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
@@ -149,7 +150,7 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         .build()?;
 
     // TODO: seeds, observer
-    let resampler = ResamplerBuilder::default()
+    let resampler = ResamplerBuilder::<_,_,_,NaiveNeighbourSearch>::default()
         .weight_norm(opt.weight_norm)
         .max_cell_size(Some(opt.max_cell_size as f64));
 

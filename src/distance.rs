@@ -7,12 +7,12 @@ use noisy_float::prelude::*;
 use permutohedron::LexicalPermutation;
 
 /// A metric (distance function) in the space of all events
-pub trait Distance {
-    fn distance(&self, ev1: &Event, ev2: &Event) -> N64;
+pub trait Distance<E=Event> {
+    fn distance(&self, ev1: &E, ev2: &E) -> N64;
 }
 
-impl<D> Distance for &D where D: Distance {
-    fn distance(&self, ev1: &Event, ev2: &Event) -> N64 {
+impl<D, E> Distance<E> for &D where D: Distance<E> {
+    fn distance(&self, ev1: &E, ev2: &E) -> N64 {
         (*self).distance(ev1, ev2)
     }
 }
@@ -168,4 +168,21 @@ fn pt_dist(p: &FourVector, q: &FourVector, pt_weight: N64) -> N64 {
 fn pt_dist_sq(p: &FourVector, q: &FourVector, pt_weight: N64) -> N64 {
     let dpt = pt_weight * (p.pt() - q.pt());
     (*p - *q).spatial_norm_sq() + dpt * dpt
+}
+
+pub struct PtDistance<'a, 'b, D: Distance> {
+    ev_dist: &'a D,
+    events: &'b [Event],
+}
+
+impl<'a, 'b, D: Distance>  PtDistance<'a, 'b, D> {
+    pub fn new(ev_dist: &'a D, events: &'b [Event]) -> Self {
+        Self { ev_dist, events }
+    }
+}
+
+impl<'a, 'b, D: Distance> Distance<usize> for PtDistance<'a, 'b, D> {
+    fn distance(&self, e1: &usize, e2: &usize) -> N64 {
+        self.ev_dist.distance(&self.events[*e1], &self.events[*e2])
+    }
 }

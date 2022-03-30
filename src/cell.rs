@@ -1,4 +1,4 @@
-use crate::distance::Distance;
+use crate::distance::{Distance, PtDistance};
 use crate::event::Event;
 use crate::traits::NeighbourSearch;
 
@@ -29,8 +29,8 @@ impl<'a> Cell<'a> {
         max_size: N64,
     ) -> Self
     where
-        N: NeighbourSearch,
-    <N as NeighbourSearch>::Iter: Iterator<Item=(usize, N64)>,
+        for<'x, 'y> N: NeighbourSearch<PtDistance<'x, 'y, F>>,
+        for<'x, 'y>  <N as NeighbourSearch<PtDistance<'x, 'y, F>>>::Iter: Iterator<Item=(usize, N64)>,
     {
         let mut weight_sum = events[seed_idx].weight;
         debug_assert!(weight_sum < 0.);
@@ -40,7 +40,7 @@ impl<'a> Cell<'a> {
 
         let neighbours = neighbour_search.nearest_in(
             &seed_idx,
-            |&i, &j| distance.distance(&events[i], &events[j])
+            PtDistance::new(distance, &events)
         );
 
         for (next_idx, dist) in neighbours {
