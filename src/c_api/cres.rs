@@ -1,9 +1,16 @@
 use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
-use crate::distance::EuclWithScaledPt;
+use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::hepmc2;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::ResamplerBuilder;
+
+use crate::neighbour_search::{
+    NeighbourData,
+    NeighbourSearch,
+    NaiveNeighbourSearch,
+    TreeSearch
+};
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
@@ -41,6 +48,8 @@ pub struct Opt {
     ptweight: c_double,
     /// Jet definition
     jet_def: JetDefinition,
+    /// Algorithm for finding nearest-neigbour events,
+    neighbour_search: Search,
     /// How to get from weights to the cross section: σ = `weight_norm` * (sum of weights)
     weight_norm: c_double,
     /// Maximum cell radius
@@ -58,6 +67,16 @@ pub struct JetDefinition {
     pub radius: c_double,
     /// Minimum jet transverse momentum
     pub min_pt: c_double,
+}
+
+/// Nearest-neighbour search algorithms
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub enum Search {
+    /// Vantage point tree search
+    Tree,
+    /// Naive search
+    Naive,
 }
 
 impl From<JetDefinition> for hepmc2::converter::JetDefinition {
@@ -118,6 +137,33 @@ pub extern "C" fn cres_run(opt: &Opt) -> i32 {
 }
 
 fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
+    if opt.distance.is_null() {
+        debug!("Using built-in distance function");
+        cres_run_with_dist(opt, EuclWithScaledPt::new(n64(opt.ptweight)))
+    } else {
+        let distance = unsafe { *opt.distance };
+        debug!("Using custom distance function {distance:?}");
+        cres_run_with_dist(opt, distance)
+    }
+
+}
+
+fn cres_run_with_dist<D>(opt: &Opt, dist: D) -> Result<(), Error>
+where D: Distance + Send + Sync
+{
+    match opt.neighbour_search {
+        Search::Tree => cres_run_with::<D, TreeSearch>(opt, dist),
+        Search::Naive => cres_run_with::<D, NaiveNeighbourSearch>(opt, dist),
+    }
+}
+
+fn cres_run_with<D, N>(opt: &Opt, dist: D) -> Result<(), Error>
+where
+    D: Distance + Send + Sync,
+    N: NeighbourData,
+    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+{
     debug!("Settings: {:#?}", opt);
 
     let infiles: Vec<_> = unsafe {
@@ -148,42 +194,24 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         .weight_norm(opt.weight_norm)
         .build()?;
 
-    // TODO: seeds, observer, nearest neighbour search, partitions
+    // TODO: seeds, observer, partitions
     let resampler = ResamplerBuilder::default()
         .weight_norm(opt.weight_norm)
-        .max_cell_size(Some(opt.max_cell_size as f64));
+        .max_cell_size(Some(opt.max_cell_size as f64))
+        .distance(dist)
+        .neighbour_search::<N>()
+        .build();
 
-    // TODO: code duplication
-    if !opt.distance.is_null() {
-        let distance = unsafe { *opt.distance };
-        debug!("Using custom distance function {:?}", distance);
-        let resampler = resampler.distance(distance).build();
-        let mut cres = CresBuilder {
-            reader,
-            converter,
-            resampler,
-            unweighter,
-            writer,
-        }
-        .build();
-        debug!("Starting resampler");
-        cres.run()?;
-    } else {
-        debug!("Using built-in distance function");
-        let resampler = resampler
-            .distance(EuclWithScaledPt::new(n64(opt.ptweight)))
-            .build();
-        let mut cres = CresBuilder {
-            reader,
-            converter,
-            resampler,
-            unweighter,
-            writer,
-        }
-        .build();
-        debug!("Starting resampler");
-        cres.run()?;
+    let mut cres = CresBuilder {
+        reader,
+        converter,
+        resampler,
+        unweighter,
+        writer,
     }
+    .build();
+    debug!("Starting resampler");
+    cres.run()?;
 
     Ok(())
 }

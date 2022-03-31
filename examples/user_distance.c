@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
   opt.jet_def.algorithm = AntiKt;
   opt.jet_def.radius = 0.4;
   opt.jet_def.min_pt = 30.;
+  opt.neighbour_search = Tree;
   opt.weight_norm = 1.;
   opt.max_cell_size = INFINITY;
 

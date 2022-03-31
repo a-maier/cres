@@ -57,6 +57,9 @@ int main(int argc, char** argv) {
   /* maximum cell size, INFIINITY means effectively unlimited */
   opt.max_cell_size = INFINITY;
 
+  /* Algorithm for finding nearest-neighbour events */
+  opt.neighbour_search = Tree;
+
   /* distance function
    *
    * `NULL` means the standard distance function described in
