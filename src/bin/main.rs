@@ -62,7 +62,6 @@ where
         .num_partitions(opt.partitions)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
-        .weight_norm(opt.weight_norm)
         .cell_collector(cell_collector.clone())
         .neighbour_search::<N>()
         .build();
@@ -74,7 +73,6 @@ where
         .with_context(|| {
             format!("Failed to open {:?} for writing", opt.outfile)
         })?
-        .weight_norm(opt.weight_norm)
         .cell_collector(cell_collector)
         .compression(opt.compression)
         .build()?;

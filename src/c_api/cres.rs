@@ -50,8 +50,6 @@ pub struct Opt {
     jet_def: JetDefinition,
     /// Algorithm for finding nearest-neigbour events,
     neighbour_search: Search,
-    /// How to get from weights to the cross section: σ = `weight_norm` * (sum of weights)
-    weight_norm: c_double,
     /// Maximum cell radius
     ///
     /// Set to INFINITY for unlimited cell sizes
@@ -191,12 +189,10 @@ where
 
     let writer = hepmc2::WriterBuilder::default()
         .writer(outfile)
-        .weight_norm(opt.weight_norm)
         .build()?;
 
     // TODO: seeds, observer, partitions
     let resampler = ResamplerBuilder::default()
-        .weight_norm(opt.weight_norm)
         .max_cell_size(Some(opt.max_cell_size as f64))
         .distance(dist)
         .neighbour_search::<N>()

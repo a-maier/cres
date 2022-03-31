@@ -41,17 +41,14 @@ pub struct Resampler<D, N, O, S> {
     neighbour_search: PhantomData<N>,
     observer: O,
     num_partitions: u32,
-    weight_norm: f64,
     max_cell_size: Option<f64>,
 }
 
 impl<D, N, O, S> Resampler<D, N, O, S> {
-    fn print_xs(&self, events: &[Event]) {
-        let xs: N64 = events.iter().map(|e| e.weight).sum();
-        let xs = n64(self.weight_norm) * xs;
+    fn print_wt_sum(&self, events: &[Event]) {
+        let sum_wt: N64 = events.iter().map(|e| e.weight).sum();
         let sum_wtsqr: N64 = events.iter().map(|e| e.weight * e.weight).sum();
-        let xs_err = n64(self.weight_norm) * sum_wtsqr.sqrt();
-        info!("Initial cross section: σ = {:.3e} ± {:.3e}", xs, xs_err);
+        info!("Initial sum of weights: {sum_wt:.3e} ± {:.3e}", sum_wtsqr.sqrt());
     }
 }
 
@@ -79,7 +76,7 @@ where
         if !self.num_partitions.is_power_of_two() {
             return Err(ResamplingError::NPartition(self.num_partitions))
         }
-        self.print_xs(&events);
+        self.print_wt_sum(&events);
 
         let nneg_weight = events.iter().filter(|e| e.weight < 0.).count();
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
@@ -132,7 +129,6 @@ pub struct ResamplerBuilder<D, O, S, N=NaiveNeighbourSearch> {
     distance: D,
     neighbour_search: PhantomData<N>,
     observer: O,
-    weight_norm: f64,
     num_partitions: u32,
     max_cell_size: Option<f64>,
 }
@@ -146,7 +142,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
-            weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -163,7 +158,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
-            weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -179,7 +173,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
-            weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -195,7 +188,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             neighbour_search: PhantomData,
             observer,
             num_partitions: self.num_partitions,
-            weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -213,18 +205,7 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             neighbour_search: PhantomData,
             observer: self.observer,
             num_partitions: self.num_partitions,
-            weight_norm: self.weight_norm,
             max_cell_size: self.max_cell_size,
-        }
-    }
-
-    /// Define the ratio between the cross section and the sum of weights
-    ///
-    /// The default is 1.
-    pub fn weight_norm(self, weight_norm: f64) -> ResamplerBuilder<D, O, S, N> {
-        ResamplerBuilder {
-            weight_norm,
-            ..self
         }
     }
 
@@ -260,7 +241,6 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
             distance: Default::default(),
             neighbour_search: PhantomData,
             observer: Default::default(),
-            weight_norm: 1.,
             num_partitions: 1,
             max_cell_size: Default::default(),
         }
@@ -268,7 +248,6 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
 }
 
 pub struct DefaultResampler<N=NaiveNeighbourSearch> {
-    weight_norm: f64,
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
@@ -305,7 +284,6 @@ where
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
             .num_partitions(self.num_partitions)
-            .weight_norm(self.weight_norm)
             .max_cell_size(self.max_cell_size)
             .observer(observer)
             .neighbour_search::<N>()
@@ -331,7 +309,6 @@ impl<N> DefaultResampler<N> {
 }
 
 pub struct DefaultResamplerBuilder<N> {
-    weight_norm: f64,
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
@@ -343,7 +320,6 @@ pub struct DefaultResamplerBuilder<N> {
 impl Default for DefaultResamplerBuilder<NaiveNeighbourSearch> {
     fn default() -> Self {
         Self {
-            weight_norm: 1.,
             ptweight: 0.,
             strategy: Strategy::default(),
             max_cell_size: None,
@@ -355,11 +331,6 @@ impl Default for DefaultResamplerBuilder<NaiveNeighbourSearch> {
 }
 
 impl<N> DefaultResamplerBuilder<N> {
-    pub fn weight_norm(mut self, value: f64) -> Self {
-        self.weight_norm = value;
-        self
-    }
-
     pub fn ptweight(mut self, value: f64) -> Self {
         self.ptweight = value;
         self
@@ -392,7 +363,6 @@ impl<N> DefaultResamplerBuilder<N> {
         for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
     {
         DefaultResamplerBuilder {
-            weight_norm: self.weight_norm,
             ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
@@ -404,7 +374,6 @@ impl<N> DefaultResamplerBuilder<N> {
 
     pub fn build(self) -> DefaultResampler<N> {
         DefaultResampler {
-            weight_norm: self.weight_norm,
             ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,

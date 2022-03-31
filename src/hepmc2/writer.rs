@@ -12,9 +12,6 @@ use crate::progress_bar::{Progress, ProgressBar};
 use crate::traits::Write;
 
 use derive_builder::Builder;
-use log::info;
-use noisy_float::prelude::*;
-use rayon::prelude::*;
 use thiserror::Error;
 
 /// Write events in HepMC 2 format
@@ -23,11 +20,6 @@ use thiserror::Error;
 pub struct Writer<T> {
     /// Where to write the events
     writer: T,
-    /// Ratio between cross section and sum of event weights
-    ///
-    /// This is needed to set the cross section entry in the event record.
-    #[builder(default = "1.")]
-    weight_norm: f64,
     #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     /// Output compression
@@ -72,13 +64,6 @@ where
         let writer = compress_writer(&mut self.writer, self.compression)?;
         let mut writer = hepmc2::Writer::try_from(writer)?;
 
-        let sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
-        let xs = n64(self.weight_norm) * sum_wt;
-        let sum_wtsqr: N64 =
-            events.par_iter().map(|e| e.weight * e.weight).sum();
-        let xs_err = n64(self.weight_norm) * sum_wtsqr.sqrt();
-        info!("Final cross section: σ = {:.3e} ± {:.3e}", xs, xs_err);
-
         let dump_event_to = self
             .cell_collector
             .clone()
@@ -112,8 +97,6 @@ where
             for weight in &mut hepmc_event.weights {
                 *weight *= reweight
             }
-            hepmc_event.xs.cross_section = xs.into();
-            hepmc_event.xs.cross_section_error = xs_err.into();
             writer.write(&hepmc_event)?;
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to

@@ -179,15 +179,6 @@ when calculating particle momentum distances.\n"
     )]
     pub(crate) ptweight: f64,
 
-    #[clap(
-        short = 'n',
-        long,
-        default_value = "1.",
-        help = "Factor between cross section and sum of weights:
-σ = weight_norm * Σ(weights)"
-    )]
-    pub(crate) weight_norm: f64,
-
     /// Whether to dump selected cells of interest
     #[clap(short = 'd', long)]
     pub(crate) dumpcells: bool,

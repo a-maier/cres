@@ -52,8 +52,6 @@ int main(int argc, char** argv) {
   opt.jet_def.algorithm = AntiKt;
   opt.jet_def.radius = 0.4;
   opt.jet_def.min_pt = 30.;
-  /* factor between total cross section and sum of weights */
-  opt.weight_norm = 1.;
   /* maximum cell size, INFIINITY means effectively unlimited */
   opt.max_cell_size = INFINITY;
 

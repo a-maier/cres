@@ -47,6 +47,7 @@ use std::convert::From;
 use std::iter::Iterator;
 
 use log::info;
+use noisy_float::prelude::*;
 use rayon::prelude::*;
 use thiserror::Error;
 
@@ -177,6 +178,11 @@ where
         let mut events =
             self.unweighter.unweight(events).map_err(UnweightErr)?;
         events.par_sort_unstable();
+
+        let sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
+        let sum_wtsqr: N64 =
+            events.par_iter().map(|e| e.weight * e.weight).sum();
+        info!("Final sum of weights: {sum_wt:.3e} ± {:.3e}", sum_wtsqr.sqrt());
 
         self.reader.rewind().map_err(RewindErr)?;
         let reader = &mut self.reader;
