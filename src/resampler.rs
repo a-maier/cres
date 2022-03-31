@@ -20,7 +20,6 @@ use crate::traits::{
 };
 
 
-use derive_builder::Builder;
 use log::{debug, info, warn};
 use noisy_float::prelude::*;
 use rand::SeedableRng;
@@ -268,21 +267,13 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
     }
 }
 
-#[derive(Builder)]
 pub struct DefaultResampler<N=NaiveNeighbourSearch> {
-    #[builder(default = "1.")]
     weight_norm: f64,
-    #[builder(default = "0.")]
     ptweight: f64,
-    #[builder(default)]
     strategy: Strategy,
-    #[builder(default)]
     max_cell_size: Option<f64>,
-    #[builder(default = "1")]
     num_partitions: u32,
-    #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
-    #[builder(default)]
     neighbour_search: PhantomData<N>,
 }
 
@@ -336,6 +327,91 @@ where
 impl<N> DefaultResampler<N> {
     pub fn cell_collector(&self) -> Option<Rc<RefCell<CellCollector>>> {
         self.cell_collector.as_ref().cloned()
+    }
+}
+
+pub struct DefaultResamplerBuilder<N> {
+    weight_norm: f64,
+    ptweight: f64,
+    strategy: Strategy,
+    max_cell_size: Option<f64>,
+    num_partitions: u32,
+    cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    neighbour_search: PhantomData<N>,
+}
+
+impl Default for DefaultResamplerBuilder<NaiveNeighbourSearch> {
+    fn default() -> Self {
+        Self {
+            weight_norm: 1.,
+            ptweight: 0.,
+            strategy: Strategy::default(),
+            max_cell_size: None,
+            num_partitions: 1,
+            cell_collector: None,
+            neighbour_search: PhantomData
+        }
+    }
+}
+
+impl<N> DefaultResamplerBuilder<N> {
+    pub fn weight_norm(mut self, value: f64) -> Self {
+        self.weight_norm = value;
+        self
+    }
+
+    pub fn ptweight(mut self, value: f64) -> Self {
+        self.ptweight = value;
+        self
+    }
+
+    pub fn strategy(mut self, value: Strategy) -> Self {
+        self.strategy = value;
+        self
+    }
+
+    pub fn max_cell_size(mut self, value: Option<f64>) -> Self {
+        self.max_cell_size = value;
+        self
+    }
+
+    pub fn num_partitions(mut self, value: u32) -> Self {
+        self.num_partitions = value;
+        self
+    }
+
+    pub fn cell_collector(mut self, value: Option<Rc<RefCell<CellCollector>>>) -> Self {
+        self.cell_collector = value;
+        self
+    }
+
+    pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
+    where
+        NN: NeighbourData,
+        for <'x, 'y, 'z> &'x mut NN: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+        for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+    {
+        DefaultResamplerBuilder {
+            weight_norm: self.weight_norm,
+            ptweight: self.ptweight,
+            strategy: self.strategy,
+            max_cell_size: self.max_cell_size,
+            num_partitions: self.num_partitions,
+            cell_collector: self.cell_collector,
+            neighbour_search: PhantomData,
+        }
+    }
+
+    pub fn build(self) -> DefaultResampler<N> {
+        DefaultResampler {
+            weight_norm: self.weight_norm,
+            ptweight: self.ptweight,
+            strategy: self.strategy,
+            max_cell_size: self.max_cell_size,
+            num_partitions: self.num_partitions,
+            cell_collector: self.cell_collector,
+            neighbour_search: PhantomData,
+        }
     }
 }
 

@@ -9,7 +9,6 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cres::{
     cell_collector::CellCollector, hepmc2, prelude::*,
-    neighbour_search::NaiveNeighbourSearch,
     resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
@@ -34,18 +33,17 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
-    let mut resampler = DefaultResamplerBuilder::<NaiveNeighbourSearch>::default();
-    resampler
+    let mut resampler = DefaultResamplerBuilder::default()
         .max_cell_size(opt.max_cell_size)
         .num_partitions(opt.partitions)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
         .weight_norm(opt.weight_norm);
     if opt.dumpcells {
-        resampler
+        resampler = resampler
             .cell_collector(Some(Rc::new(RefCell::new(CellCollector::new()))));
     }
-    let resampler = resampler.build()?;
+    let resampler = resampler.build();
 
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
