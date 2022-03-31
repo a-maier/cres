@@ -12,9 +12,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // initialise logging from the RUST_LOG environment variable
     env_logger::init();
 
-    // access command line arguments
-    let mut args = std::env::args();
-    let _ = args.next().unwrap(); // ignore program name
+    // access command line arguments, ignoring the program name
+    let mut args = std::env::args().skip(1);
     let infile = args.next().unwrap();
     let outfile = args.next().unwrap();
 
