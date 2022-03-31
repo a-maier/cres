@@ -39,8 +39,8 @@ pub mod file;
 pub mod four_vector;
 /// HepMC2 interface
 pub mod hepmc2;
-/// Implementation of naive nearest neighbour search
-pub mod naive_neighbour_search;
+/// Nearest neighbour search algorithms
+pub mod neighbour_search;
 /// Most important exports
 pub mod prelude;
 /// Progress bar
@@ -53,8 +53,6 @@ pub mod seeds;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
-/// Nearest neighbour search using a vantage point tree
-pub mod vptree_neighbour_search;
 
 mod bisect;
 mod vptree;

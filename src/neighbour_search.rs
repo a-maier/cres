@@ -1,7 +1,59 @@
-use crate::traits::{Distance, NeighbourData, NeighbourSearch};
+use crate::traits::Distance;
+use crate::vptree::{VPTree, NearestNeighbourIter};
 
 use noisy_float::prelude::*;
 use rayon::prelude::*;
+
+/// Nearest neighbour search for indexed points
+pub trait NeighbourSearch<D: Distance<usize> + Send + Sync> {
+    /// Iterator over nearest neighbours
+    ///
+    /// This has to implement `Iterator<Item = (usize, N64)>`, where
+    /// the first tuple element is the index of the nearest neighbour
+    /// and the second one the distance.  At the moment it is
+    /// unfortunately impossible to enforce this constraint at the
+    /// trait level.
+    type Iter;
+
+    /// Return nearest neighbours in order for the point with the given index
+    fn nearest_in(
+        self,
+        point: &usize,
+        d: D
+    ) -> Self::Iter;
+}
+
+/// Data structure to hold information for nearest-neighbour searches
+pub trait NeighbourData {
+    /// Initialise nearest neighbour search
+    ///
+    /// The arguments are the number of points and a function
+    /// returning the distance given the indices of two points
+    fn new_with_dist<D>(npoints: usize, d: D) -> Self
+    where D: Distance<usize>;
+}
+
+impl<'a, D> NeighbourSearch<D> for &'a mut VPTree<usize>
+where D: Distance<usize> + Send + Sync
+{
+    type Iter = NearestNeighbourIter<'a, usize, D>;
+
+    fn nearest_in(
+        self,
+        point: &usize,
+        d: D
+    ) -> Self::Iter {
+        self.nearest_in(point, d)
+    }
+}
+
+impl NeighbourData for VPTree<usize> {
+    fn new_with_dist<D>(npoints: usize, d: D) -> Self
+    where D: Distance<usize>
+    {
+        Self::from_iter_with_dist(0..npoints, d)
+    }
+}
 
 /// Naive nearest neighbour search
 #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]

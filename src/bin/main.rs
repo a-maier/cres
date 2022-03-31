@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cres::{
     cell_collector::CellCollector, hepmc2, prelude::*,
-    naive_neighbour_search::NaiveNeighbourSearch,
+    neighbour_search::NaiveNeighbourSearch,
     resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;

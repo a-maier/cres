@@ -2,9 +2,9 @@ use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::distance::EuclWithScaledPt;
 use crate::hepmc2;
+use crate::neighbour_search::NaiveNeighbourSearch;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::ResamplerBuilder;
-use crate::naive_neighbour_search::NaiveNeighbourSearch;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};

@@ -8,6 +8,7 @@ use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::event::Event;
+use crate::neighbour_search::NaiveNeighbourSearch;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
 use crate::traits::{
@@ -18,7 +19,6 @@ use crate::traits::{
     SelectSeeds
 };
 
-use crate::naive_neighbour_search::NaiveNeighbourSearch;
 
 use derive_builder::Builder;
 use log::{debug, info, warn};
