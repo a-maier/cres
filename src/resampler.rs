@@ -201,6 +201,24 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
         }
     }
 
+    /// Algorithm for nearest-neighbour search
+    pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN>
+    where
+        NN: NeighbourData,
+        for <'x, 'y, 'z> &'x mut NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
+        for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    {
+        ResamplerBuilder {
+            seeds: self.seeds,
+            distance: self.distance,
+            neighbour_search: PhantomData,
+            observer: self.observer,
+            num_partitions: self.num_partitions,
+            weight_norm: self.weight_norm,
+            max_cell_size: self.max_cell_size,
+        }
+    }
+
     /// Define the ratio between the cross section and the sum of weights
     ///
     /// The default is 1.
@@ -235,8 +253,7 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     }
 }
 
-impl<N> Default
-    for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector, N>
+impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector, NaiveNeighbourSearch>
 {
     fn default() -> Self {
         Self {
@@ -293,14 +310,14 @@ where
             threaded: Default::default()
         };
 
-        let resampler: ResamplerBuilder<_,_,_,N> = ResamplerBuilder::default();
-        let mut resampler = resampler
+        let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
             .num_partitions(self.num_partitions)
             .weight_norm(self.weight_norm)
             .max_cell_size(self.max_cell_size)
             .observer(observer)
+            .neighbour_search::<N>()
             .build();
         let events = crate::traits::Resample::resample(
             &mut resampler,

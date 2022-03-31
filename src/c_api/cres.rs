@@ -2,7 +2,6 @@ use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::distance::EuclWithScaledPt;
 use crate::hepmc2;
-use crate::neighbour_search::NaiveNeighbourSearch;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::ResamplerBuilder;
 
@@ -149,8 +148,8 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         .weight_norm(opt.weight_norm)
         .build()?;
 
-    // TODO: seeds, observer
-    let resampler = ResamplerBuilder::<_,_,_,NaiveNeighbourSearch>::default()
+    // TODO: seeds, observer, nearest neighbour search, partitions
+    let resampler = ResamplerBuilder::default()
         .weight_norm(opt.weight_norm)
         .max_cell_size(Some(opt.max_cell_size as f64));
 
