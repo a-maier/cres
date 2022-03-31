@@ -37,10 +37,6 @@ We recommend to set the jet algorithm `JETALGO`, jet radius
 that were used to generate the input events. The supported jet
 algorithms are anti-kt, kt, and Cambridge-Aachen.
 
-`cres` assumes that the total cross section is given by the _sum_ of
-all event weights. If this is not the case one should pass a
-normalisation factor via the `--weight-norm` option.
-
 Options
 -------
 
