@@ -81,9 +81,10 @@ the jet clustering, set
 See the [`env_logger` crate](https://crates.io/crates/env_logger/) for a
 comprehensive documentation.
 
-By default, `cres` uses all available cores. For small event samples,
-limiting the number of threads can be faster. You can set the number
-of threads with the `RAYON_NUM_THREADS` environment variable.
+By default, `cres` uses as many cores as possible. For small event
+samples, limiting the number of threads can be faster. You can set the
+number of threads with the `--threads` command line option or with the
+`RAYON_NUM_THREADS` environment variable.
 
 Use as a library
 ----------------
