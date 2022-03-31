@@ -1,5 +1,5 @@
 use crate::traits::Distance;
-use crate::vptree::{VPTree, NearestNeighbourIter};
+use crate::vptree::{NearestNeighbourIter, VPTree};
 
 use noisy_float::prelude::*;
 use rayon::prelude::*;
@@ -33,7 +33,10 @@ pub trait NeighbourData {
     where D: Distance<usize>;
 }
 
-impl<'a, D> NeighbourSearch<D> for &'a mut VPTree<usize>
+/// Nearest-neighbour search using a vantage point tree
+pub type TreeSearch = VPTree<usize>;
+
+impl<'a, D> NeighbourSearch<D> for &'a mut TreeSearch
 where D: Distance<usize> + Send + Sync
 {
     type Iter = NearestNeighbourIter<'a, usize, D>;
@@ -47,7 +50,7 @@ where D: Distance<usize> + Send + Sync
     }
 }
 
-impl NeighbourData for VPTree<usize> {
+impl NeighbourData for TreeSearch {
     fn new_with_dist<D>(npoints: usize, d: D) -> Self
     where D: Distance<usize>
     {

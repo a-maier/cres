@@ -6,7 +6,7 @@ use cres::compression::Compression;
 use cres::hepmc2::converter::JetAlgorithm;
 use cres::seeds::Strategy;
 
-use clap::Parser;
+use clap::{ArgEnum, Parser};
 use lazy_static::lazy_static;
 use regex::Regex;
 use thiserror::Error;
@@ -140,6 +140,12 @@ impl std::convert::From<JetDefinition>
     }
 }
 
+#[derive(ArgEnum, Debug, Copy, Clone)]
+pub(crate) enum Search {
+    Tree,
+    Naive
+}
+
 #[derive(Debug, Copy, Clone, Parser)]
 pub(crate) struct UnweightOpt {
     /// Weight below which events are unweighted
@@ -147,7 +153,7 @@ pub(crate) struct UnweightOpt {
     pub(crate) minweight: f64,
 
     /// Random number generator seed for unweighting
-    #[clap(short, long, default_value = "0")]
+    #[clap(long, default_value = "0")]
     pub(crate) seed: u64,
 }
 
@@ -212,6 +218,10 @@ which has to be a power of two. Each partition is resampled
 separately."
     )]
     pub(crate) partitions: u32,
+
+    /// Algorithm for finding nearest-neighbour events.
+    #[clap(arg_enum, short, long, default_value = "tree")]
+    pub(crate) search: Search,
 
     #[clap(
         long, default_value = "most_negative",
