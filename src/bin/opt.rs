@@ -140,7 +140,7 @@ impl std::convert::From<JetDefinition>
     }
 }
 
-#[derive(ArgEnum, Debug, Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
 pub(crate) enum Search {
     Tree,
     Naive
