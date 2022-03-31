@@ -92,7 +92,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         let mut iter = iter.into_iter();
         if let Some(first) = iter.next() {
             let max = iter.enumerate().max_by_key(
-                |(_, a)| dist.distance(&first, a)
+                |(_, a)| dist.distance(first, a)
             );
             if let Some((pos, _)) = max {
                 Some(pos + 1)
@@ -178,8 +178,8 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         }
     }
 
-    fn nearest_in_subtree<'a, DF>(
-        subtree: &'a mut [Node<P>],
+    fn nearest_in_subtree<DF>(
+        subtree: &mut [Node<P>],
         pt: P,
         dist: &DF,
         idx: usize,

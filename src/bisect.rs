@@ -15,7 +15,7 @@ where
     if depth == 0 {
         return vec![s]
     }
-    if let Some(corner) = find_corner(s.iter(), &mut |a, b| dist(a, b)) {
+    if let Some(corner) = find_corner(s.iter(), &dist) {
         debug_assert!(!s.is_empty());
         let mut res = Vec::new();
         let last_idx = s.len() - 1;

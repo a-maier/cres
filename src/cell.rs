@@ -40,7 +40,7 @@ impl<'a> Cell<'a> {
 
         let neighbours = neighbour_search.nearest_in(
             &seed_idx,
-            PtDistance::new(distance, &events)
+            PtDistance::new(distance, events)
         );
 
         for (next_idx, dist) in neighbours {

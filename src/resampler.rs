@@ -95,11 +95,11 @@ where
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
         parts.into_par_iter().enumerate().for_each(|(n, events)| {
             debug!("Selecting seeds for partition {n}");
-            let seeds = self.seeds.select_seeds(&events);
+            let seeds = self.seeds.select_seeds(events);
             debug!("Initialising nearest-neighbour search for part {n}");
             let mut neighbour_search = N::new_with_dist(
                 events.len(),
-                PtDistance::new(&self.distance, &events)
+                PtDistance::new(&self.distance, events)
             );
             debug!("Resampling part {n}");
             for seed in seeds.take(nneg_weight) {

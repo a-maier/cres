@@ -97,7 +97,7 @@ impl EuclWithScaledPt {
         debug_assert!(p1.len() <= p2.len());
         // copy and pad with zeros
         let zero = FourVector::new();
-        let mut p1: Vec<_> = p1.iter().copied().collect();
+        let mut p1 = p1.to_vec();
         p1.resize_with(p2.len(), || zero);
         p1.sort_unstable();
         let mut min_dist = self.paired_distance(&p1, p2);
@@ -123,7 +123,7 @@ impl EuclWithScaledPt {
         if p1.len() > p2.len() {
             return self.norm_ordered_paired_distance(p2, p1);
         }
-        let mut p1: Vec<_> = p1.iter().copied().collect();
+        let mut p1 = p1.to_vec();
         p1.resize_with(p2.len(), FourVector::new);
         std::cmp::min(
             self.ordered_paired_distance_eq_size(&p1, p2),

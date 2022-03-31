@@ -70,7 +70,7 @@ where
             .map(|c| c.borrow().event_cells());
         let mut cell_writers = HashMap::new();
         for cellnr in
-            dump_event_to.iter().map(|c| c.values().flatten()).flatten()
+            dump_event_to.iter().flat_map(|c| c.values().flatten())
         {
             if let Entry::Vacant(entry) = cell_writers.entry(cellnr) {
                 let file = File::create(format!("cell{}.hepmc", cellnr))?;
