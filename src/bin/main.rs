@@ -73,6 +73,15 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
+    let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+    let writer = hepmc2::WriterBuilder::default()
+        .to_filename(&opt.outfile)
+        .with_context(|| {
+            format!("Failed to open {:?} for writing", opt.outfile)
+        })?
+        .cell_collector(cell_collector)
+        .compression(opt.compression)
+        .build()?;
 
     if !opt.infiles.is_empty() && all_root_files(&opt.infiles)? {
         if !cfg!(feature = "ntuple") {
@@ -84,10 +93,8 @@ where
         #[cfg(feature = "ntuple")]
         {
             info!("Reading ROOT ntuple event files");
-            let mut reader = ntuple::Reader::new(opt.jet_def.into());
+            let mut reader = ntuple::Reader::new();
             reader.add_files(opt.infiles);
-            let converter = ntuple::Converter::default();
-            let writer = ntuple::Writer::default();
             let mut cres = CresBuilder {
                 reader,
                 converter,
@@ -100,15 +107,6 @@ where
     } else {
         info!("Reading HepMC event files");
         let reader = hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?;
-        let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
-        let writer = hepmc2::WriterBuilder::default()
-            .to_filename(&opt.outfile)
-            .with_context(|| {
-                format!("Failed to open {:?} for writing", opt.outfile)
-            })?
-            .cell_collector(cell_collector)
-            .compression(opt.compression)
-            .build()?;
 
         let mut cres = CresBuilder {
             reader,
