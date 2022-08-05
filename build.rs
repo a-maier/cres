@@ -112,7 +112,7 @@ fn get_ntuplereader_flags(flags: &str) -> Result<Vec<String>> {
 
     let cmd = format!("{CFG_CMD} {flags}");
     let output = Command::new(CFG_CMD).arg(flags).output().with_context(
-        || format!("Trying to run `{cmd}`")
+        || format!("Failed to run `{cmd}`")
     )?;
     if !output.status.success() {
         if output.stderr.is_empty() {
