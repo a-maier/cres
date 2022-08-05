@@ -1,12 +1,14 @@
 mod opt;
 
-use std::cell::RefCell;
+use std::io::Read;
+use std::{cell::RefCell, path::Path};
 use std::rc::Rc;
 
 use crate::opt::{Opt, Search};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
+use cres::file::File;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
@@ -15,6 +17,8 @@ use cres::{
     neighbour_search::{NeighbourData, NeighbourSearch, NaiveNeighbourSearch, TreeSearch},
     resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
 };
+#[cfg(feature = "ntuple")]
+use cres::ntuple;
 use env_logger::Env;
 use log::{debug, info};
 use rand::SeedableRng;
@@ -68,25 +72,69 @@ where
 
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
-    let writer = hepmc2::WriterBuilder::default()
-        .to_filename(&opt.outfile)
-        .with_context(|| {
-            format!("Failed to open {:?} for writing", opt.outfile)
-        })?
-        .cell_collector(cell_collector)
-        .compression(opt.compression)
-        .build()?;
-
-    let reader = hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?;
-    let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
-    let mut cres = CresBuilder {
-        reader,
-        converter,
-        resampler,
-        unweighter,
-        writer,
-    }.build();
-    cres.run()?;
+
+    if !opt.infiles.is_empty() && all_root_files(&opt.infiles)? {
+        if !cfg!(feature = "ntuple") {
+            return Err(anyhow!(
+                "Cannot read ROOT ntuple event files: \
+                 reinstall cres with `cargo install cres --features = ntuple`"
+            ));
+        }
+        #[cfg(feature = "ntuple")]
+        {
+            info!("Reading ROOT ntuple event files");
+            let mut reader = ntuple::Reader::new(opt.jet_def.into());
+            reader.add_files(opt.infiles);
+            let converter = ntuple::Converter::default();
+            let writer = ntuple::Writer::default();
+            let mut cres = CresBuilder {
+                reader,
+                converter,
+                resampler,
+                unweighter,
+                writer,
+            }.build();
+            cres.run()?;
+        }
+    } else {
+        info!("Reading HepMC event files");
+        let reader = hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?;
+        let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+        let writer = hepmc2::WriterBuilder::default()
+            .to_filename(&opt.outfile)
+            .with_context(|| {
+                format!("Failed to open {:?} for writing", opt.outfile)
+            })?
+            .cell_collector(cell_collector)
+            .compression(opt.compression)
+            .build()?;
+
+        let mut cres = CresBuilder {
+            reader,
+            converter,
+            resampler,
+            unweighter,
+            writer,
+        }.build();
+        cres.run()?;
+    }
     Ok(())
+}
+
+fn all_root_files<I, P>(files: I) -> Result<bool>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<Path>,
+{
+    const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
+    let mut header = [0; 4];
+    for file in files {
+        let mut input = File::open(file.as_ref())?;
+        let read = input.read(&mut header)?;
+        if read < ROOT_MAGIC_BYTES.len() || header != ROOT_MAGIC_BYTES {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }

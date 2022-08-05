@@ -55,6 +55,9 @@ pub mod seeds;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
+/// ntuple interface
+#[cfg(feature = "ntuple")]
+pub mod ntuple;
 
 mod bisect;
 mod vptree;

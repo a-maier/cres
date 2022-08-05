@@ -48,6 +48,12 @@ crate-type =["lib", "staticlib", "cdylib"]
 name = "cres"
 path = "src/bin/main.rs"
 
+[features]
+ntuple = ["dep:cc", "dep:bindgen"]
+
 [build-dependencies]
+anyhow = "1.0"
+bindgen = { version = "0.60", optional = true }
 cbindgen = "0.21"
+cc = { version = "1.0", optional = true }
 vergen = "7"
