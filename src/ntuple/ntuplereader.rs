@@ -1,4 +1,3 @@
-use std::ffi::CStr;
 use std::{ffi::CString, path::Path};
 use std::os::unix::ffi::OsStrExt;
 
@@ -137,8 +136,8 @@ impl NTupleReader {
     }
 
     pub fn add_file<T: AsRef<Path>>(&mut self, name: T) {
+        let name = CString::new(name.as_ref().as_os_str().as_bytes()).unwrap();
         unsafe {
-            let name = CStr::from_bytes_with_nul_unchecked(name.as_ref().as_os_str().as_bytes());
             add_file(self.0, name.as_ptr())
         }
     }
