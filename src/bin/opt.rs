@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use cres::compression::Compression;
-use cres::hepmc2::converter::JetAlgorithm;
+use cres::cluster::JetAlgorithm;
 use cres::seeds::Strategy;
 
 use clap::{ArgEnum, Parser};
@@ -128,9 +128,7 @@ pub(crate) struct JetDefinition {
     pub jetpt: f64,
 }
 
-impl std::convert::From<JetDefinition>
-    for cres::hepmc2::converter::JetDefinition
-{
+impl std::convert::From<JetDefinition> for cres::cluster::JetDefinition {
     fn from(j: JetDefinition) -> Self {
         Self {
             algorithm: j.jetalgorithm,

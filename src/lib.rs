@@ -28,6 +28,8 @@ pub mod cell;
 pub mod cell_collector;
 /// Output compression
 pub mod compression;
+/// Jet clustering helpers
+pub mod cluster;
 pub mod cres;
 /// Distance functions
 pub mod distance;

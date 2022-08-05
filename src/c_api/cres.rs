@@ -2,6 +2,7 @@ use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::hepmc2;
+use crate::cluster;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::ResamplerBuilder;
 
@@ -77,7 +78,7 @@ pub enum Search {
     Naive,
 }
 
-impl From<JetDefinition> for hepmc2::converter::JetDefinition {
+impl From<JetDefinition> for cluster::JetDefinition {
     fn from(j: JetDefinition) -> Self {
         Self {
             algorithm: j.algorithm.into(),
@@ -99,9 +100,9 @@ pub enum JetAlgorithm {
     Kt,
 }
 
-impl From<JetAlgorithm> for hepmc2::converter::JetAlgorithm {
+impl From<JetAlgorithm> for cluster::JetAlgorithm {
     fn from(j: JetAlgorithm) -> Self {
-        use crate::hepmc2::converter::JetAlgorithm::*;
+        use crate::cluster::JetAlgorithm::*;
         match j {
             JetAlgorithm::AntiKt => AntiKt,
             JetAlgorithm::CambridgeAachen => CambridgeAachen,
