@@ -1,8 +1,9 @@
 use std::{path::{Path, PathBuf}, convert::Infallible};
 
-use crate::{ntuple::ntuplereader::NTupleReader, traits::Rewind};
+use crate::traits::Rewind;
 
 use hepmc2::event::{Particle, CrossSection, PdfInfo, Vertex};
+use ntuplereader::NTupleReader;
 
 #[derive(Debug, Default)]
 pub struct Reader {
