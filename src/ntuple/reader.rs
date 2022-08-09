@@ -8,6 +8,7 @@ use log::trace;
 
 // TODO: code duplication with hepmc2 converter
 const OUTGOING_STATUS: i32 = 1;
+// const INCOMING_STATUS: i32 = 4;
 
 #[derive(Debug, Default)]
 pub struct Reader {
@@ -69,7 +70,7 @@ impl Iterator for Reader {
             let p = Particle {
                 id: self.r.get_pdg_code(i),
                 p: hepmc2::event::FourVector(p),
-                m: m(p),
+                m: 0.,
                 theta: theta(p),
                 phi: phi(p),
                 status: OUTGOING_STATUS,
@@ -98,20 +99,13 @@ impl Iterator for Reader {
             vertices,
             xs,
             pdf_info,
+            energy_unit: EnergyUnit::GEV,
+            length_unit: LengthUnit::MM,
             ..Default::default()
         };
         trace!("{ev:#?}");
         Some(Ok(ev))
     }
-}
-
-fn m(p: [f64; 4]) -> f64 {
-    m2(p).abs().sqrt()
-}
-
-fn m2(p: [f64; 4]) -> f64 {
-    let pvec2: f64 = p.into_iter().skip(1).map(|p| p * p).sum();
-    p[0]*p[0] - pvec2
 }
 
 fn phi(p: [f64; 4]) -> f64 {
