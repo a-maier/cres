@@ -4,6 +4,7 @@ use crate::traits::Rewind;
 
 use hepmc2::event::{Particle, CrossSection, PdfInfo, Vertex};
 use ntuplereader::NTupleReader;
+use log::trace;
 
 // TODO: code duplication with hepmc2 converter
 const OUTGOING_STATUS: i32 = 1;
@@ -90,7 +91,7 @@ impl Iterator for Reader {
             particles_out: particles,
             ..Default::default()
         }];
-        Some(Ok(hepmc2::Event {
+        let ev =  hepmc2::Event {
             number: self.r.get_id(),
             scale: self.r.get_renormalization_scale(),
             weights: vec![self.r.get_weight()],
@@ -98,7 +99,9 @@ impl Iterator for Reader {
             xs,
             pdf_info,
             ..Default::default()
-        }))
+        };
+        trace!("{ev:#?}");
+        Some(Ok(ev))
     }
 }
 

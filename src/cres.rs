@@ -46,7 +46,7 @@
 use std::convert::From;
 use std::iter::Iterator;
 
-use log::info;
+use log::{info, trace};
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 use thiserror::Error;
@@ -169,7 +169,8 @@ where
             .collect();
         let mut events = events?;
         for (id, ev) in events.iter_mut().enumerate() {
-            ev.id = id
+            ev.id = id;
+            trace!("{ev:#?}");
         }
         info!("Read {} events", events.len());
 
