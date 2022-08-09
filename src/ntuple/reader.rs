@@ -5,6 +5,9 @@ use crate::traits::Rewind;
 use hepmc2::event::{Particle, CrossSection, PdfInfo, Vertex};
 use ntuplereader::NTupleReader;
 
+// TODO: code duplication with hepmc2 converter
+const OUTGOING_STATUS: i32 = 1;
+
 #[derive(Debug, Default)]
 pub struct Reader {
     r: NTupleReader,
@@ -68,6 +71,7 @@ impl Iterator for Reader {
                 m: m(p),
                 theta: theta(p),
                 phi: phi(p),
+                status: OUTGOING_STATUS,
                 ..Default::default()
             };
             particles.push(p)
