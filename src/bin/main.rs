@@ -4,11 +4,12 @@ use std::io::Read;
 use std::{cell::RefCell, path::Path};
 use std::rc::Rc;
 
-use crate::opt::{Opt, Search};
+use crate::opt::{Opt, Search, FileFormat};
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use cres::file::File;
+use cres::traits::Rewind;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
@@ -56,6 +57,37 @@ where
 
     debug!("settings: {:#?}", opt);
 
+    if !opt.infiles.is_empty() && all_root_files(&opt.infiles)? {
+        if !cfg!(feature = "ntuple") {
+            return Err(anyhow!(
+                "Cannot read ROOT ntuple event files: \
+                 reinstall cres with `cargo install cres --features = ntuple`"
+            ));
+        }
+        #[cfg(feature = "ntuple")]
+        {
+            info!("Reading ROOT ntuple event files");
+            let mut reader = ntuple::Reader::new();
+            reader.add_files(opt.infiles.clone());
+            run_with_reader(opt, reader)?;
+        }
+    } else {
+        info!("Reading HepMC event files");
+        let reader = hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?;
+        run_with_reader(opt, reader)?;
+    }
+    Ok(())
+}
+
+fn run_with_reader<N, R, E>(opt: Opt, reader: R) -> Result<()>
+where
+    N: NeighbourData,
+    R: Iterator<Item = Result<::hepmc2::Event, E>> + Rewind,
+    E: std::error::Error + Send + Sync + 'static,
+    <R as Rewind>::Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static,
+    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+{
     let cell_collector = if opt.dumpcells {
         Some(Rc::new(RefCell::new(CellCollector::new())))
     } else {
@@ -74,27 +106,33 @@ where
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
     let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
-    let writer = hepmc2::WriterBuilder::default()
-        .to_filename(&opt.outfile)
-        .with_context(|| {
-            format!("Failed to open {:?} for writing", opt.outfile)
-        })?
-        .cell_collector(cell_collector)
-        .compression(opt.compression)
-        .build()?;
+    match opt.outformat {
+        FileFormat::HepMC2 => {
+            let writer = hepmc2::WriterBuilder::default()
+                .to_filename(&opt.outfile)
+                .with_context(|| {
+                    format!("Failed to open {:?} for writing", opt.outfile)
+                })?
+                .cell_collector(cell_collector)
+                .compression(opt.compression)
+                .build()?;
 
-    if !opt.infiles.is_empty() && all_root_files(&opt.infiles)? {
-        if !cfg!(feature = "ntuple") {
-            return Err(anyhow!(
-                "Cannot read ROOT ntuple event files: \
-                 reinstall cres with `cargo install cres --features = ntuple`"
-            ));
-        }
+            let mut cres = CresBuilder {
+                reader,
+                converter,
+                resampler,
+                unweighter,
+                writer,
+            }.build();
+            cres.run()?;
+        },
         #[cfg(feature = "ntuple")]
-        {
-            info!("Reading ROOT ntuple event files");
-            let mut reader = ntuple::Reader::new();
-            reader.add_files(opt.infiles);
+        FileFormat::Root => {
+            let writer = ntuple::WriterBuilder::default()
+                .path(opt.outfile)
+                .cell_collector(cell_collector)
+                .build()?;
+
             let mut cres = CresBuilder {
                 reader,
                 converter,
@@ -104,19 +142,8 @@ where
             }.build();
             cres.run()?;
         }
-    } else {
-        info!("Reading HepMC event files");
-        let reader = hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?;
+    };
 
-        let mut cres = CresBuilder {
-            reader,
-            converter,
-            resampler,
-            unweighter,
-            writer,
-        }.build();
-        cres.run()?;
-    }
     Ok(())
 }
 
