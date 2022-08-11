@@ -2,7 +2,7 @@ use std::{path::{Path, PathBuf}, convert::Infallible};
 
 use crate::traits::Rewind;
 
-use hepmc2::event::{Particle, CrossSection, PdfInfo, Vertex};
+use hepmc2::event::{Particle, CrossSection, EnergyUnit, LengthUnit, PdfInfo, Vertex};
 use ntuplereader::NTupleReader;
 use log::trace;
 
