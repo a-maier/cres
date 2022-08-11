@@ -10,6 +10,7 @@ use clap::{ArgEnum, Parser};
 use lazy_static::lazy_static;
 use regex::Regex;
 use thiserror::Error;
+use strum::{Display, EnumString};
 
 fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
     use Strategy::*;
@@ -155,6 +156,14 @@ pub(crate) struct UnweightOpt {
     pub(crate) seed: u64,
 }
 
+#[derive(Debug, Display, Default, Copy, Clone, ArgEnum, EnumString)]
+pub(crate) enum FileFormat {
+    #[default]
+    HepMC2,
+    #[cfg(feature = "ntuple")]
+    Root
+}
+
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) struct Opt {
@@ -187,6 +196,10 @@ Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
 Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
+
+    /// Output format
+    #[clap(short, long, default_value_t)]
+    pub(crate) outformat: FileFormat,
 
     /// Verbosity level
     #[clap(
