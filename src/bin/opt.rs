@@ -198,7 +198,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
 
     /// Output format
-    #[clap(short, long, default_value_t)]
+    #[clap(long, default_value_t)]
     pub(crate) outformat: FileFormat,
 
     /// Verbosity level
