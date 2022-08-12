@@ -256,7 +256,7 @@ left-over negative-weight events."
     pub(crate) infiles: Vec<PathBuf>,
 }
 
-fn is_power_of_two(s: &str) -> Result<(), String> {
+pub(crate) fn is_power_of_two(s: &str) -> Result<(), String> {
     match u32::from_str(s) {
         Ok(n) => if n.is_power_of_two() {
             Ok(())

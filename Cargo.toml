@@ -51,6 +51,10 @@ crate-type =["lib", "staticlib", "cdylib"]
 name = "cres"
 path = "src/bin/main.rs"
 
+[[bin]]
+name = "cres-partition"
+path = "src/bin/partition.rs"
+
 [features]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuplereader" , "dep:ntuplewriter"]
 

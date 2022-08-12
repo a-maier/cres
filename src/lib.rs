@@ -21,6 +21,8 @@
 
 /// Automatic input decompression
 pub mod auto_decompress;
+/// Partition events by iterative bisection
+pub mod bisect;
 #[cfg(target_family = "unix")]
 pub mod c_api;
 /// Definition of event cells
@@ -61,7 +63,6 @@ pub mod unweight;
 #[cfg(feature = "ntuple")]
 pub mod ntuple;
 
-mod bisect;
 mod vptree;
 
 use lazy_static::lazy_static;

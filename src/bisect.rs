@@ -2,7 +2,7 @@ use std::cmp::PartialOrd;
 
 use rayon::prelude::*;
 
-pub(crate) fn circle_partition<DF, D, T>(
+pub fn circle_partition<DF, D, T>(
     s: &mut [T],
     dist: DF,
     depth: u32,

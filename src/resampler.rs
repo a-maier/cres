@@ -488,7 +488,7 @@ impl ObserveCell for NoObserver {
 /// Default cell observer doing nothing
 pub const NO_OBSERVER: NoObserver = NoObserver {};
 
-const fn log2(n: u32) -> u32 {
+pub const fn log2(n: u32) -> u32 {
     u32::BITS - n.leading_zeros() - 1
 }
 
