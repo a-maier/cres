@@ -59,7 +59,8 @@ impl ProgressBar {
         let bar = indicatif::ProgressBar::new(len);
         bar.set_style(
             indicatif::ProgressStyle::default_bar()
-                .template("{bar:60.cyan/cyan} {msg} {pos}/{len} [{elapsed}]"),
+                .template("{bar:60.cyan/cyan} {msg} {pos}/{len} [{elapsed}]")
+                .unwrap(),
         );
         bar.set_message(message.to_owned());
         // temporarily disable logging to not overwrite the bar
