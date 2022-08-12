@@ -1,5 +1,6 @@
-use std::{path::{Path, PathBuf}, convert::Infallible};
+use std::path::{Path, PathBuf};
 
+use crate::reader::{EventReadError, RewindError};
 use crate::traits::Rewind;
 
 use hepmc2::event::{Particle, CrossSection, EnergyUnit, LengthUnit, PdfInfo, Vertex};
@@ -38,7 +39,7 @@ impl Reader {
 }
 
 impl Rewind for Reader {
-    type Error = Infallible;
+    type Error = RewindError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         self.r = Default::default();
@@ -50,7 +51,7 @@ impl Rewind for Reader {
 }
 
 impl Iterator for Reader {
-    type Item = Result<hepmc2::Event, Infallible>;
+    type Item = Result<hepmc2::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // TODO: some code duplication with hepmc2 code

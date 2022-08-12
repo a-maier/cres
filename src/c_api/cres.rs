@@ -4,6 +4,7 @@ use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::hepmc2;
 use crate::cluster;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
+use crate::reader::CombinedReader;
 use crate::resampler::ResamplerBuilder;
 
 use crate::neighbour_search::{
@@ -176,7 +177,7 @@ where
     debug!("Will write output to {:?}", outfile);
     let outfile = std::fs::File::create(outfile)?;
 
-    let reader = hepmc2::Reader::from_filenames(
+    let reader = CombinedReader::from_files(
         infiles
             .iter()
             .rev()

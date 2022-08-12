@@ -1,15 +1,13 @@
 mod opt;
 
-use std::io::Read;
-use std::{cell::RefCell, path::Path};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::opt::{Opt, Search, FileFormat};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
-use cres::file::File;
-use cres::traits::Rewind;
+use cres::reader::CombinedReader;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
@@ -57,37 +55,8 @@ where
 
     debug!("settings: {:#?}", opt);
 
-    if !opt.infiles.is_empty() && all_root_files(&opt.infiles)? {
-        if !cfg!(feature = "ntuple") {
-            return Err(anyhow!(
-                "Cannot read ROOT ntuple event files: \
-                 reinstall cres with `cargo install cres --features = ntuple`"
-            ));
-        }
-        #[cfg(feature = "ntuple")]
-        {
-            info!("Reading ROOT ntuple event files");
-            let mut reader = ntuple::Reader::new();
-            reader.add_files(opt.infiles.clone());
-            run_with_reader(opt, reader)?;
-        }
-    } else {
-        info!("Reading HepMC event files");
-        let reader = hepmc2::Reader::from_filenames(opt.infiles.iter().rev())?;
-        run_with_reader(opt, reader)?;
-    }
-    Ok(())
-}
+    let reader = CombinedReader::from_files(opt.infiles)?;
 
-fn run_with_reader<N, R, E>(opt: Opt, reader: R) -> Result<()>
-where
-    N: NeighbourData,
-    R: Iterator<Item = Result<::hepmc2::Event, E>> + Rewind,
-    E: std::error::Error + Send + Sync + 'static,
-    <R as Rewind>::Error: std::fmt::Debug + std::fmt::Display + Send + Sync + 'static,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
-{
     let cell_collector = if opt.dumpcells {
         Some(Rc::new(RefCell::new(CellCollector::new())))
     } else {
@@ -145,21 +114,4 @@ where
     };
 
     Ok(())
-}
-
-fn all_root_files<I, P>(files: I) -> Result<bool>
-where
-    I: IntoIterator<Item = P>,
-    P: AsRef<Path>,
-{
-    const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
-    let mut header = [0; 4];
-    for file in files {
-        let mut input = File::open(file.as_ref())?;
-        let read = input.read(&mut header)?;
-        if read < ROOT_MAGIC_BYTES.len() || header != ROOT_MAGIC_BYTES {
-            return Ok(false);
-        }
-    }
-    Ok(true)
 }

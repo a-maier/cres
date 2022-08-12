@@ -47,6 +47,8 @@ pub mod neighbour_search;
 pub mod prelude;
 /// Progress bar
 pub mod progress_bar;
+/// Event readers
+pub mod reader;
 /// Cell resampling
 pub mod resampler;
 /// Cell seed selection

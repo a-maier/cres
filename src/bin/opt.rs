@@ -48,7 +48,7 @@ const GZIP_DEFAULT_LEVEL: u8 = 6;
 const LZ4_DEFAULT_LEVEL: u8 = 0;
 const ZSTD_DEFAULT_LEVEL: u8 = 0;
 
-fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
+pub(crate) fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
     use Compression::*;
     use ParseCompressionErr::*;
 
