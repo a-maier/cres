@@ -136,7 +136,7 @@ fn main() -> Result<()> {
     for outfile in outfiles {
         match opt.outformat {
             FileFormat::HepMC2 => {
-                let file = File::open(&outfile).with_context(
+                let file = File::create(&outfile).with_context(
                     || format!("Failed to open {outfile:?}")
                 )?;
                 let writer = compress_writer(file, opt.compression)?;
