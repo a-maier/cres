@@ -4,7 +4,7 @@ use std::{path::PathBuf, io::Write};
 
 use crate::opt::{FileFormat, parse_compr};
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use clap::Parser;
 use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition, file::File};
 use env_logger::Env;
@@ -136,7 +136,9 @@ fn main() -> Result<()> {
     for outfile in outfiles {
         match opt.outformat {
             FileFormat::HepMC2 => {
-                let file = File::open(outfile)?;
+                let file = File::open(&outfile).with_context(
+                    || format!("Failed to open {outfile:?}")
+                )?;
                 let writer = compress_writer(file, opt.compression)?;
                 let writer = hepmc2::Writer::new(writer)?;
                 writers.push(Box::new(writer));
