@@ -48,7 +48,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     /// The input event sample is split into the given number of
     /// partitions, which has to be a power of two. Each partition is
     /// written to its own output file.
-    #[clap(short, long, validator = is_power_of_two)]
+    #[clap(long, validator = is_power_of_two)]
     partitions: u32,
 
     /// Number of threads
@@ -110,7 +110,7 @@ fn main() -> Result<()> {
 
     let extension = match opt.outformat {
         FileFormat::HepMC2 => {
-            let base = ".hepmc2".to_string();
+            let base = "hepmc2".to_string();
             match opt.compression {
                 Some(Compression::Bzip2) => base + ".bz2",
                 Some(Compression::Gzip(_)) => base + ".gz",
@@ -120,7 +120,7 @@ fn main() -> Result<()> {
             }}
         ,
         #[cfg(feature = "ntuple")]
-        FileFormat::Root => ".root".to_string()
+        FileFormat::Root => "root".to_string()
     };
     let outfiles = (0..opt.partitions).map(|n| {
         let mut path = opt.outfile.clone();
