@@ -8,7 +8,7 @@ use anyhow::{Result, Context};
 use clap::Parser;
 use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition, file::File};
 use env_logger::Env;
-use log::{info, debug, error};
+use log::{info, debug, error, trace};
 use opt::{JetDefinition, is_power_of_two};
 use noisy_float::prelude::*;
 
@@ -101,6 +101,15 @@ fn main() -> Result<()> {
     );
     debug_assert_eq!(parts.len(), opt.partitions as usize);
 
+    let mut partition = vec![0; nevents];
+    for (npart, events) in parts.into_iter().enumerate() {
+        trace!("In partition {npart}:");
+        for ev in events {
+            trace!("event {}", ev.id());
+            partition[ev.id()] = npart;
+        }
+    }
+
     let extension = match opt.outformat {
         FileFormat::HepMC2 => {
             let base = "hepmc2".to_string();
@@ -120,12 +129,6 @@ fn main() -> Result<()> {
         opt.partitions - 1,
         outfile = opt.outfile.display()
     );
-    let mut partition = vec![0; nevents];
-    for (npart, events) in parts.into_iter().enumerate() {
-        for ev in events {
-            partition[ev.id()] = npart;
-        }
-    }
 
     let outfiles = (0..opt.partitions).map(|n| {
         let mut path = opt.outfile.clone();
