@@ -124,6 +124,8 @@ pub enum CresError<E1, E2, E3, E4, E5, E6> {
     UnweightErr(E5),
     #[error("Failed to write events: {0}")]
     WriteErr(E6),
+    #[error("Encountered event with non-zero id {0}")]
+    IdErr(usize),
 }
 
 impl<R, C, S, U, W, E, Ev> Cres<R, C, S, U, W>
@@ -169,6 +171,9 @@ where
             .collect();
         let mut events = events?;
         for (id, ev) in events.iter_mut().enumerate() {
+            if ev.id != 0 {
+                return Err(IdErr(ev.id));
+            }
             ev.id = id;
             trace!("{ev:#?}");
         }

@@ -81,7 +81,7 @@ fn compress_outgoing(
 /// A Monte Carlo scattering event
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub struct Event {
-    pub(crate) id: usize,
+    pub id: usize,
     pub weight: N64,
 
     outgoing_by_pid: Vec<(i32, MomentumSet)>,
