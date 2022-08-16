@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     }
 
     #[cfg(feature = "ntuple")]
-    for flag in ntuplereader::LINKER_FLAGS {
+    for flag in ntuple::ROOT_LINKER_FLAGS {
         println!("cargo:rustc-link-arg={flag}");
     }
 

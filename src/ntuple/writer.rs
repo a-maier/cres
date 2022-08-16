@@ -10,7 +10,6 @@ use crate::progress_bar::ProgressBar;
 use crate::traits::{Progress, Write};
 
 use derive_builder::Builder;
-use ntuplewriter::NTupleWriter;
 use thiserror::Error;
 
 /// Write events to ntuple format
@@ -39,7 +38,7 @@ where
     ) -> Result<(), Self::Error> {
         use WriteError::*;
 
-        let mut writer = NTupleWriter::new(&self.path, "cres ntuple")
+        let mut writer = ntuple::Writer::new(&self.path, "cres ntuple")
             .ok_or_else(|| CreateWriteErr(self.path.clone()))?;
 
         let dump_event_to = self
@@ -53,7 +52,7 @@ where
             if let Entry::Vacant(entry) = cell_writers.entry(cellnr) {
                 let cell_file = format!("cell{cellnr}.root");
                 let ntuplename = format!("cres cell{cellnr}");
-                let writer = NTupleWriter::new(&cell_file, &ntuplename)
+                let writer = ntuple::Writer::new(&cell_file, &ntuplename)
                     .ok_or_else(|| CreateWriteErr(cell_file.into()))?;
 
                 entry.insert(writer);
@@ -100,7 +99,7 @@ pub enum WriteError<E> {
     #[error("Failed to read event: {0}")]
     ReadErr(E),
     #[error("Failed to write event: {0}")]
-    WriteErr(#[from] ntuplewriter::ntuplewriter::WriteError),
+    WriteErr(#[from] ntuple::writer::WriteError),
     #[error("Create writer to {0}")]
     CreateWriteErr(PathBuf),
 }

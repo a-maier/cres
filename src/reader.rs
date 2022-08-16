@@ -44,14 +44,14 @@ pub fn make_reader<P: AsRef<Path>>(
         },
     };
     if bytes.starts_with(&ROOT_MAGIC_BYTES) {
+        let path = path.as_ref().to_owned();
         if !cfg!(feature = "ntuple") {
-            return Err(CreateError::RootUnsupported(path.as_ref().to_owned()));
+            return Err(CreateError::RootUnsupported(path));
         }
         #[cfg(feature = "ntuple")]
         {
-            debug!("Read {:?} as ROOT ntuple", path.as_ref());
-            let mut reader = crate::ntuple::Reader::new();
-            reader.add_file(path);
+            debug!("Read {path:?} as ROOT ntuple");
+            let reader = crate::ntuple::Reader::new(path)?;
             return Ok(FileReader(Box::new(reader)))
         }
 
@@ -83,6 +83,9 @@ pub enum RewindError {
 pub enum EventReadError {
     #[error("Error reading HepMC record: {0}")]
     HepMCError(#[from] LineParseError),
+    #[cfg(feature = "ntuple")]
+    #[error("Error reading ntuple event: {0}")]
+    NTupleError(#[from] ::ntuple::reader::ReadError),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]

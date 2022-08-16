@@ -159,7 +159,7 @@ fn main() -> Result<()> {
         FileFormat::Root => {
             use anyhow::anyhow;
             let writers: Result<Vec<_>, _> = outfiles.map(|f| {
-                ntuplewriter::NTupleWriter::new(
+                ntuple::Writer::new(
                     &f, "cres ntuple"
                 ).ok_or_else(
                     || anyhow!("Failed to construct ntuple writer for {f:?}")
@@ -189,7 +189,7 @@ fn main() -> Result<()> {
 enum Writers {
     HepMC(Vec<hepmc2::Writer<Box<dyn Write>>>),
     #[cfg(feature = "ntuple")]
-    NTuple(Vec<ntuplewriter::NTupleWriter>),
+    NTuple(Vec<ntuple::Writer>),
 }
 
 impl Writers {

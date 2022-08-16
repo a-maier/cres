@@ -29,8 +29,7 @@ log = "0.4"
 logbar = "0.1"
 lz4 = "1.23"
 noisy_float = "0.2"
-ntuplereader = { version = "0.1", optional = true, git = "https://github.com/a-maier/ntuplereader.git" }
-ntuplewriter = { version = "0.2", optional = true, git = "https://github.com/a-maier/ntuplewriter.git", features = ["hepmc2"] }
+ntuple = { version = "0.3", optional = true, git = "https://github.com/a-maier/ntuple.git", features = ["hepmc2"] }
 permutohedron = "0.2"
 rand = "0.8"
 rand_xoshiro = "0.6"
@@ -56,12 +55,12 @@ name = "cres-partition"
 path = "src/bin/partition.rs"
 
 [features]
-ntuple = ["dep:cc", "dep:bindgen", "dep:ntuplereader" , "dep:ntuplewriter"]
+ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple"]
 
 [build-dependencies]
 anyhow = "1.0"
 bindgen = { version = "0.60", optional = true }
 cbindgen = "0.24"
 cc = { version = "1.0", optional = true }
-ntuplereader = { version = "0.1", optional = true, git = "https://github.com/a-maier/ntuplereader.git" }
+ntuple = { version = "0.3", optional = true, git = "https://github.com/a-maier/ntuple.git" }
 vergen = "7"
