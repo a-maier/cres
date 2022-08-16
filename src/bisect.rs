@@ -1,5 +1,6 @@
 use std::cmp::PartialOrd;
 
+use log::debug;
 use rayon::prelude::*;
 
 pub fn circle_partition<DF, D, T>(
@@ -77,6 +78,11 @@ where
     );
     let median_idx = s.len() / 2;
     let (inner, outer) = s.split_at_mut(median_idx);
+    debug!(
+        "partition at depth {depth}: {} vs. {} events",
+        inner.len(),
+        outer.len()
+    );
     partition(inner, dist, depth - 1, res);
     partition(outer, dist, depth - 1, res);
 }
