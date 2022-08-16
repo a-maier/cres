@@ -88,6 +88,9 @@ fn main() -> Result<()> {
         .map(|ev| ev.map(|e| converter.try_convert(e)))
         .collect();
     let mut events = events??;
+    for (id, event) in events.iter_mut().enumerate() {
+        event.id = id;
+    }
     let nevents = events.len();
 
     info!("Splitting {nevents} events into {} parts", opt.partitions);
