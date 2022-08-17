@@ -2,8 +2,12 @@ use crate::event::Event;
 use crate::four_vector::FourVector;
 
 use std::cmp::Ordering;
+use std::fmt::{Display, self};
+use std::ops::{Index, IndexMut};
 
+use itertools::Itertools;
 use noisy_float::prelude::*;
+use pathfinding::prelude::{Weights, kuhn_munkres_min};
 use permutohedron::LexicalPermutation;
 
 /// A metric (distance function) in the space of all events
@@ -16,8 +20,6 @@ impl<D, E> Distance<E> for &D where D: Distance<E> {
         (*self).distance(ev1, ev2)
     }
 }
-
-const FALLBACK_SIZE: usize = 8;
 
 /// The distance function defined in [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
@@ -83,11 +85,7 @@ impl EuclWithScaledPt {
     }
 
     fn set_distance(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
-        if std::cmp::max(p1.len(), p2.len()) < FALLBACK_SIZE {
-            self.min_paired_distance(p1, p2)
-        } else {
-            self.norm_ordered_paired_distance(p1, p2)
-        }
+        self.min_paired_distance(p1, p2)
     }
 
     fn min_paired_distance(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
@@ -100,11 +98,31 @@ impl EuclWithScaledPt {
         let mut p1 = p1.to_vec();
         p1.resize_with(p2.len(), || zero);
         p1.sort_unstable();
-        let mut min_dist = self.paired_distance(&p1, p2);
+
+        // TODO: find optimum value (either 2, 3, or 4)
+        const MAX_PART_NAIVE: usize = 3;
+        match p1.len() {
+            0 => n64(0.),
+            1 => pt_dist(&p1[0], &p2[0], self.pt_weight),
+            2..=MAX_PART_NAIVE => self.min_paired_distance_naive(&mut p1, p2),
+            _ => self.min_paired_distance_hungarian(&p1, p2),
+        }
+    }
+
+    fn min_paired_distance_naive(&self, p1: &mut [FourVector], p2: &[FourVector]) -> N64 {
+        let mut min_dist = self.paired_distance(p1, p2);
         while p1.next_permutation() {
-            min_dist = std::cmp::min(min_dist, self.paired_distance(&p1, p2));
+            min_dist = std::cmp::min(min_dist, self.paired_distance(p1, p2));
         }
         min_dist
+    }
+
+    fn min_paired_distance_hungarian(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
+        let weights = SquareMatrix::from_iter(
+            p1.iter().cartesian_product(p2.iter())
+                .map(|(p, q)| pt_dist(p, q, self.pt_weight))
+        );
+        kuhn_munkres_min(&weights).0
     }
 
     fn paired_distance(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
@@ -113,42 +131,6 @@ impl EuclWithScaledPt {
             .zip(p2.iter())
             .map(|(p1, p2)| pt_dist(p1, p2, self.pt_weight))
             .sum()
-    }
-
-    fn norm_ordered_paired_distance(
-        &self,
-        p1: &[FourVector],
-        p2: &[FourVector],
-    ) -> N64 {
-        if p1.len() > p2.len() {
-            return self.norm_ordered_paired_distance(p2, p1);
-        }
-        let mut p1 = p1.to_vec();
-        p1.resize_with(p2.len(), FourVector::new);
-        std::cmp::min(
-            self.ordered_paired_distance_eq_size(&p1, p2),
-            self.ordered_paired_distance_eq_size(p2, &p1),
-        )
-    }
-
-    fn ordered_paired_distance_eq_size(
-        &self,
-        p1: &[FourVector],
-        p2: &[FourVector],
-    ) -> N64 {
-        debug_assert!(p1.len() == p2.len());
-        let mut dists: Vec<_> = p2.iter().map(|q| (n64(0.), q)).collect();
-        let mut dist = n64(0.);
-        for p in p1 {
-            for (dist, q) in &mut dists {
-                *dist = pt_dist_sq(p, *q, self.pt_weight);
-            }
-            let (n, min) =
-                dists.iter().enumerate().min_by_key(|(_n, d)| *d).unwrap();
-            dist += min.0.sqrt();
-            dists.swap_remove(n);
-        }
-        dist
     }
 }
 
@@ -184,5 +166,67 @@ impl<'a, 'b, D: Distance>  PtDistance<'a, 'b, D> {
 impl<'a, 'b, D: Distance> Distance<usize> for PtDistance<'a, 'b, D> {
     fn distance(&self, e1: &usize, e2: &usize) -> N64 {
         self.ev_dist.distance(&self.events[*e1], &self.events[*e2])
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+struct SquareMatrix {
+    entries: Vec<N64>,
+    rows: usize,
+}
+
+impl Index<(usize, usize)> for SquareMatrix {
+    type Output = N64;
+
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        let (row, col) = index;
+        &self.entries[row * self.rows + col]
+    }
+}
+
+impl IndexMut<(usize, usize)> for SquareMatrix {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+        let (row, col) = index;
+        &mut self.entries[row * self.rows + col]
+    }
+}
+
+impl Weights<N64> for SquareMatrix {
+    fn rows(&self) -> usize {
+        self.rows
+    }
+
+    fn columns(&self) -> usize {
+        self.rows()
+    }
+
+    fn at(&self, row: usize, col: usize) -> N64 {
+        self[(row, col)]
+    }
+
+    fn neg(&self) -> Self {
+        let entries = self.entries.iter().map(|e| -e).collect();
+        Self { entries, rows: self.rows }
+    }
+}
+
+impl Display for SquareMatrix {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for row in 0..self.rows {
+            write!(f, "(")?;
+            for col in 0..self.rows {
+                write!(f, " {:^6.2} ", self[(row, col)])?;
+            }
+            writeln!(f, ")")?;
+        }
+        Ok(())
+    }
+}
+impl FromIterator<N64> for SquareMatrix {
+    fn from_iter<T: IntoIterator<Item = N64>>(iter: T) -> Self {
+        let entries = Vec::from_iter(iter);
+        let rows = (entries.len() as f64).sqrt();
+        assert_eq!(rows.fract(), 0.);
+        Self { entries, rows: rows as usize }
     }
 }
