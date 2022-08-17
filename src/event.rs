@@ -75,6 +75,10 @@ fn compress_outgoing(
             _ => outgoing_by_pid.push((id, vec![p])),
         }
     }
+    outgoing_by_pid.shrink_to_fit();
+    for (_, p) in &mut outgoing_by_pid {
+        p.shrink_to_fit();
+    }
     outgoing_by_pid
 }
 
