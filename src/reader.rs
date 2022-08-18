@@ -26,6 +26,10 @@ impl Iterator for FileReader {
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
 }
 
 /// Returns an event reader for the file at `path`
@@ -125,6 +129,18 @@ impl<R: Iterator> Iterator for CombinedReader<R> {
         }
         self.current += 1;
         self.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.readers[self.current..].iter()
+            .map(|r| r.size_hint())
+            .reduce(|(accmin, accmax), (min, max)|  {
+                let accmax = match (accmax, max) {
+                    (Some(accmax), Some(max)) => Some(accmax + max),
+                    _ => None
+                };
+                (accmin + min, accmax)
+            }).unwrap_or_default()
     }
 }
 

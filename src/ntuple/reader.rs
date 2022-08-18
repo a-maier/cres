@@ -38,6 +38,10 @@ impl Iterator for Reader {
             None => None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
 }
 
 fn create_error(file: impl Debug) -> Error {
