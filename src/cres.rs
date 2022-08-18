@@ -52,6 +52,7 @@ use rayon::prelude::*;
 use thiserror::Error;
 
 use crate::event::Event;
+use crate::progress_bar::ProgressBar;
 use crate::traits::*;
 
 /// Build a new [Cres] object
@@ -163,13 +164,22 @@ where
         self.reader.rewind().map_err(RewindErr)?;
 
         let converter = &mut self.converter;
+        let expected_nevents = self.reader.size_hint().0;
+        let event_progress = if expected_nevents > 0 {
+            ProgressBar::new(expected_nevents as u64, "events read")
+        } else {
+            ProgressBar::default()
+        };
         let events: Result<Vec<_>, _> = (&mut self.reader)
             .map(|ev| match ev {
                 Ok(ev) => converter.try_convert(ev).map_err(ConversionErr),
                 Err(err) => Err(ReadErr(err)),
             })
+            .inspect(|_| event_progress.inc(1))
             .collect();
+        event_progress.finish();
         let mut events = events?;
+
         for (id, ev) in events.iter_mut().enumerate() {
             if ev.id != 0 {
                 return Err(IdErr(ev.id));
