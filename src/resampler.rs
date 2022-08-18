@@ -99,7 +99,8 @@ where
             debug!("Initialising nearest-neighbour search for part {n}");
             let mut neighbour_search = N::new_with_dist(
                 events.len(),
-                PtDistance::new(&self.distance, events)
+                PtDistance::new(&self.distance, events),
+                max_cell_size,
             );
             debug!("Resampling part {n}");
             for seed in seeds.take(nneg_weight) {
@@ -116,8 +117,7 @@ where
                     events,
                     seed,
                     &self.distance,
-                    &mut neighbour_search,
-                    max_cell_size
+                    &mut neighbour_search
                 );
                 cell.resample();
                 self.observer.observe_cell(&cell);

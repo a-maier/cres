@@ -29,7 +29,11 @@ pub trait NeighbourData {
     ///
     /// The arguments are the number of points and a function
     /// returning the distance given the indices of two points
-    fn new_with_dist<D>(npoints: usize, d: D) -> Self
+    fn new_with_dist<D>(
+        npoints: usize,
+        d: D,
+        max_dist: N64,
+    ) -> Self
     where D: Distance<usize>;
 }
 
@@ -51,17 +55,22 @@ where D: Distance<usize> + Send + Sync
 }
 
 impl NeighbourData for TreeSearch {
-    fn new_with_dist<D>(npoints: usize, d: D) -> Self
+    fn new_with_dist<D>(
+        npoints: usize,
+        d: D,
+        max_dist: N64
+    ) -> Self
     where D: Distance<usize>
     {
-        Self::from_iter_with_dist(0..npoints, d)
+        Self::from_iter_with_dist(0..npoints, d).with_max_dist(max_dist)
     }
 }
 
 /// Naive nearest neighbour search
 #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct NaiveNeighbourSearch {
-    dist: Vec<(usize, N64)>
+    dist: Vec<(usize, N64)>,
+    max_dist: N64,
 }
 
 impl<'a, D> NeighbourSearch<D> for &'a mut NaiveNeighbourSearch
@@ -75,19 +84,25 @@ where D: Distance<usize> + Send + Sync
         d: D
     ) -> Self::Iter
     {
+        let max_dist = self.max_dist;
         self.dist.par_iter_mut().for_each(|(id, dist)| {
             *dist = d.distance(id, point);
         });
-        NaiveNeighbourIter::new(&self.dist, *point)
+        NaiveNeighbourIter::new(&self.dist, *point, max_dist)
     }
 }
 
 impl NeighbourData for NaiveNeighbourSearch {
-    fn new_with_dist<D>(npoints: usize, _d: D) -> Self
+    fn new_with_dist<D>(
+        npoints: usize,
+        _d: D,
+        max_dist: N64,
+    ) -> Self
     where D: Distance<usize>
     {
         Self {
-            dist: Vec::from_iter((0..npoints).map(|id| (id, n64(0.))))
+            dist: Vec::from_iter((0..npoints).map(|id| (id, n64(0.)))),
+            max_dist
         }
     }
 }
@@ -96,15 +111,21 @@ impl NeighbourData for NaiveNeighbourSearch {
 pub struct NaiveNeighbourIter<'a>{
     dist: &'a [(usize, N64)],
     candidates: Vec<usize>,
+    max_dist: N64,
 }
 
 impl<'a>  NaiveNeighbourIter<'a>{
-    fn new(dist: &'a [(usize, N64)], seed: usize) -> Self {
+    fn new(
+        dist: &'a [(usize, N64)],
+        seed: usize,
+        max_dist: N64,
+    ) -> Self {
         let mut candidates = Vec::from_iter(0..dist.len());
         candidates.swap_remove(seed);
         Self {
             dist,
-            candidates
+            candidates,
+            max_dist
         }
     }
 }
@@ -118,8 +139,13 @@ impl<'a> Iterator for NaiveNeighbourIter<'a> {
             .enumerate()
             .min_by_key(|(_pos, &idx)| self.dist[idx].1);
         if let Some((pos, &idx)) = nearest {
-            self.candidates.swap_remove(pos);
-            Some((idx, self.dist[idx].1))
+            let dist = self.dist[idx].1;
+            if dist <= self.max_dist {
+                self.candidates.swap_remove(pos);
+                Some((idx, self.dist[idx].1))
+            } else {
+                None
+            }
         } else {
             None
         }

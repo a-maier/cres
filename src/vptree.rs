@@ -7,9 +7,16 @@ use noisy_float::prelude::*;
 
 use crate::traits::Distance;
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct VPTree<P> {
     nodes: Vec<Node<P>>,
+    max_dist: N64,
+}
+
+impl<P> Default for VPTree<P> {
+    fn default() -> Self {
+        Self { nodes: Default::default(), max_dist: n64(f64::MAX) }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
@@ -41,6 +48,11 @@ impl<P: Copy + PartialEq> VPTree<P> {
         DF: Distance<P>
     {
         Self::from_iter_with_dist(nodes.into_iter(), dist)
+    }
+
+    pub fn with_max_dist(mut self, max_dist: N64) -> Self {
+        self.max_dist = max_dist;
+        self
     }
 }
 
@@ -77,7 +89,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         }
         Self::build_tree(nodes.as_mut_slice(), & dist);
         let nodes = nodes.into_iter().map(|(_d, n)| n).collect();
-        Self { nodes }
+        Self { nodes, max_dist: n64(f64::MAX) }
     }
 
     fn find_corner_pt<'a, I, DF>(
@@ -154,11 +166,11 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         NearestNeighbourIter{
             tree: self,
             pt: *pt,
-            dist
+            dist,
         }
     }
 
-    fn nearest_in_impl<DF>(&mut self, pt: &P, dist: DF) -> Option<(P, N64)>
+    fn nearest_in_impl<DF>(&mut self, pt: &P, dist: DF, max_dist: N64) -> Option<(P, N64)>
     where
         DF: Distance<P>
     {
@@ -167,12 +179,17 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
             self.nodes.as_mut_slice(),
             *pt,
             & dist,
-            0
+            0,
+            max_dist,
         );
         if let Some((idx, d)) = idx {
             trace!("nearest is at index {idx}");
-            self.nodes[idx].cache.used = true;
-            Some((self.nodes[idx].vantage_pt, d))
+            if d <= self.max_dist {
+                self.nodes[idx].cache.used = true;
+                Some((self.nodes[idx].vantage_pt, d))
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -183,6 +200,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         pt: P,
         dist: &DF,
         idx: usize,
+        max_dist: N64,
     ) -> Option<(usize, N64)>
     where
         DF: Distance<P>
@@ -210,7 +228,8 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
                     sub,
                     pt,
                     dist,
-                    idx
+                    idx,
+                    max_dist
                 );
                 if d > children.radius {
                     std::mem::swap(&mut subtrees.0, &mut subtrees.1);
@@ -219,6 +238,10 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
                 }
                 trace!("Looking for nearest neighbour in more promising region");
                 nearest = Self::nearer(nearest, nearest_in_sub(subtrees.0, idx + offsets.0));
+                let possibly_in_less_promising = (d - children.radius).abs() <= max_dist;
+                if !possibly_in_less_promising {
+                    return nearest
+                }
                 if let Some((_, dn)) = nearest {
                     if dn < (children.radius - d).abs() {
                         return nearest;
@@ -250,7 +273,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
 pub struct NearestNeighbourIter<'a, P, DF> {
     pt: P,
     dist: DF,
-    tree: &'a mut VPTree<P>
+    tree: &'a mut VPTree<P>,
 }
 
 impl<'a, P, DF> Iterator for NearestNeighbourIter<'a, P, DF>
@@ -261,6 +284,6 @@ where
     type Item = (P, N64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.tree.nearest_in_impl(&self.pt, &self.dist)
+        self.tree.nearest_in_impl(&self.pt, &self.dist, self.tree.max_dist)
     }
 }

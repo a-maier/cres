@@ -26,7 +26,6 @@ impl<'a> Cell<'a> {
         seed_idx: usize,
         distance: &F,
         neighbour_search: N,
-        max_size: N64,
     ) -> Self
     where
         for<'x, 'y> N: NeighbourSearch<PtDistance<'x, 'y, F>>,
@@ -44,9 +43,6 @@ impl<'a> Cell<'a> {
         );
 
         for (next_idx, dist) in neighbours {
-            if dist > max_size {
-                break;
-            }
             trace!(
                 "adding event with distance {dist}, weight {:e} to cell",
                 events[next_idx].weight
