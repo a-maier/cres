@@ -114,18 +114,18 @@ pub(crate) fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
 
 #[derive(Debug, Copy, Clone, Parser)]
 pub(crate) struct JetDefinition {
-    /// Jet algorithm
+    /// Jet algorithm.
     #[clap(
         short = 'a',
         long,
-        help = "Jet algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'"
+        help = "Jet algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'."
     )]
     pub jetalgorithm: JetAlgorithm,
-    /// Jet radius parameter
+    /// Jet radius parameter.
     #[clap(short = 'R', long)]
     pub jetradius: f64,
     #[clap(short = 'p', long)]
-    /// Minimum jet transverse momentum
+    /// Minimum jet transverse momentum.
     pub jetpt: f64,
 }
 
@@ -147,16 +147,17 @@ pub(crate) enum Search {
 
 #[derive(Debug, Copy, Clone, Parser)]
 pub(crate) struct UnweightOpt {
-    /// Weight below which events are unweighted
+    /// Weight below which events are unweighted.
     #[clap(short = 'w', long, default_value = "0.")]
     pub(crate) minweight: f64,
 
-    /// Random number generator seed for unweighting
+    /// Random number generator seed for unweighting.
     #[clap(long, default_value = "0")]
     pub(crate) seed: u64,
 }
 
 #[derive(Debug, Display, Default, Copy, Clone, ArgEnum, EnumString)]
+#[clap(rename_all = "lower")]
 pub(crate) enum FileFormat {
     #[default]
     HepMC2,
@@ -167,7 +168,7 @@ pub(crate) enum FileFormat {
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) struct Opt {
-    /// Output file
+    /// Output file.
     #[clap(long, short, parse(from_os_str))]
     pub(crate) outfile: PathBuf,
 
@@ -177,28 +178,23 @@ pub(crate) struct Opt {
     #[clap(flatten)]
     pub(crate) unweight: UnweightOpt,
 
-    ///
-    #[clap(
-        long,
-        default_value = "0.",
-        help = "Weight of transverse momentum
-when calculating particle momentum distances.\n"
-    )]
+    /// Weight of transverse momentum when calculating particle momentum distances.
+    #[clap(long, default_value = "0.")]
     pub(crate) ptweight: f64,
 
-    /// Whether to dump selected cells of interest
+    /// Whether to dump selected cells of interest.
     #[clap(short = 'd', long)]
     pub(crate) dumpcells: bool,
 
     #[clap(short = 'c', long, parse(try_from_str = parse_compr),
                 help = "Compress output file.
-Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
+Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
 Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
 
-    /// Output format
-    #[clap(long, default_value_t)]
+    /// Output format.
+    #[clap(arg_enum, long, default_value_t)]
     pub(crate) outformat: FileFormat,
 
     /// Verbosity level
@@ -217,11 +213,14 @@ Possible values with increasing amount of output are
 
 The input event sample is split into the given number of partitions,
 which has to be a power of two. Each partition is resampled
-separately."
+separately in parallel."
     )]
     pub(crate) partitions: u32,
 
     /// Algorithm for finding nearest-neighbour events.
+    ///
+    /// Note that the 'tree' search is not parallelised. To benefit from
+    /// parallelisation use the `--partitions` options in addition.
     #[clap(arg_enum, short, long, default_value = "tree")]
     pub(crate) search: Search,
 
