@@ -99,7 +99,7 @@ impl EuclWithScaledPt {
         p1.resize_with(p2.len(), || zero);
         p1.sort_unstable();
 
-        // TODO: find optimum value (either 2, 3, or 4)
+        // TODO: find optimum value (either 3 or 4)
         const MAX_PART_NAIVE: usize = 3;
         match p1.len() {
             0 => n64(0.),
