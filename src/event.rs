@@ -5,7 +5,7 @@ use std::default::Default;
 
 use noisy_float::prelude::*;
 
-pub type MomentumSet = Vec<FourVector>;
+pub type MomentumSet = Box<[FourVector]>;
 
 /// Build and `Event'
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]
@@ -66,7 +66,7 @@ impl From<EventBuilder> for Event {
 
 fn compress_outgoing(
     mut out: Vec<(i32, FourVector)>,
-) -> Vec<(i32, Vec<FourVector>)> {
+) -> Box<[(i32, MomentumSet)]> {
     out.sort_unstable_by(|a, b| b.cmp(a));
     let mut outgoing_by_pid: Vec<(i32, Vec<_>)> = Vec::new();
     for (id, p) in out {
@@ -75,11 +75,11 @@ fn compress_outgoing(
             _ => outgoing_by_pid.push((id, vec![p])),
         }
     }
-    outgoing_by_pid.shrink_to_fit();
-    for (_, p) in &mut outgoing_by_pid {
-        p.shrink_to_fit();
-    }
-    outgoing_by_pid
+    let outgoing_by_pid = Vec::from_iter(
+        outgoing_by_pid.into_iter()
+            .map(|(id, p)| (id, p.into_boxed_slice()))
+    );
+    outgoing_by_pid.into_boxed_slice()
 }
 
 /// A Monte Carlo scattering event
@@ -88,7 +88,7 @@ pub struct Event {
     pub id: usize,
     pub weight: N64,
 
-    outgoing_by_pid: Vec<(i32, MomentumSet)>,
+    outgoing_by_pid: Box<[(i32, MomentumSet)]>,
 }
 
 const EMPTY_SLICE: &[FourVector] = &[];
@@ -105,7 +105,7 @@ impl Event {
 
     /// Access the outgoing particle momenta grouped by particle id
     pub fn outgoing(&self) -> &[(i32, MomentumSet)] {
-        self.outgoing_by_pid.as_slice()
+        &self.outgoing_by_pid
     }
 
     /// Access the outgoing particle momenta with the given particle id
@@ -121,7 +121,7 @@ impl Event {
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
-    pub fn into_outgoing(self) -> Vec<(i32, MomentumSet)> {
+    pub fn into_outgoing(self) -> Box<[(i32, MomentumSet)]> {
         self.outgoing_by_pid
     }
 }
