@@ -92,6 +92,7 @@ where
         );
         debug_assert_eq!(parts.len(), self.num_partitions as usize);
 
+        info!("Resampling {nneg_weight} cells");
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
         parts.into_par_iter().enumerate().for_each(|(n, events)| {
             debug!("Selecting seeds for partition {n}");
