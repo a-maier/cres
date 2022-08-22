@@ -62,6 +62,10 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     /// Input files
     #[clap(name = "INFILES", parse(from_os_str))]
     infiles: Vec<PathBuf>,
+
+    /// Weight of transverse momentum when calculating particle momentum distances.
+    #[clap(long, default_value = "0.")]
+    ptweight: f64,
 }
 
 fn main() -> Result<()> {
@@ -105,7 +109,7 @@ fn main() -> Result<()> {
     info!("Splitting {nevents} events into {} parts", opt.partitions);
 
     let depth = log2(opt.partitions);
-    let distance = EuclWithScaledPt::new(n64(0.));
+    let distance = EuclWithScaledPt::new(n64(opt.ptweight));
     let parts = circle_partition(
         &mut events,
         |e1, e2| distance.distance(e1, e2),
