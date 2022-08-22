@@ -6,7 +6,7 @@ use crate::opt::{FileFormat, parse_compr};
 
 use anyhow::{Result, Context};
 use clap::Parser;
-use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition, file::File};
+use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind, Progress}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition, file::File, progress_bar::ProgressBar};
 use env_logger::Env;
 use log::{info, debug, error, trace};
 use opt::{JetDefinition, is_power_of_two};
@@ -82,11 +82,20 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
+    //TODO: code duplication with Cres
     let mut reader = CombinedReader::from_files(opt.infiles)?;
+    let expected_nevents = reader.size_hint().0;
+    let event_progress = if expected_nevents > 0 {
+        ProgressBar::new(expected_nevents as u64, "events read")
+    } else {
+        ProgressBar::default()
+    };
     let mut converter = ClusteringConverter::new(opt.jet_def.into());
     let events: Result<Result<Vec<_>, _>, _> = (&mut reader)
         .map(|ev| ev.map(|e| converter.try_convert(e)))
+        .inspect(|_| event_progress.inc(1))
         .collect();
+    event_progress.finish();
     let mut events = events??;
     for (id, event) in events.iter_mut().enumerate() {
         event.id = id;
