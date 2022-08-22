@@ -1,4 +1,4 @@
-use std::cmp::PartialOrd;
+use std::{cmp::PartialOrd, sync::Mutex};
 
 use log::debug;
 use rayon::prelude::*;
@@ -18,11 +18,11 @@ where
     }
     if let Some(corner) = find_corner(s, &dist) {
         debug_assert!(!s.is_empty());
-        let mut res = Vec::new();
+        let res = Mutex::new(Vec::new());
         let last_idx = s.len() - 1;
         s.swap(corner, last_idx);
-        partition(s, &dist, depth, &mut res);
-        res
+        partition(s, &dist, depth, &res);
+        res.into_inner().unwrap()
     } else {
         debug_assert!(s.is_empty());
         vec![s]
@@ -40,12 +40,15 @@ where
     D: PartialOrd,
 {
     if let Some((first, rest)) = slice.split_first() {
+        debug!("Finding corner");
         let max = rest.iter().enumerate().max_by(
             |(_, a), (_, b)| dist(first, *a).partial_cmp(&dist(first, *b)).unwrap()
         );
         if let Some((pos, _)) = max {
+            debug!("Corner at {pos}");
             Some(pos + 1)
         } else {
+            debug!("Corner at 0");
             Some(0)
         }
     } else {
@@ -57,7 +60,7 @@ fn partition<'a, 'b, 'c, D, DF, T>(
     s: &'a mut[T],
     dist: &'b DF,
     depth: u32,
-    res: &'c mut Vec<&'a mut[T]>,
+    res: &'c Mutex<Vec<&'a mut[T]>>,
 )
 where
     T: Send + Sync,
@@ -66,9 +69,10 @@ where
     D: PartialOrd,
 {
     if depth == 0 || s.len() < 2 {
-        res.push(s);
+        res.lock().unwrap().push(s);
         return;
     }
+    debug!("Starting partition at depth {depth}");
     s.swap(0, s.len() - 1);
     let (centre, rest) = s.split_first_mut().unwrap();
     rest.par_sort_unstable_by(
@@ -76,11 +80,8 @@ where
     );
     let median_idx = s.len() / 2;
     let (inner, outer) = s.split_at_mut(median_idx);
-    debug!(
-        "partition at depth {depth}: {} vs. {} events",
-        inner.len(),
-        outer.len()
+    debug!("Finished partition at depth {depth}");
+    [inner, outer].into_par_iter().for_each(
+        |region| partition(region, dist, depth - 1, res)
     );
-    partition(inner, dist, depth - 1, res);
-    partition(outer, dist, depth - 1, res);
 }
