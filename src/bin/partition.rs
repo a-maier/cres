@@ -12,6 +12,7 @@ use log::{info, debug, error, trace};
 use opt::{JetDefinition, is_power_of_two};
 use noisy_float::prelude::*;
 
+// TODO: code duplication with opt::Opt
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 struct Opt {
@@ -23,7 +24,7 @@ struct Opt {
     outfile: PathBuf,
 
     /// Output format
-    #[clap(long, default_value_t)]
+    #[clap(arg_enum, long, default_value_t)]
     outformat: FileFormat,
 
     #[clap(short = 'c', long, parse(try_from_str = parse_compr),
