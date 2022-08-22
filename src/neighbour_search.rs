@@ -34,7 +34,7 @@ pub trait NeighbourData {
         d: D,
         max_dist: N64,
     ) -> Self
-    where D: Distance<usize>;
+    where D: Distance<usize> + Send + Sync;
 }
 
 /// Nearest-neighbour search using a vantage point tree
@@ -60,9 +60,10 @@ impl NeighbourData for TreeSearch {
         d: D,
         max_dist: N64
     ) -> Self
-    where D: Distance<usize>
+    where D: Distance<usize> + Send + Sync
     {
-        Self::from_iter_with_dist(0..npoints, d).with_max_dist(max_dist)
+        let range = (0..npoints).into_par_iter();
+        Self::from_par_iter_with_dist(range, d).with_max_dist(max_dist)
     }
 }
 
