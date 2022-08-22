@@ -210,7 +210,7 @@ impl Writers {
     fn write(&mut self, idx: usize, event: &hepmc2::Event) -> Result<()> {
         match self {
             Writers::HepMC(writers) =>
-                writers[idx].write(&event).map_err(|e| e.into()),
+                writers[idx].write(event).map_err(|e| e.into()),
             #[cfg(feature = "ntuple")]
             Writers::NTuple(writers) =>
                 writers[idx].write(&event.into()).map_err(|e| e.into())

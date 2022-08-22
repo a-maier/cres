@@ -24,7 +24,7 @@ impl Rewind for FileReader {
     fn rewind(&mut self) -> Result<(), Self::Error> {
         use RewindError::*;
         self.source.seek(SeekFrom::Start(0))?;
-        let cloned_source = self.source.try_clone().map_err(|err| CloneError(err))?;
+        let cloned_source = self.source.try_clone().map_err(CloneError)?;
         self.reader = hepmc2::Reader::new(auto_decompress(BufReader::new(cloned_source)));
 
         Ok(())
