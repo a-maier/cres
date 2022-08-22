@@ -16,7 +16,7 @@ where
     if depth == 0 {
         return vec![s]
     }
-    if let Some(corner) = find_corner(s.iter(), &dist) {
+    if let Some(corner) = find_corner(s, &dist) {
         debug_assert!(!s.is_empty());
         let mut res = Vec::new();
         let last_idx = s.len() - 1;
@@ -30,19 +30,17 @@ where
 }
 
 
-pub(crate) fn find_corner<D, DF, I, P>(
-    iter: I,
+pub(crate) fn find_corner<D, DF, P>(
+    slice: &[P],
     dist: &DF
 ) -> Option<usize>
 where
-    I: IntoIterator<Item = P>,
-    DF: Send + Sync + Fn(P, P) -> D,
-    P: Copy,
+    P: Send + Sync,
+    DF: Send + Sync + Fn(&P, &P) -> D,
     D: PartialOrd,
 {
-    let mut iter = iter.into_iter();
-    if let Some(first) = iter.next() {
-        let max = iter.enumerate().max_by(
+    if let Some((first, rest)) = slice.split_first() {
+        let max = rest.iter().enumerate().max_by(
             |(_, a), (_, b)| dist(first, *a).partial_cmp(&dist(first, *b)).unwrap()
         );
         if let Some((pos, _)) = max {
