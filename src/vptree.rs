@@ -4,6 +4,7 @@ use std::iter::{Iterator, FromIterator};
 
 use log::{debug, trace};
 use noisy_float::prelude::*;
+use rayon::prelude::*;
 
 use crate::traits::Distance;
 
@@ -50,6 +51,18 @@ impl<P: Copy + PartialEq> VPTree<P> {
         Self::from_iter_with_dist(nodes.into_iter(), dist)
     }
 
+    pub fn par_new<DF>(
+        nodes: Vec<P>,
+        dist: DF
+    ) -> Self
+    where
+        DF: Distance<P> + Send + Sync,
+        P: Send + Sync
+    {
+        Self::from_par_iter_with_dist(nodes.into_par_iter(), dist)
+    }
+
+
     pub fn with_max_dist(mut self, max_dist: N64) -> Self {
         self.max_dist = max_dist;
         self
@@ -92,6 +105,47 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         Self { nodes, max_dist: n64(f64::MAX) }
     }
 
+    pub fn from_par_iter_with_dist<DF, I>(
+        iter: I,
+        dist: DF
+    ) -> Self
+    where
+        I: ParallelIterator<Item = P>,
+        DF: Distance<P> + Send + Sync,
+        P: Send + Sync,
+    {
+        let mut nodes: Vec<_> = iter.map(
+            |vantage_pt| {
+                // reserve first element for storing distances
+                let cache = Cache {
+                    pt: vantage_pt,
+                    dist: Default::default(),
+                    used: false,
+                };
+                (Default::default(), Node{ vantage_pt, children: None, cache })
+            }
+        ).collect();
+
+        let corner_pt_idx = if let Some((first, nodes)) = nodes.split_first() {
+            Some(Self::par_find_corner_pt(
+                &first.1.vantage_pt,
+                nodes.par_iter().map(|(_, pt)| &pt.vantage_pt).enumerate(),
+                & dist
+            ))
+        } else {
+            None
+        };
+
+        debug!("first vantage point: {corner_pt_idx:?}");
+        if let Some(pos) = corner_pt_idx {
+            let last_idx = nodes.len() - 1;
+            nodes.swap(pos, last_idx)
+        }
+        Self::par_build_tree(nodes.as_mut_slice(), & dist);
+        let nodes = nodes.into_par_iter().map(|(_d, n)| n).collect();
+        Self { nodes, max_dist: n64(f64::MAX) }
+    }
+
     fn find_corner_pt<'a, I, DF>(
         iter: I,
         dist: & DF
@@ -113,6 +167,27 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
             }
         } else {
             None
+        }
+    }
+
+    fn par_find_corner_pt<'a, I, DF>(
+        first: &P,
+        iter: I,
+        dist: & DF
+    ) -> usize
+    where
+        'x: 'a,
+        I: ParallelIterator<Item = (usize, &'a P)>,
+        DF: Distance<P> + Send + Sync,
+        P: Send + Sync
+    {
+        let max = iter.max_by_key(
+            |(_, a)| dist.distance(first, a)
+        );
+        if let Some((pos, _)) = max {
+            pos + 1
+        } else {
+            0
         }
     }
 
@@ -157,6 +232,36 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         });
         Self::build_tree(inside, dist);
         Self::build_tree(outside, dist);
+    }
+
+    fn par_build_tree<DF>(
+        pts: &mut [(N64, Node<P>)],
+        dist: & DF,
+    )
+    where
+        DF: Distance<P> + Send + Sync,
+        P: Send + Sync,
+    {
+        const PAR_MIN_SIZE: usize = 1_000;
+        if pts.len() < PAR_MIN_SIZE {
+            return Self::build_tree(pts, dist);
+        }
+        // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
+        pts.swap(0, pts.len() - 1);
+        let (vp, pts) = pts.split_first_mut().unwrap();
+        pts.par_iter_mut().for_each(|(d, pt)| {
+            *d = dist.distance(&vp.1.vantage_pt, &pt.vantage_pt)
+        });
+        pts.par_sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let median_idx = pts.len() / 2;
+        let (inside, outside) = pts.split_at_mut(median_idx);
+        vp.1.children = Some(Children {
+            radius: outside.first().unwrap().0,
+            outside_offset: median_idx
+        });
+        [inside, outside].into_par_iter().for_each(|region| {
+            Self::build_tree(region, dist)
+        });
     }
 
     pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIter<'_, P, DF>
