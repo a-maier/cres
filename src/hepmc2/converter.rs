@@ -1,4 +1,4 @@
-use crate::cluster::{JetDefinition, is_parton, cluster, PID_JET};
+use crate::cluster::{JetDefinition, is_parton, is_charged_lepton, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON};
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
@@ -10,12 +10,23 @@ const OUTGOING_STATUS: i32 = 1;
 #[derive(Copy, Clone, Debug)]
 pub struct ClusteringConverter {
     jet_def: JetDefinition,
+    lepton_def: Option<JetDefinition>,
 }
 
 impl ClusteringConverter {
     /// Construct a new converter using the given jet clustering
     pub fn new(jet_def: JetDefinition) -> Self {
-        Self { jet_def }
+        Self { jet_def, lepton_def: None }
+    }
+
+    /// Enable lepton clustering
+    pub fn with_lepton_def(mut self, lepton_def: JetDefinition) -> Self {
+        self.lepton_def = Some(lepton_def);
+        self
+    }
+
+    fn is_clustered_to_lepton(&self, id: i32) -> bool {
+        self.lepton_def.is_some() && (is_charged_lepton(id) || is_photon(id))
     }
 }
 
@@ -27,6 +38,7 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
         event: hepmc2::Event,
     ) -> Result<Event, Self::Error> {
         let mut partons = Vec::new();
+        let mut leptons = Vec::new();
         let mut builder = EventBuilder::new();
         builder.weight(n64(*event.weights.first().unwrap()));
         for vx in event.vertices {
@@ -37,6 +49,8 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
             for out in outgoing {
                 if is_parton(out.id) {
                     partons.push(out.p.0.into());
+                } else if self.is_clustered_to_lepton(out.id) {
+                    leptons.push(out.p.0.into());
                 } else {
                     let p = [
                         n64(out.p[0]),
@@ -52,6 +66,13 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
         for jet in jets {
             let p = [jet.e(), jet.px(), jet.py(), jet.pz()];
             builder.add_outgoing(PID_JET, p.into());
+        }
+        if let Some(lepton_def) = self.lepton_def.as_ref() {
+            let leptons = cluster(leptons, lepton_def);
+            for lepton in leptons {
+                let p = [lepton.e(), lepton.px(), lepton.py(), lepton.pz()];
+                builder.add_outgoing(PID_DRESSED_LEPTON, p.into());
+            }
         }
         Ok(builder.build())
     }

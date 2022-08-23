@@ -30,7 +30,7 @@ fn main() -> Result<()> {
         argfile::parse_fromfile,
         argfile::PREFIX,
     ).with_context(|| "Failed to read argument file")?;
-    let opt = Opt::parse_from(args);
+    let opt = Opt::parse_from(args).validate()?;
     match opt.search {
         Search::Naive => run_main::<NaiveNeighbourSearch>(opt),
         Search::Tree => run_main::<TreeSearch>(opt),
@@ -79,7 +79,10 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
-    let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+    let mut converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+    if opt.lepton_def.leptonalgorithm.is_some() {
+        converter = converter.with_lepton_def(opt.lepton_def.into())
+    }
     match opt.outformat {
         FileFormat::HepMC2 => {
             let writer = hepmc2::WriterBuilder::default()

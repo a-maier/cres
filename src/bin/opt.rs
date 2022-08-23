@@ -139,6 +139,32 @@ impl std::convert::From<JetDefinition> for cres::cluster::JetDefinition {
     }
 }
 
+#[derive(Debug, Copy, Clone, Parser)]
+pub(crate) struct LeptonDefinition {
+    /// Lepton dressing algorithm.
+    #[clap(
+        long,
+        help = "Lepton dressing algorithm.\nPossible settings are 'anti-kt', 'kt', 'Cambridge-Aachen'."
+    )]
+    pub leptonalgorithm: Option<JetAlgorithm>,
+    /// Lepton radius parameter.
+    #[clap(long)]
+    pub leptonradius: Option<f64>,
+    #[clap(long)]
+    /// Minimum lepton transverse momentum.
+    pub leptonpt: Option<f64>,
+}
+
+impl std::convert::From<LeptonDefinition> for cres::cluster::JetDefinition {
+    fn from(l: LeptonDefinition) -> Self {
+        Self {
+            algorithm: l.leptonalgorithm.unwrap(),
+            radius: l.leptonradius.unwrap(),
+            min_pt: l.leptonpt.unwrap(),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
 pub(crate) enum Search {
     Tree,
@@ -183,6 +209,9 @@ pub(crate) struct Opt {
 
     #[clap(flatten)]
     pub(crate) jet_def: JetDefinition,
+
+    #[clap(flatten)]
+    pub(crate) lepton_def: LeptonDefinition,
 
     #[clap(flatten)]
     pub(crate) unweight: UnweightOpt,
@@ -274,4 +303,26 @@ pub(crate) fn is_power_of_two(s: &str) -> Result<(), String> {
         }
         Err(err) => Err(err.to_string())
     }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Error)]
+pub(crate) enum ValidationError {
+    #[error("Either all or none of --leptonalgorithm, --leptonradius, --leptonpt have to be set")]
+    BadLeptonOpt,
+}
+
+impl Opt {
+    pub(crate) fn validate(self) -> Result<Self, ValidationError> {
+        let &LeptonDefinition {
+            leptonalgorithm,
+            leptonpt,
+            leptonradius
+        }= &self.lepton_def;
+        match (leptonalgorithm, leptonpt, leptonradius) {
+            (Some(_), Some(_), Some(_)) => Ok(self),
+            (None, None, None) => Ok(self),
+            _ => Err(ValidationError::BadLeptonOpt),
+        }
+    }
+
 }

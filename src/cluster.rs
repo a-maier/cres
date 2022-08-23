@@ -53,7 +53,19 @@ pub(crate) fn is_parton(id: i32) -> bool {
     id.abs() <= 5 || id == 21
 }
 
+pub(crate) fn is_charged_lepton(id: i32) -> bool {
+    match id.abs() {
+        11 | 13 | 15 => true,
+        _ => false,
+    }
+}
+
+pub(crate) fn is_photon(id: i32) -> bool {
+    id == 22
+}
+
 pub(crate) const PID_JET: i32 = 81;
+pub(crate) const PID_DRESSED_LEPTON: i32 = 82;
 
 pub fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
     let minpt2 = jet_def.min_pt * jet_def.min_pt;
