@@ -243,11 +243,12 @@ variable."
     )]
     pub(crate) threads: usize,
 
-    #[clap(
-        long,
-        help = "Maximum cell size. Limiting the cell size can cause
-left-over negative-weight events."
-    )]
+    /// Maximum cell size.
+    ///
+    /// Limiting the cell size ensures that event weights are only
+    /// redistributed between events that are sufficiently similar.
+    /// The downside is that not all negative weights may be cancelled.
+    #[clap(long)]
     pub(crate) max_cell_size: Option<f64>,
 
     /// Input files
