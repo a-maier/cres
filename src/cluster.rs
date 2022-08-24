@@ -53,11 +53,8 @@ pub(crate) fn is_parton(id: i32) -> bool {
     id.abs() <= 5 || id == 21
 }
 
-pub(crate) fn is_charged_lepton(id: i32) -> bool {
-    match id.abs() {
-        11 | 13 | 15 => true,
-        _ => false,
-    }
+pub(crate) fn is_electron(id: i32) -> bool {
+    id == 11
 }
 
 pub(crate) fn is_photon(id: i32) -> bool {

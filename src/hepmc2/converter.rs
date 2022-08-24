@@ -1,4 +1,4 @@
-use crate::cluster::{JetDefinition, is_parton, is_charged_lepton, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON};
+use crate::cluster::{JetDefinition, is_parton, is_electron, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON};
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
@@ -26,7 +26,7 @@ impl ClusteringConverter {
     }
 
     fn is_clustered_to_lepton(&self, id: i32) -> bool {
-        self.lepton_def.is_some() && (is_charged_lepton(id) || is_photon(id))
+        self.lepton_def.is_some() && (is_electron(id.abs()) || is_photon(id))
     }
 }
 
