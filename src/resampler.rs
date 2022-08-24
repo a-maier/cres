@@ -3,7 +3,7 @@ use std::default::Default;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::bisect::circle_partition;
+use crate::bisect::circle_partition_with_progress;
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
@@ -85,7 +85,7 @@ where
             info!("Splitting events into {} parts", self.num_partitions);
         }
         let depth = log2(self.num_partitions);
-        let parts = circle_partition(
+        let parts = circle_partition_with_progress(
             &mut events,
             |e1, e2| (&self.distance).distance(e1, e2),
             depth

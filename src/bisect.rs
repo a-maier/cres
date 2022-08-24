@@ -3,6 +3,8 @@ use std::{cmp::PartialOrd, sync::Mutex};
 use log::debug;
 use rayon::prelude::*;
 
+use crate::progress_bar::{ProgressBar, Progress};
+
 pub fn circle_partition<DF, D, T>(
     s: &mut [T],
     dist: DF,
@@ -13,6 +15,43 @@ where
     D: PartialOrd,
     T: Send + Sync
 {
+    circle_partition_with_callback(s, dist, depth, |_|{})
+}
+
+pub fn circle_partition_with_progress<DF, D, T>(
+    s: &mut [T],
+    dist: DF,
+    depth: u32,
+) -> Vec<&mut [T]>
+where
+    DF: Send + Sync + Fn(&T, &T) -> D,
+    D: PartialOrd,
+    T: Send + Sync
+{
+    if depth > 0 {
+        let max_progress = depth as u64 * 2_u64.pow(depth - 1);
+        let progress = ProgressBar::new(max_progress, "");
+        let inc = |d| progress.inc(2_u64.pow(d - 1));
+        let res = circle_partition_with_callback(s, dist, depth, inc);
+        progress.finish();
+        res
+    } else {
+        circle_partition(s, dist, depth)
+    }
+}
+
+pub fn circle_partition_with_callback<C, DF, D, T>(
+    s: &mut [T],
+    dist: DF,
+    depth: u32,
+    callback: C,
+) -> Vec<&mut [T]>
+where
+    DF: Send + Sync + Fn(&T, &T) -> D,
+    D: PartialOrd,
+    T: Send + Sync,
+    C: Copy + Send + Sync + Fn(u32),
+{
     if depth == 0 {
         return vec![s]
     }
@@ -21,7 +60,7 @@ where
         let res = Mutex::new(Vec::new());
         let last_idx = s.len() - 1;
         s.swap(corner, last_idx);
-        partition(s, &dist, depth, &res);
+        partition(s, &dist, depth, &res, callback);
         res.into_inner().unwrap()
     } else {
         debug_assert!(s.is_empty());
@@ -56,17 +95,19 @@ where
     }
 }
 
-fn partition<'a, 'b, 'c, D, DF, T>(
+fn partition<'a, 'b, 'c, C, D, DF, T>(
     s: &'a mut[T],
     dist: &'b DF,
     depth: u32,
     res: &'c Mutex<Vec<&'a mut[T]>>,
+    callback: C,
 )
 where
     T: Send + Sync,
     DF: Send + Sync,
     for<'d, 'e> DF: Fn(&'d T, &'e T) -> D,
     D: PartialOrd,
+    C: Copy + Send + Sync + Fn(u32),
 {
     if depth == 0 || s.len() < 2 {
         res.lock().unwrap().push(s);
@@ -80,8 +121,9 @@ where
     );
     let median_idx = s.len() / 2;
     let (inner, outer) = s.split_at_mut(median_idx);
+    callback(depth);
     debug!("Finished partition at depth {depth}");
     [inner, outer].into_par_iter().for_each(
-        |region| partition(region, dist, depth - 1, res)
+        |region| partition(region, dist, depth - 1, res, callback)
     );
 }

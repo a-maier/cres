@@ -6,7 +6,7 @@ use crate::opt::{FileFormat, parse_compr};
 
 use anyhow::{Result, Context};
 use clap::Parser;
-use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind, Progress}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition, file::File, progress_bar::ProgressBar};
+use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind, Progress}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar};
 use env_logger::Env;
 use log::{info, debug, error, trace};
 use opt::{JetDefinition, is_power_of_two};
@@ -111,7 +111,7 @@ fn main() -> Result<()> {
 
     let depth = log2(opt.partitions);
     let distance = EuclWithScaledPt::new(n64(opt.ptweight));
-    let parts = circle_partition(
+    let parts = circle_partition_with_progress(
         &mut events,
         |e1, e2| distance.distance(e1, e2),
         depth
