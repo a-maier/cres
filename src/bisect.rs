@@ -41,7 +41,7 @@ where
 {
     if let Some((first, rest)) = slice.split_first() {
         debug!("Finding corner");
-        let max = rest.iter().enumerate().max_by(
+        let max = rest.par_iter().enumerate().max_by(
             |(_, a), (_, b)| dist(first, *a).partial_cmp(&dist(first, *b)).unwrap()
         );
         if let Some((pos, _)) = max {
