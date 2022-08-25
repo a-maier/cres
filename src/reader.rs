@@ -32,38 +32,40 @@ impl Iterator for FileReader {
     }
 }
 
-/// Returns an event reader for the file at `path`
-pub fn make_reader<P: AsRef<Path>>(
-    path: P
-) -> Result<FileReader, CreateError> {
-    use crate::hepmc2::FileReader as HepMCReader;
-    let file = File::open(&path)?;
-    let mut r = BufReader::new(file);
-    let bytes = match r.fill_buf() {
-        Ok(bytes) => bytes,
-        Err(_) => {
-            let file = File::open(&path)?;
-            let reader = HepMCReader::new(file)?;
-            return Ok(FileReader(Box::new(reader)))
-        },
-    };
-    if bytes.starts_with(&ROOT_MAGIC_BYTES) {
-        let path = path.as_ref().to_owned();
-        if !cfg!(feature = "ntuple") {
-            return Err(CreateError::RootUnsupported(path));
-        }
-        #[cfg(feature = "ntuple")]
-        {
-            debug!("Read {path:?} as ROOT ntuple");
-            let reader = crate::ntuple::Reader::new(path)?;
-            return Ok(FileReader(Box::new(reader)))
-        }
+impl FileReader {
+    /// Returns an event reader for the file at `path`
+    pub fn new<P: AsRef<Path>>(
+        path: P
+    ) -> Result<FileReader, CreateError> {
+        use crate::hepmc2::FileReader as HepMCReader;
+        let file = File::open(&path)?;
+        let mut r = BufReader::new(file);
+        let bytes = match r.fill_buf() {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                let file = File::open(&path)?;
+                let reader = HepMCReader::new(file)?;
+                return Ok(FileReader(Box::new(reader)))
+            },
+        };
+        if bytes.starts_with(&ROOT_MAGIC_BYTES) {
+            let path = path.as_ref().to_owned();
+            if !cfg!(feature = "ntuple") {
+                return Err(CreateError::RootUnsupported(path));
+            }
+            #[cfg(feature = "ntuple")]
+            {
+                debug!("Read {path:?} as ROOT ntuple");
+                let reader = crate::ntuple::Reader::new(path)?;
+                return Ok(FileReader(Box::new(reader)))
+            }
 
+        }
+        debug!("Read {:?} as HepMC file", path.as_ref());
+        let file = File::open(path)?;
+        let reader = HepMCReader::new(file)?;
+        Ok(FileReader(Box::new(reader)))
     }
-    debug!("Read {:?} as HepMC file", path.as_ref());
-    let file = File::open(path)?;
-    let reader = HepMCReader::new(file)?;
-    Ok(FileReader(Box::new(reader)))
 }
 
 #[derive(Debug, Error)]
@@ -156,7 +158,7 @@ impl CombinedReader<FileReader> {
         P: AsRef<Path>,
     {
         let readers: Result<_, _> = files.into_iter()
-            .map(|f| make_reader(f.as_ref()).map_err(
+            .map(|f| FileReader::new(f.as_ref()).map_err(
                 |err| CreateError::FileError(f.as_ref().to_path_buf(), Box::new(err))
             ))
             .collect();
