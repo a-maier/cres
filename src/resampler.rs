@@ -8,7 +8,7 @@ use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::event::Event;
-use crate::neighbour_search::NaiveNeighbourSearch;
+use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
 use crate::traits::{
@@ -134,7 +134,7 @@ where
 }
 
 /// Construct a `Resampler` object
-pub struct ResamplerBuilder<D, O, S, N=NaiveNeighbourSearch> {
+pub struct ResamplerBuilder<D, O, S, N=TreeSearch> {
     seeds: S,
     distance: D,
     neighbour_search: PhantomData<N>,
@@ -243,7 +243,7 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     }
 }
 
-impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector, NaiveNeighbourSearch>
+impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector, TreeSearch>
 {
     fn default() -> Self {
         Self {
@@ -257,7 +257,7 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
     }
 }
 
-pub struct DefaultResampler<N=NaiveNeighbourSearch> {
+pub struct DefaultResampler<N=TreeSearch> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
@@ -327,7 +327,7 @@ pub struct DefaultResamplerBuilder<N> {
     neighbour_search: PhantomData<N>,
 }
 
-impl Default for DefaultResamplerBuilder<NaiveNeighbourSearch> {
+impl Default for DefaultResamplerBuilder<TreeSearch> {
     fn default() -> Self {
         Self {
             ptweight: 0.,
