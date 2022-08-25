@@ -70,6 +70,8 @@ pub fn make_reader<P: AsRef<Path>>(
 pub enum CreateError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Failed to read from {0}")]
+    FileError(PathBuf, #[source] Box<CreateError>),
 
     #[error("Cannot read ROOT ntuple event file `{0}`. Reinstall cres with `cargo install cres --features = ntuple`")]
     RootUnsupported(PathBuf),
@@ -153,7 +155,11 @@ impl CombinedReader<FileReader> {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let readers: Result<_, _> = files.into_iter().map(make_reader).collect();
+        let readers: Result<_, _> = files.into_iter()
+            .map(|f| make_reader(f.as_ref()).map_err(
+                |err| CreateError::FileError(f.as_ref().to_path_buf(), Box::new(err))
+            ))
+            .collect();
         Ok(Self::new(readers?))
     }
 }
