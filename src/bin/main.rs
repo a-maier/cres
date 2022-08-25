@@ -7,7 +7,7 @@ use crate::opt::{Opt, Search, FileFormat};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use cres::reader::CombinedReader;
+use cres::reader::Reader;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
@@ -60,7 +60,7 @@ where
 
     debug!("settings: {:#?}", opt);
 
-    let reader = CombinedReader::from_files(opt.infiles)?;
+    let reader = Reader::from_files(opt.infiles)?;
 
     let cell_collector = if opt.dumpcells {
         Some(Rc::new(RefCell::new(CellCollector::new())))

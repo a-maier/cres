@@ -97,18 +97,18 @@ pub enum EventReadError {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct CombinedReader<R> {
+pub struct Reader<R> {
     readers: Vec<R>,
     current: usize,
 }
 
-impl<R> CombinedReader<R> {
+impl<R> Reader<R> {
     fn new(readers: Vec<R>) -> Self {
         Self{ readers, current: 0 }
     }
 }
 
-impl<R: Rewind> Rewind for CombinedReader<R> {
+impl<R: Rewind> Rewind for Reader<R> {
     type Error = <R as Rewind>::Error;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
@@ -120,7 +120,7 @@ impl<R: Rewind> Rewind for CombinedReader<R> {
     }
 }
 
-impl<R: Iterator> Iterator for CombinedReader<R> {
+impl<R: Iterator> Iterator for Reader<R> {
     type Item = <R as Iterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -148,7 +148,7 @@ impl<R: Iterator> Iterator for CombinedReader<R> {
     }
 }
 
-impl CombinedReader<FileReader> {
+impl Reader<FileReader> {
     /// Construct a new reader reading from the files with the given names
     pub fn from_files<I, P>(
         files: I
