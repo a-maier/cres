@@ -13,11 +13,10 @@
  * linux) and the generated header `cres.h` to a directory where
  * they can be found by your C compiler.
  *
- * Now compile the example. For gcc use
+ * Now compile the example, for example with
  * ```
- * gcc -o cres examples/cres.c -lcres -lm
+ * cc -o cres examples/cres.c -lcres -lm
  * ```
- * or similar for clang.
  *
  * Finally, run with
  * ```
@@ -52,7 +51,7 @@ int main(int argc, char** argv) {
   opt.jet_def.algorithm = AntiKt;
   opt.jet_def.radius = 0.4;
   opt.jet_def.min_pt = 30.;
-  /* maximum cell size, INFIINITY means effectively unlimited */
+  /* maximum cell size, INFINITY means effectively unlimited */
   opt.max_cell_size = INFINITY;
 
   /* Algorithm for finding nearest-neighbour events */

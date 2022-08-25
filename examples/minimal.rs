@@ -3,7 +3,7 @@
 // set the environment variable `RUST_LOG=info` for command-line output
 use std::error::Error;
 
-use cres::hepmc2::{Converter, Reader, WriterBuilder};
+use cres::hepmc2::{Converter, WriterBuilder};
 use cres::prelude::*;
 
 use env_logger;
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let outfile = args.next().unwrap();
 
     // How to read events
-    let reader = Reader::from_filenames(vec![infile])?;
+    let reader = Reader::from_files(vec![infile])?;
 
     // How to convert into internal event format
     // To perform jet clustering use `ClusteringConverter` instead

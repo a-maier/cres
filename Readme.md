@@ -49,18 +49,29 @@ The most important options are
 - `--max-cell-size` can be used to limit the size of the generated
   cells. This ensures that weights are only transferred between events
   which are sufficiently similar. The downside is that not all
-  negative event weights will be removed. If you use this option, we
-  recommend values that are not too much smaller than the median
-  radius that `cres` shows during a standard run.
+  negative event weights will be removed.
+
+  Cell resampling is much faster with a small cell size limit. It is
+  therefore recommended, to start with a small value, for example 10,
+  and gradually increase the value if too many negative weights are
+  left.
+
+- `--partitions` the initial sample is divided into the given number
+  of partitions. The number of partitions has to be a power of two.
+  On the one hand, values larger than one accelerate the
+  nearest-neighbour search and are necessary to parallelise the
+  default search strategy. On the other hand, nearest neighbours may
+  be missed for cells close to partitions boundaries.
+
+  Recommended values are 1 for slow, but exact resampling, or a number
+  up to about twice the number of cores for faster approximate
+  resampling. Increasing the number of partitions is better than
+  increasing the number of runs with different event input files.
 
 - `--ptweight` specifies how much transverse momenta affect distances
   between particles with momenta p and q according to the formula
 
       d(p, q) = \sqrt{ ptweight^2 (p_\perp - q_\perp)^2 + \sum (p_i - q_i)^2 }
-
-- `--strategy` sets the order in which cell seeds are selected. The
-  chosen strategy can affect generation times and cell sizes
-  significantly. It is not clear which strategy is best in general.
 
 - With `--minweight` events are also unweighted in addition to the
   resampling.  Events with weight `w < minweight` are discarded with
@@ -68,6 +79,23 @@ The most important options are
   otherwise. Finally, all event weights are rescaled to exactly
   preserve the original sum of weights. The seed for unweighting can
   be chosen with the `--seed` option.
+
+There are too many options
+--------------------------
+
+To avoid cluttering the command line, options can be saved in an
+argfile. Each line should contain exactly one option, and option name
+and value have to be separated by '='. For example:
+
+```
+--jetalgorithm=anti-kt
+--jetradius=0.4
+--jetpt=30
+```
+
+The argfile can be used like this:
+
+    cres @argfile -o OUT.HEPMC2 IN.HEPMC2
 
 Environment variables
 ---------------------
@@ -86,6 +114,18 @@ samples, limiting the number of threads can be faster. You can set the
 number of threads with the `--threads` command line option or with the
 `RAYON_NUM_THREADS` environment variable.
 
+Support for ntuple files
+------------------------
+
+To read and write [ROOT ntuple files](https://arxiv.org/abs/1310.7439),
+ROOT has to be installed and `root-config` has to be in the executable
+path. To install `cres` with ntuple support, run
+
+    cargo install cres --features ntuple
+
+Input files are recognised automatically, the output file format can
+be chosen with the `--outformat` flag.
+
 Use as a library
 ----------------
 
@@ -93,4 +133,4 @@ For full flexibility like custom distance functions `cres` can be used
 as a library from Rust and C. For examples, see the `examples`
 subdirectory. The Rust API is documented on
 [docs.rs](https://docs.rs/crate/cres/). The C API is still limited and
-only available on unixoid platforms.
+only available on unixoid platforms. It will be extended on request.
