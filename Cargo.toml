@@ -42,6 +42,7 @@ num-traits = "0.2"
 strum = { version = "0.24", features = ["derive"] }
 pathfinding = "3.0"
 itertools = "0.10"
+argfile = "0.1.4"
 
 [lib]
 name = "cres"

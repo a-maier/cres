@@ -172,6 +172,15 @@ pub(crate) struct Opt {
     #[clap(long, short, parse(from_os_str))]
     pub(crate) outfile: PathBuf,
 
+    /// Configuration file.
+    ///
+    /// Name of a file containing default settings for command line
+    /// options.  The format is the same as when passing these options
+    /// via command line, If settings are specified both in the file
+    /// and via command line the latter take precedence.
+    #[clap(long, short, parse(from_os_str))]
+    pub(crate) configfile: Option<PathBuf>,
+
     #[clap(flatten)]
     pub(crate) jet_def: JetDefinition,
 
@@ -186,7 +195,7 @@ pub(crate) struct Opt {
     #[clap(short = 'd', long)]
     pub(crate) dumpcells: bool,
 
-    #[clap(short = 'c', long, parse(try_from_str = parse_compr),
+    #[clap(long, parse(try_from_str = parse_compr),
                 help = "Compress output file.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.

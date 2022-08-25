@@ -25,7 +25,12 @@ use rand_xoshiro::Xoshiro256Plus;
 use noisy_float::prelude::*;
 
 fn main() -> Result<()> {
-    let opt = Opt::parse();
+    let args = argfile::expand_args_from(
+        std::env::args_os(),
+        argfile::parse_fromfile,
+        argfile::PREFIX,
+    ).with_context(|| "Failed to read argument file")?;
+    let opt = Opt::parse_from(args);
     match opt.search {
         Search::Naive => run_main::<NaiveNeighbourSearch>(opt),
         Search::Tree => run_main::<TreeSearch>(opt),

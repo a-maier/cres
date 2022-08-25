@@ -70,7 +70,12 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
 }
 
 fn main() -> Result<()> {
-    let opt = Opt::parse();
+    let args = argfile::expand_args_from(
+        std::env::args_os(),
+        argfile::parse_fromfile,
+        argfile::PREFIX,
+    ).with_context(|| "Failed to read argument file")?;
+    let opt = Opt::parse_from(args);
 
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
