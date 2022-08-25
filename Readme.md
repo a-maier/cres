@@ -20,6 +20,17 @@ system, run
 Precompiled executables are available on
 [hepforge](https://cres.hepforge.org/).
 
+To generate shell command completion, run
+
+    cres-generate-shell-completion SHELL
+
+For bash and fish, command completion should work upon the next login.
+For other shells, the completion code is written to standard
+output. Consult your shell's documentation if you are unsure what to
+do with it. To list the supported shells, run
+
+    cres-generate-shell-completion --help
+
 Usage
 -----
 

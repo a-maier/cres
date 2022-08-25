@@ -42,7 +42,9 @@ num-traits = "0.2"
 strum = { version = "0.24", features = ["derive"] }
 pathfinding = "3.0"
 itertools = "0.10"
-argfile = "0.1.4"
+argfile = "0.1"
+clap_complete = "3.2"
+dirs = "4.0"
 
 [lib]
 name = "cres"
@@ -56,6 +58,10 @@ path = "src/bin/main.rs"
 [[bin]]
 name = "cres-partition"
 path = "src/bin/partition.rs"
+
+[[bin]]
+name = "cres-generate-shell-completions"
+path = "src/bin/shell_completion.rs"
 
 [features]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple"]
