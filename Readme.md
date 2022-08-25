@@ -63,7 +63,7 @@ The most important options are
   negative event weights will be removed.
 
   Cell resampling is much faster with a small cell size limit. It is
-  therefore recommended, to start with a small value, for example 10,
+  therefore recommended to start with a small value, for example 10,
   and gradually increase the value if too many negative weights are
   left.
 
