@@ -6,7 +6,7 @@ use cres::compression::Compression;
 use cres::cluster::JetAlgorithm;
 use cres::seeds::Strategy;
 
-use clap::{ArgEnum, Parser};
+use clap::{ValueEnum, Parser};
 use lazy_static::lazy_static;
 use regex::Regex;
 use thiserror::Error;
@@ -165,7 +165,7 @@ impl std::convert::From<LeptonDefinition> for cres::cluster::JetDefinition {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub(crate) enum Search {
     Tree,
     Naive
@@ -182,7 +182,7 @@ pub(crate) struct UnweightOpt {
     pub(crate) seed: u64,
 }
 
-#[derive(Debug, Display, Default, Copy, Clone, ArgEnum, EnumString)]
+#[derive(Debug, Display, Default, Copy, Clone, ValueEnum, EnumString)]
 #[clap(rename_all = "lower")]
 pub(crate) enum FileFormat {
     #[default]
@@ -195,7 +195,7 @@ pub(crate) enum FileFormat {
 #[clap(about, author, version)]
 pub(crate) struct Opt {
     /// Output file.
-    #[clap(long, short, parse(from_os_str))]
+    #[clap(long, short, value_parser)]
     pub(crate) outfile: PathBuf,
 
     /// Configuration file.
@@ -204,7 +204,7 @@ pub(crate) struct Opt {
     /// options.  The format is the same as when passing these options
     /// via command line, If settings are specified both in the file
     /// and via command line the latter take precedence.
-    #[clap(long, short, parse(from_os_str))]
+    #[clap(long, short, value_parser)]
     pub(crate) configfile: Option<PathBuf>,
 
     #[clap(flatten)]
@@ -224,7 +224,7 @@ pub(crate) struct Opt {
     #[clap(short = 'd', long)]
     pub(crate) dumpcells: bool,
 
-    #[clap(long, parse(try_from_str = parse_compr),
+    #[clap(long, value_parser = parse_compr,
                 help = "Compress output file.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
@@ -232,7 +232,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
 
     /// Output format.
-    #[clap(arg_enum, long, default_value_t)]
+    #[clap(value_enum, long, default_value_t)]
     pub(crate) outformat: FileFormat,
 
     /// Verbosity level
@@ -246,7 +246,7 @@ Possible values with increasing amount of output are
     )]
     pub(crate) loglevel: String,
 
-    #[clap(long, default_value = "1", validator = is_power_of_two,
+    #[clap(long, default_value = "1", value_parser = is_power_of_two,
         help = "Number of partitions.
 
 The input event sample is split into the given number of partitions,
@@ -259,12 +259,12 @@ separately in parallel."
     ///
     /// Note that the 'tree' search is not parallelised. To benefit from
     /// parallelisation use the `--partitions` options in addition.
-    #[clap(arg_enum, short, long, default_value = "tree")]
+    #[clap(value_enum, short, long, default_value = "tree")]
     pub(crate) search: Search,
 
     #[clap(
         long, default_value = "most_negative",
-        parse(try_from_str = parse_strategy),
+        value_parser = parse_strategy,
         help = "Strategy for choosing cell seeds. Possible values are
 'least_negative': event with negative weight closest to zero,
 'most_negative' event with the lowest weight,
@@ -290,7 +290,7 @@ variable."
     pub(crate) max_cell_size: Option<f64>,
 
     /// Input files
-    #[clap(name = "INFILES", parse(from_os_str))]
+    #[clap(name = "INFILES", value_parser)]
     pub(crate) infiles: Vec<PathBuf>,
 }
 

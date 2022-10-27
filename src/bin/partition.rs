@@ -20,14 +20,14 @@ struct Opt {
     ///
     /// Output is written to prefixX.suffix, where X is a number and
     /// suffix is chosen depending on the output format.
-    #[clap(long, short, parse(from_os_str))]
+    #[clap(long, short, value_parser)]
     outfile: PathBuf,
 
     /// Output format
-    #[clap(arg_enum, long, default_value_t)]
+    #[clap(value_enum, long, default_value_t)]
     outformat: FileFormat,
 
-    #[clap(short = 'c', long, parse(try_from_str = parse_compr),
+    #[clap(short = 'c', long, value_parser = parse_compr,
                 help = "Compress hepmc output files.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
@@ -49,7 +49,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     /// The input event sample is split into the given number of
     /// partitions, which has to be a power of two. Each partition is
     /// written to its own output file.
-    #[clap(long, validator = is_power_of_two)]
+    #[clap(long, value_parser = is_power_of_two)]
     partitions: u32,
 
     /// Number of threads
@@ -61,7 +61,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     threads: usize,
 
     /// Input files
-    #[clap(name = "INFILES", parse(from_os_str))]
+    #[clap(name = "INFILES", value_parser)]
     infiles: Vec<PathBuf>,
 
     /// Weight of transverse momentum when calculating particle momentum distances.
