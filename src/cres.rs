@@ -22,7 +22,7 @@
 //! use cres::prelude::*;
 //!
 //! // Define `reader`, `converter`, `resampler`, `unweighter`, `writer`
-//!# let reader = cres::hepmc2::Reader::from_filenames(vec![""])?;
+//!# let reader = Reader::from_files(vec![""])?;
 //!# let converter = cres::hepmc2::Converter::new();
 //!# let resampler = cres::resampler::ResamplerBuilder::default().build();
 //!# let writer = cres::hepmc2::WriterBuilder::default().to_filename("")?.build()?;
