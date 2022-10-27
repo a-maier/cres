@@ -5,7 +5,7 @@ use std::error::Error;
 
 use cres::distance::Distance;
 use cres::event::Event;
-use cres::hepmc2::{Converter, Reader, WriterBuilder};
+use cres::hepmc2::{Converter, WriterBuilder};
 use cres::prelude::*;
 
 use env_logger;
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let infile = args.next().unwrap();
     let outfile = args.next().unwrap();
 
-    let reader = Reader::from_filenames(vec![infile])?;
+    let reader = Reader::from_files(vec![infile])?;
 
     let converter = Converter::new();
 
