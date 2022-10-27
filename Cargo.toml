@@ -68,7 +68,7 @@ ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple"]
 
 [build-dependencies]
 anyhow = "1.0"
-bindgen = { version = "0.60", optional = true }
+bindgen = { version = "0.61", optional = true }
 cbindgen = "0.24"
 cc = { version = "1.0", optional = true }
 ntuple = { version = "0.5", optional = true, git = "https://github.com/a-maier/ntuple.git" }
