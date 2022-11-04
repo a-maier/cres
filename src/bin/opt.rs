@@ -246,7 +246,7 @@ Possible values with increasing amount of output are
     )]
     pub(crate) loglevel: String,
 
-    #[clap(long, default_value = "1", value_parser = is_power_of_two,
+    #[clap(long, default_value = "1", value_parser = parse_npartitions,
         help = "Number of partitions.
 
 The input event sample is split into the given number of partitions,
@@ -294,10 +294,10 @@ variable."
     pub(crate) infiles: Vec<PathBuf>,
 }
 
-pub(crate) fn is_power_of_two(s: &str) -> Result<(), String> {
+pub(crate) fn parse_npartitions(s: &str) -> Result<u32, String> {
     match u32::from_str(s) {
         Ok(n) => if n.is_power_of_two() {
-            Ok(())
+            Ok(n)
         } else {
             Err("has to be a power of two".to_string())
         }
