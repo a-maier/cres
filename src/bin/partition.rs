@@ -9,7 +9,7 @@ use clap::Parser;
 use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::Reader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind, Progress}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar};
 use env_logger::Env;
 use log::{info, debug, error, trace};
-use opt::{JetDefinition, is_power_of_two};
+use opt::{JetDefinition, parse_npartitions};
 use noisy_float::prelude::*;
 
 // TODO: code duplication with opt::Opt
@@ -49,7 +49,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     /// The input event sample is split into the given number of
     /// partitions, which has to be a power of two. Each partition is
     /// written to its own output file.
-    #[clap(long, value_parser = is_power_of_two)]
+    #[clap(long, value_parser = parse_npartitions)]
     partitions: u32,
 
     /// Number of threads
