@@ -126,18 +126,18 @@ where
     }
 }
 
-fn partition<'a, 'b, 'c, C, D, DF, T>(
-    s: &'a mut[(D, T)],
+fn partition<C, D, DF, T>(
+    s: &mut[(D, T)],
     cur_range: Range<usize>,
-    dist: &'b DF,
+    dist: &DF,
     depth: u32,
-    res: &'c Mutex<Vec<Range<usize>>>,
+    res: &Mutex<Vec<Range<usize>>>,
     callback: C,
 )
 where
     T: Send + Sync,
     DF: Send + Sync,
-    for<'d, 'e> DF: Fn(&'d T, &'e T) -> D,
+    for<'a, 'b> DF: Fn(&'a T, &'b T) -> D,
     D: Copy + Ord + Send + Sync,
     C: Copy + Send + Sync + Fn(u32),
 {

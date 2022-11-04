@@ -87,7 +87,7 @@ where
         let depth = log2(self.num_partitions);
         let parts = circle_partition_with_progress(
             &mut events,
-            |e1, e2| (&self.distance).distance(e1, e2),
+            |e1, e2| self.distance.distance(e1, e2),
             depth
         );
         debug_assert_eq!(parts.len(), self.num_partitions as usize);
