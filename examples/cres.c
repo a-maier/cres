@@ -7,7 +7,11 @@
  * ```
  * cargo build --release
  * ```
- * in the directory containing `Cargo.toml`.
+ * in the directory containing `Cargo.toml`. To compile with support for
+ * ROOT ntuple files instead use
+ * ```
+ * cargo build --release --features=ntuple
+ * ```
  *
  * Then copy the compiled libraries (`libcres.a` and `libcres.so` on
  * linux) and the generated header `cres.h` to a directory where
@@ -54,8 +58,10 @@ int main(int argc, char** argv) {
   /* maximum cell size, INFINITY means effectively unlimited */
   opt.max_cell_size = INFINITY;
 
-  /* Algorithm for finding nearest-neighbour events */
+  /* algorithm for finding nearest-neighbour events */
   opt.neighbour_search = Tree;
+  /* number of partitions (a power of two) */
+  opt.num_partitions = 1;
 
   /* distance function
    *
