@@ -1,3 +1,5 @@
+// clippy warns against casts e.g. from `c_double` to `f64` in 1.67.1
+#![allow(clippy::unnecessary_cast)]
 use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};

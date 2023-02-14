@@ -141,7 +141,7 @@ where
     D: Copy + Ord + Send + Sync,
     C: Copy + Send + Sync + Fn(u32),
 {
-    debug_assert_eq!((cur_range.end - cur_range.start) as usize, s.len());
+    debug_assert_eq!(cur_range.end - cur_range.start, s.len());
     if depth == 0 || s.len() < 2 {
         res.lock().unwrap().push(cur_range);
         return;

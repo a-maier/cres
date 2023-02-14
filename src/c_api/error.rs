@@ -54,7 +54,7 @@ fn cres_last_err_internal(buf: *mut c_char, buflen: usize) -> i32 {
         if buflen == 0 {
             return (1 + msg_len) as i32;
         }
-        let len = std::cmp::min(msg_len, (buflen as usize) - 1);
+        let len = std::cmp::min(msg_len, buflen - 1);
         unsafe {
             std::ptr::copy_nonoverlapping(
                 msg.as_bytes().as_ptr() as *const c_char,

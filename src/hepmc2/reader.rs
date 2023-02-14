@@ -1,4 +1,4 @@
-use std::io::{Seek, BufRead, BufReader, SeekFrom};
+use std::io::{Seek, BufRead, BufReader};
 
 
 use crate::{traits::{TryClone, Rewind}, reader::{RewindError, EventReadError}, file::File, auto_decompress::auto_decompress};
@@ -23,7 +23,7 @@ impl Rewind for FileReader {
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         use RewindError::*;
-        self.source.seek(SeekFrom::Start(0))?;
+        self.source.rewind()?;
         let cloned_source = self.source.try_clone().map_err(CloneError)?;
         self.reader = hepmc2::Reader::new(auto_decompress(BufReader::new(cloned_source)));
 

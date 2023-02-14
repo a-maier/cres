@@ -11,13 +11,17 @@ use env_logger::Env;
 ///
 /// The name of the environment variable must be a valid utf8 string.
 ///
+/// # Safety
+///
+/// The passed pointer must point to a valid null-terminated C string.
+///
 /// # Return values
 ///
 /// - `0`: success
 /// - `-1`: rust panic, check with `cres_get_last_err` or `cres_print_last_err`
 #[no_mangle]
 #[must_use]
-pub extern "C" fn cres_logger_from_env(env_var: *const c_char) -> i32 {
+pub unsafe extern "C" fn cres_logger_from_env(env_var: *const c_char) -> i32 {
     let res = std::panic::catch_unwind(|| {
         let env_var = unsafe { CStr::from_ptr(env_var) };
         let env_var = OsStr::from_bytes(env_var.to_bytes());
