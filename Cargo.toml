@@ -1,6 +1,6 @@
 [package]
 name = "cres"
-version = "0.4.3"
+version = "0.4.4"
 description = "Cell resampling for collider events"
 authors = ["Andreas Maier <andreas.martin.maier@desy.de>"]
 edition = "2021"
