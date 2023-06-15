@@ -59,6 +59,9 @@ pub mod seeds;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
+/// LesHouches Event File interface
+//#[cfg(feature = "lhef")]
+pub mod lhef;
 /// ntuple interface
 #[cfg(feature = "ntuple")]
 pub mod ntuple;
