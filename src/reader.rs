@@ -4,7 +4,7 @@ use hepmc2::reader::LineParseError;
 use log::debug;
 use thiserror::Error;
 
-use crate::{traits::Rewind, file::File};
+use crate::{traits::Rewind, file::File, auto_decompress::auto_decompress};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -39,7 +39,7 @@ impl FileReader {
     ) -> Result<FileReader, CreateError> {
         use crate::hepmc2::FileReader as HepMCReader;
         let file = File::open(&path)?;
-        let mut r = BufReader::new(file);
+        let mut r = auto_decompress(BufReader::new(file));
         let bytes = match r.fill_buf() {
             Ok(bytes) => bytes,
             Err(_) => {
