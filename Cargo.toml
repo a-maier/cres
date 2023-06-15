@@ -30,6 +30,7 @@ logbar = "0.1"
 lz4 = "1.23"
 noisy_float = "0.2"
 ntuple = { version = "0.7", optional = true, features = ["hepmc2"] }
+particle_id = "0.2.0"
 permutohedron = "0.2"
 rand = "0.8"
 rand_xoshiro = "0.6"

@@ -1,4 +1,4 @@
-use crate::cluster::{JetDefinition, is_parton, is_electron, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON};
+use crate::cluster::{JetDefinition, is_parton, is_electron, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON, is_hadron};
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
@@ -47,7 +47,7 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
                 .into_iter()
                 .filter(|p| p.status == OUTGOING_STATUS);
             for out in outgoing {
-                if is_parton(out.id) {
+                if is_parton(out.id) || is_hadron(out.id) {
                     partons.push(out.p.0.into());
                 } else if self.is_clustered_to_lepton(out.id) {
                     leptons.push(out.p.0.into());

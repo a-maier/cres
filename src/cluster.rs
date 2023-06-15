@@ -1,6 +1,7 @@
 use std::{fmt::{Display, self}, str::FromStr};
 
 use jetty::{PseudoJet, cluster_if, anti_kt_f, kt_f, cambridge_aachen_f};
+use particle_id::ParticleID;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -51,6 +52,10 @@ pub struct JetDefinition {
 
 pub(crate) fn is_parton(id: i32) -> bool {
     id.abs() <= 5 || id == 21
+}
+
+pub(crate) fn is_hadron(id: i32) -> bool {
+    particle_id::hadrons::HADRONS.contains(&ParticleID::new(id))
 }
 
 pub(crate) fn is_electron(id: i32) -> bool {
