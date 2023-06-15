@@ -1,7 +1,7 @@
 use std::{fmt::{Display, self}, str::FromStr};
 
 use jetty::{PseudoJet, cluster_if, anti_kt_f, kt_f, cambridge_aachen_f};
-use particle_id::ParticleID;
+use particle_id::{ParticleID, sm_elementary_particles::{photon, electron, gluon}};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -51,7 +51,7 @@ pub struct JetDefinition {
 }
 
 pub(crate) fn is_parton(id: i32) -> bool {
-    id.abs() <= 5 || id == 21
+    id.abs() <= 5 || id == gluon.id()
 }
 
 pub(crate) fn is_hadron(id: i32) -> bool {
@@ -59,11 +59,11 @@ pub(crate) fn is_hadron(id: i32) -> bool {
 }
 
 pub(crate) fn is_electron(id: i32) -> bool {
-    id == 11
+    id == electron.id()
 }
 
 pub(crate) fn is_photon(id: i32) -> bool {
-    id == 22
+    id == photon.id()
 }
 
 pub(crate) const PID_JET: i32 = 81;
