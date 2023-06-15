@@ -59,7 +59,14 @@ impl FileReader {
                 let reader = crate::ntuple::Reader::new(path)?;
                 return Ok(FileReader(Box::new(reader)))
             }
-
+        }
+        #[cfg(feature = "lhef")]
+        if bytes.starts_with(b"<LesHouchesEvents") {
+            use crate::lhef::FileReader as LHEFReader;
+            debug!("Read {:?} as LHEF file", path.as_ref());
+            let file = File::open(path)?;
+            let reader = LHEFReader::new(file)?;
+            return Ok(FileReader(Box::new(reader)));
         }
         debug!("Read {:?} as HepMC file", path.as_ref());
         let file = File::open(path)?;
@@ -94,6 +101,9 @@ pub enum EventReadError {
     #[cfg(feature = "ntuple")]
     #[error("Error reading ntuple event: {0}")]
     NTupleError(#[from] ::ntuple::reader::ReadError),
+    // #[cfg(feature = "lhef")]
+    #[error("Error reading LHEF event: {0}")]
+    LHEFError(#[from] ::lhef::reader::ReadError),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -173,5 +183,8 @@ pub trait EventFileReader:
 
 #[cfg(feature = "ntuple")]
 impl EventFileReader for crate::ntuple::Reader {}
+
+#[cfg(feature = "lhef")]
+impl EventFileReader for crate::lhef::FileReader {}
 
 impl EventFileReader for crate::hepmc2::FileReader {}

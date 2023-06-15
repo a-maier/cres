@@ -5,11 +5,10 @@ use std::fmt::{Debug, Display};
 use hepmc2::Event;
 use hepmc2::event::{Particle, Vertex};
 use lhef::HEPEUP;
-use lhef::reader::ReadError;
 
 use crate::auto_decompress::auto_decompress;
 use crate::file::File;
-use crate::reader::RewindError;
+use crate::reader::{RewindError, EventReadError};
 use crate::traits::{Rewind, TryClone};
 
 pub struct FileReader {
@@ -48,12 +47,15 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<Event, ReadError>;
+    type Item = Result<Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.hepeup()
             .transpose()
-            .map(|r| r.map(|hepeup| into_event(hepeup)))
+            .map(|r| match r{
+                Ok(hepeup) => Ok(into_event(hepeup)),
+                Err(err) => Err(err.into()),
+            })
     }
 }
 
