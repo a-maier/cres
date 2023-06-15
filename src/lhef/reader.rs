@@ -68,6 +68,9 @@ fn into_event(hepeup: HEPEUP) -> Event {
     const LHEF_INCOMING: i32 = -1;
     const LHEF_OUTGOING: i32 = 1;
 
+    const HEPMC_INCOMING: i32 = 4;
+    const HEPMC_OUTGOING: i32 = 1;
+
     assert!(hepeup.NUP >= 0);
     let nparticles = hepeup.NUP as usize;
     let mut incoming = Vec::with_capacity(2);
@@ -75,15 +78,21 @@ fn into_event(hepeup: HEPEUP) -> Event {
     for i in 0..nparticles {
         let p = hepeup.PUP[i];
         let p = [p[3], p[0], p[1], p[2]];
-        let p = Particle {
+        let mut p = Particle {
             id: hepeup.IDUP[i],
             p: hepmc2::event::FourVector(p),
             m: hepeup.PUP[i][4],
             ..Default::default()
         };
         match hepeup.ISTUP[i] {
-            LHEF_INCOMING => incoming.push(p),
-            LHEF_OUTGOING => outgoing.push(p),
+            LHEF_INCOMING => {
+                p.status = HEPMC_INCOMING;
+                incoming.push(p)
+            },
+            LHEF_OUTGOING => {
+                p.status = HEPMC_OUTGOING;
+                outgoing.push(p)
+            },
             _ => { } // ignore intermediate particles
         }
     }
