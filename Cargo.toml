@@ -65,6 +65,7 @@ name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 
 [features]
+default = ["lhef"]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple"]
 
 [build-dependencies]
