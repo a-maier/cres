@@ -1,7 +1,7 @@
 use std::{fmt::{Display, self}, str::FromStr};
 
 use jetty::{PseudoJet, cluster_if, anti_kt_f, kt_f, cambridge_aachen_f};
-use particle_id::{ParticleID, sm_elementary_particles::{photon, electron, gluon}};
+use particle_id::{ParticleID, sm_elementary_particles::{photon, electron, gluon, muon}};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -58,8 +58,8 @@ pub(crate) fn is_hadron(id: i32) -> bool {
     particle_id::hadrons::HADRONS.contains(&ParticleID::new(id))
 }
 
-pub(crate) fn is_electron(id: i32) -> bool {
-    id == electron.id()
+pub(crate) fn is_light_lepton(id: i32) -> bool {
+    id == electron.id() || id == muon.id()
 }
 
 pub(crate) fn is_photon(id: i32) -> bool {
