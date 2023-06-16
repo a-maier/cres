@@ -198,15 +198,6 @@ pub(crate) struct Opt {
     #[clap(long, short, value_parser)]
     pub(crate) outfile: PathBuf,
 
-    /// Configuration file.
-    ///
-    /// Name of a file containing default settings for command line
-    /// options.  The format is the same as when passing these options
-    /// via command line, If settings are specified both in the file
-    /// and via command line the latter take precedence.
-    #[clap(long, short, value_parser)]
-    pub(crate) configfile: Option<PathBuf>,
-
     #[clap(flatten)]
     pub(crate) jet_def: JetDefinition,
 
