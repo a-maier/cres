@@ -64,6 +64,9 @@ fn into_event(
     heprup: &HEPRUP,
     hepeup: HEPEUP
 ) -> Event {
+    // vertex id most be any non-positive number according to HepMC standard?
+    const VTX_ID: i32 = -1;
+
     const LHEF_INCOMING: i32 = -1;
     const LHEF_OUTGOING: i32 = 1;
 
@@ -86,6 +89,7 @@ fn into_event(
         match hepeup.ISTUP[i] {
             LHEF_INCOMING => {
                 p.status = HEPMC_INCOMING;
+                p.end_vtx = VTX_ID;
                 incoming.push(p)
             },
             LHEF_OUTGOING => {
@@ -98,6 +102,7 @@ fn into_event(
     let vertices = vec![Vertex {
         particles_in: incoming,
         particles_out: outgoing,
+        barcode: VTX_ID,
         ..Default::default()
     }];
     let xs_err = heprup.XERRUP.iter()
