@@ -48,7 +48,9 @@ impl<D, N, O, S> Resampler<D, N, O, S> {
     fn print_wt_sum(&self, events: &[Event]) {
         let sum_wt: N64 = events.iter().map(|e| e.weight).sum();
         let sum_wtsqr: N64 = events.iter().map(|e| e.weight * e.weight).sum();
+        let sum_neg_wt: N64 = events.iter().map(|e| e.weight).filter(|&w| w < 0.).sum();
         info!("Initial sum of weights: {sum_wt:.3e} ± {:.3e}", sum_wtsqr.sqrt());
+        info!("Negative weight fraction: {:.3}", -sum_neg_wt / (sum_wt - sum_neg_wt * 2.));
     }
 }
 
