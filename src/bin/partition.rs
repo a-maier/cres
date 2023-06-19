@@ -100,7 +100,7 @@ fn main() -> Result<()> {
     } else {
         ProgressBar::default()
     };
-    let mut converter = ClusteringConverter::new(opt.jet_def.into());
+    let converter = ClusteringConverter::new(opt.jet_def.into());
     let events: Result<Result<Vec<_>, _>, _> = (&mut reader)
         .map(|ev| ev.map(|e| converter.try_convert(e)))
         .inspect(|_| event_progress.inc(1))

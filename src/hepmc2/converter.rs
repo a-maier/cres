@@ -35,7 +35,7 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
     type Error = std::convert::Infallible;
 
     fn try_convert(
-        &mut self,
+        &self,
         event: hepmc2::Event,
     ) -> Result<Event, Self::Error> {
         let mut partons = Vec::new();
@@ -100,7 +100,7 @@ impl TryConvert<hepmc2::Event, Event> for Converter {
     type Error = std::convert::Infallible;
 
     fn try_convert(
-        &mut self,
+        &self,
         event: hepmc2::Event,
     ) -> Result<Event, Self::Error> {
         let mut builder = EventBuilder::new();

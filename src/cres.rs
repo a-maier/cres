@@ -163,7 +163,7 @@ where
 
         self.reader.rewind().map_err(RewindErr)?;
 
-        let converter = &mut self.converter;
+        let converter = &self.converter;
         let expected_nevents = self.reader.size_hint().0;
         let event_progress = if expected_nevents > 0 {
             ProgressBar::new(expected_nevents as u64, "events read")

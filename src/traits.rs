@@ -19,7 +19,7 @@ pub trait Rewind {
 pub trait TryConvert<From, To> {
     type Error;
 
-    fn try_convert(&mut self, f: From) -> Result<To, Self::Error>;
+    fn try_convert(&self, f: From) -> Result<To, Self::Error>;
 }
 
 /// Resample events
