@@ -2,6 +2,7 @@ use crate::cluster::{JetDefinition, is_parton, is_light_lepton, cluster, PID_JET
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
+use hepmc2::event::EnergyUnit;
 use noisy_float::prelude::*;
 
 const OUTGOING_STATUS: i32 = 1;
@@ -46,7 +47,14 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
                 .particles_out
                 .into_iter()
                 .filter(|p| p.status == OUTGOING_STATUS);
-            for out in outgoing {
+            for mut out in outgoing {
+                // rescale all energies to GeV
+                if event.energy_unit == EnergyUnit::MEV {
+                    for p in &mut out.p.0 {
+                        *p /= 1000.;
+                    }
+                }
+                let out = out;
                 if is_parton(out.id) || is_hadron(out.id) {
                     partons.push(out.p.0.into());
                 } else if self.is_clustered_to_lepton(out.id) {
