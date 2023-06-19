@@ -3,8 +3,8 @@ use std::io::{Error, ErrorKind, BufReader, BufRead, Seek};
 use std::fmt::{Debug, Display};
 
 use hepmc2::Event;
-use hepmc2::event::{Particle, Vertex};
-use lhef::HEPEUP;
+use hepmc2::event::{Particle, Vertex, CrossSection};
+use lhef::{HEPEUP, HEPRUP};
 
 use crate::auto_decompress::auto_decompress;
 use crate::file::File;
@@ -53,18 +53,17 @@ impl Iterator for FileReader {
         self.reader.hepeup()
             .transpose()
             .map(|r| match r{
-                Ok(hepeup) => Ok(into_event(hepeup)),
+                Ok(hepeup) => Ok(into_event(self.reader.heprup(), hepeup)),
                 Err(err) => Err(err.into()),
             })
     }
 }
 
 // convert to HepMC event
-//
-// We only use this because a reader (currently) has to return a hepmc2 event.
-// Note that we don't construct the full information to write a valid
-// event record. The vertex barcode (and maybe more) is missing.
-fn into_event(hepeup: HEPEUP) -> Event {
+fn into_event(
+    heprup: &HEPRUP,
+    hepeup: HEPEUP
+) -> Event {
     const LHEF_INCOMING: i32 = -1;
     const LHEF_OUTGOING: i32 = 1;
 
@@ -101,6 +100,14 @@ fn into_event(hepeup: HEPEUP) -> Event {
         particles_out: outgoing,
         ..Default::default()
     }];
+    let xs_err = heprup.XERRUP.iter()
+        .map(|e| e * e)
+        .sum::<f64>()
+        .sqrt();
+    let xs = CrossSection{
+        cross_section: heprup.XSECUP.iter().sum(),
+        cross_section_error: xs_err,
+    };
     Event {
         number: hepeup.IDRUP,
         scale: hepeup.SCALUP,
@@ -108,6 +115,7 @@ fn into_event(hepeup: HEPEUP) -> Event {
         alpha_qed: hepeup.AQEDUP,
         weights: vec![hepeup.XWGTUP],
         vertices,
+        xs,
         ..Default::default()
     }
 }
