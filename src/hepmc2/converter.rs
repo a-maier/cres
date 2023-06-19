@@ -55,7 +55,7 @@ impl TryConvert<hepmc2::Event, Event> for ClusteringConverter {
                     }
                 }
                 let out = out;
-                if is_parton(out.id) || is_hadron(out.id) {
+                if is_parton(out.id) || is_hadron(out.id.abs()) {
                     partons.push(out.p.0.into());
                 } else if self.is_clustered_to_lepton(out.id) {
                     leptons.push(out.p.0.into());
