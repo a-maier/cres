@@ -132,7 +132,9 @@ pub enum CresError<E1, E2, E3, E4, E5, E6> {
 impl<R, C, S, U, W, E, Ev> Cres<R, C, S, U, W>
 where
     R: Iterator<Item = Result<Ev, E>> + Rewind,
-    C: TryConvert<Ev, Event>,
+    C: Sync + TryConvert<Ev, Event>,
+    <C as TryConvert<Ev, Event>>::Error: Send,
+    Ev: Send,
     S: Resample,
     U: Unweight,
     W: Write<R>,
@@ -170,15 +172,26 @@ where
         } else {
             ProgressBar::default()
         };
-        let events: Result<Vec<_>, _> = (&mut self.reader)
-            .map(|ev| match ev {
-                Ok(ev) => converter.try_convert(ev).map_err(ConversionErr),
-                Err(err) => Err(ReadErr(err)),
-            })
-            .inspect(|_| event_progress.inc(1))
-            .collect();
+
+        let mut events = Vec::new();
+        const CHUNK_SIZE: usize = 1000;
+        let mut full_chunk_read = true;
+        while full_chunk_read {
+            let event_chunk: Result<Vec<_>, _> = (&mut self.reader)
+                .take(CHUNK_SIZE)
+                .collect();
+            let event_chunk = event_chunk.map_err(ReadErr)?;
+            full_chunk_read = event_chunk.len() == CHUNK_SIZE;
+            let event_chunk: Result<Vec<_>, _> = event_chunk.into_par_iter()
+                .map(|ev| {
+                    event_progress.inc(1);
+                    converter.try_convert(ev)
+                })
+                .collect();
+            let event_chunk = event_chunk.map_err(ConversionErr)?;
+            events.extend(event_chunk);
+        }
         event_progress.finish();
-        let mut events = events?;
 
         for (id, ev) in events.iter_mut().enumerate() {
             if ev.id != 0 {
