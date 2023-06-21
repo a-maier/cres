@@ -114,6 +114,9 @@ pub enum CreateError {
     #[cfg(feature = "stripper-xml")]
     #[error("Failed to read XML file: `{0}`")]
     XmlError(#[from] crate::stripper_xml::XMLError),
+    #[cfg(feature = "stripper-xml")]
+    #[error("Missing normalization for part `{0}`")]
+    NoScale(String),
 }
 
 #[derive(Debug, Error)]
@@ -237,7 +240,8 @@ impl Reader<FileReader> {
                                 // don't need the file anymore
                             },
                             XMLTag::Eventrecord { name, nevents } => {
-                                let mut entry = rescale.entry(name).or_default();
+                                let mut entry = rescale.entry(name)
+                                    .or_insert((n64(-1.), 0));
                                 entry.1 += nevents;
                                 event_files.push(path);
                             },
@@ -250,9 +254,14 @@ impl Reader<FileReader> {
                 _ => event_files.push(path)
             }
         }
-        let rescale = rescale.into_iter()
+        let rescale: HashMap<_, _> = rescale.into_iter()
             .map(|(name, (scale, nevents))| (name, scale / n64(nevents as f64)))
             .collect();
+        for (part, &scale) in &rescale {
+            if scale < 0. {
+                return Err(CreateError::NoScale(part.to_string()));
+            }
+        }
         debug!("Channel rescaling factors: {rescale:#?}");
         Self::from_event_files(event_files, &rescale)
     }
