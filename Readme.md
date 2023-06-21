@@ -9,6 +9,11 @@ Unbiased Elimination of Negative Weights in Monte Carlo Samples\
 J. Andersen, A. Maier\
 [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
 
+Efficient negative-weight elimination in large high-multiplicity Monte Carlo event samples
+Jeppe R. Andersen, Andreas Maier, Daniel Maître
+[arXiv:2303.15246](https://arxiv.org/abs/2303.15246)
+
+
 Installation
 ------------
 
