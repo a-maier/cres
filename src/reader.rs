@@ -101,7 +101,7 @@ pub enum EventReadError {
     #[cfg(feature = "ntuple")]
     #[error("Error reading ntuple event: {0}")]
     NTupleError(#[from] ::ntuple::reader::ReadError),
-    // #[cfg(feature = "lhef")]
+    #[cfg(feature = "lhef")]
     #[error("Error reading LHEF event: {0}")]
     LHEFError(#[from] ::lhef::reader::ReadError),
 }
