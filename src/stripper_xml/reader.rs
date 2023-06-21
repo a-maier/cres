@@ -11,6 +11,7 @@ pub struct Reader {
     events: Vec<SubEvent>,
     scale: N64,
     eof_reached: bool,
+    nevents: u64,
 }
 
 impl Reader {
@@ -23,7 +24,7 @@ impl Reader {
         let mut input = auto_decompress(BufReader::new(input));
         let buf = input.fill_buf()?;
         let tag = extract_xml_info(path.as_path(), buf)?;
-        let XMLTag::Eventrecord { name, .. } = tag else {
+        let XMLTag::Eventrecord { name, nevents } = tag else {
             panic!("Can no longer find Eventrecord")
         };
         let Some(scale) = scaling.get(&name).copied() else {
@@ -34,6 +35,7 @@ impl Reader {
             events: Vec::new(),
             scale,
             eof_reached: false,
+            nevents,
         })
     }
 
@@ -75,5 +77,14 @@ impl Iterator for Reader {
             e.weight *= f64::from(self.scale);
             Ok((&e).into())
         })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = if self.eof_reached {
+            self.events.len()
+        } else {
+            self.nevents as usize
+        };
+        (size, Some(size))
     }
 }
