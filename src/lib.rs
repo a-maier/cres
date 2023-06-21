@@ -62,6 +62,9 @@ pub mod unweight;
 /// LesHouches Event File interface
 #[cfg(feature = "lhef")]
 pub mod lhef;
+/// Interface to STRIPPER XML files
+#[cfg(feature = "stripper-xml")]
+pub mod stripper_xml;
 /// ntuple interface
 #[cfg(feature = "ntuple")]
 pub mod ntuple;

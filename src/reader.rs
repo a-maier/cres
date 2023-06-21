@@ -1,7 +1,12 @@
-use std::{path::{Path, PathBuf}, io::{BufReader, BufRead}};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    io::{BufReader, BufRead}
+};
 
 use hepmc2::reader::LineParseError;
 use log::debug;
+use noisy_float::prelude::*;
 use thiserror::Error;
 
 use crate::{traits::Rewind, file::File, auto_decompress::auto_decompress};
@@ -37,6 +42,13 @@ impl FileReader {
     pub fn new<P: AsRef<Path>>(
         path: P
     ) -> Result<FileReader, CreateError> {
+        Self::with_scaling(path, &HashMap::new())
+    }
+
+    pub fn with_scaling<P: AsRef<Path>>(
+        path: P,
+        _scaling: &HashMap<String, N64> // only used in "stripper-xml" feature
+    ) -> Result<FileReader, CreateError> {
         use crate::hepmc2::FileReader as HepMCReader;
         let file = File::open(&path)?;
         let mut r = auto_decompress(BufReader::new(file));
@@ -57,6 +69,17 @@ impl FileReader {
             {
                 debug!("Read {path:?} as ROOT ntuple");
                 let reader = crate::ntuple::Reader::new(path)?;
+                return Ok(FileReader(Box::new(reader)))
+            }
+        } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
+            let path = path.as_ref().to_owned();
+            if !cfg!(feature = "stripper-xml") {
+                return Err(CreateError::XMLUnsupported(path));
+            }
+            #[cfg(feature = "stripper-xml")]
+            {
+                debug!("Read {path:?} as STRIPPER XML file");
+                let reader = crate::stripper_xml::Reader::new(path, _scaling)?;
                 return Ok(FileReader(Box::new(reader)))
             }
         }
@@ -84,6 +107,13 @@ pub enum CreateError {
 
     #[error("Cannot read ROOT ntuple event file `{0}`. Reinstall cres with `cargo install cres --features = ntuple`")]
     RootUnsupported(PathBuf),
+
+    #[error("Cannot read XML event file `{0}`. Reinstall cres with `cargo install cres --features = stripper-xml`")]
+    XMLUnsupported(PathBuf),
+
+    #[cfg(feature = "stripper-xml")]
+    #[error("Failed to read XML file: `{0}`")]
+    XmlError(#[from] crate::stripper_xml::XMLError),
 }
 
 #[derive(Debug, Error)]
@@ -96,14 +126,19 @@ pub enum RewindError {
 
 #[derive(Debug, Error)]
 pub enum EventReadError {
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
     #[error("Error reading HepMC record: {0}")]
     HepMCError(#[from] LineParseError),
-    #[cfg(feature = "ntuple")]
-    #[error("Error reading ntuple event: {0}")]
-    NTupleError(#[from] ::ntuple::reader::ReadError),
     #[cfg(feature = "lhef")]
     #[error("Error reading LHEF event: {0}")]
     LHEFError(#[from] ::lhef::reader::ReadError),
+    #[cfg(feature = "stripper-xml")]
+    #[error("Error reading STRIPPER XML event: {0}")]
+    XMLError(#[from] quick_xml::DeError),
+    #[cfg(feature = "ntuple")]
+    #[error("Error reading ntuple event: {0}")]
+    NTupleError(#[from] ::ntuple::reader::ReadError),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -167,11 +202,81 @@ impl Reader<FileReader> {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let readers: Result<_, _> = files.into_iter()
-            .map(|f| FileReader::new(f.as_ref()).map_err(
-                |err| CreateError::FileError(f.as_ref().to_path_buf(), Box::new(err))
-            ))
+        #[cfg(feature = "stripper-xml")]
+        return Self::from_files_with_stripper_xml(files);
+
+        #[cfg(not(feature = "stripper-xml"))]
+        return Self::from_event_files(files, &HashMap::new());
+    }
+
+    #[cfg(feature = "stripper-xml")]
+    fn from_files_with_stripper_xml<I, P>(
+        paths: I
+    ) -> Result<Self, CreateError>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<Path>,
+    {
+        use crate::stripper_xml::{extract_xml_info, XMLTag};
+
+        let paths = paths.into_iter();
+        let mut event_files = Vec::with_capacity(paths.size_hint().0);
+        let mut rescale: HashMap<_, (N64, u64)> = HashMap::new();
+        for path in paths {
+            let file = File::open(&path)?;
+            let mut r = auto_decompress(BufReader::new(file));
+            match r.fill_buf() {
+                Ok(buf) => {
+                    let buf = trim_ascii_start(buf);
+                    if buf.starts_with(b"<?xml") {
+                        let tag = extract_xml_info(path.as_ref(), buf)?;
+                        match tag {
+                            XMLTag::Normalization { name, scale } => {
+                                let mut entry = rescale.entry(name).or_default();
+                                entry.0 = scale;
+                                // don't need the file anymore
+                            },
+                            XMLTag::Eventrecord { name, nevents } => {
+                                let mut entry = rescale.entry(name).or_default();
+                                entry.1 += nevents;
+                                event_files.push(path);
+                            },
+                        }
+                    } else {
+                        // not a STRIPPER XML file
+                        event_files.push(path);
+                    }
+                },
+                _ => event_files.push(path)
+            }
+        }
+        let rescale = rescale.into_iter()
+            .map(|(name, (scale, nevents))| (name, scale / n64(nevents as f64)))
             .collect();
+        debug!("Channel rescaling factors: {rescale:#?}");
+        Self::from_event_files(event_files, &rescale)
+    }
+
+    fn from_event_files<I, P>(
+        files: I,
+        channel_scaling: &HashMap<String, N64>
+    ) -> Result<Self, CreateError>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<Path>,
+    {
+        let readers: Result<_, _> = files.into_iter()
+            .map(|f| {
+                FileReader::with_scaling(
+                    f.as_ref(),
+                    channel_scaling
+                ).map_err(
+                    |err| CreateError::FileError(
+                        f.as_ref().to_path_buf(),
+                        Box::new(err)
+                    )
+                )
+            }).collect();
         Ok(Self::new(readers?))
     }
 }
@@ -184,7 +289,20 @@ pub trait EventFileReader:
 #[cfg(feature = "ntuple")]
 impl EventFileReader for crate::ntuple::Reader {}
 
+#[cfg(feature = "stripper-xml")]
+impl EventFileReader for crate::stripper_xml::Reader {}
+
 #[cfg(feature = "lhef")]
 impl EventFileReader for crate::lhef::FileReader {}
 
 impl EventFileReader for crate::hepmc2::FileReader {}
+
+// the corresponding built-in method is currently (rust 1.70.0) only
+// available in unstable, so we have to implement it ourselves
+fn trim_ascii_start(buf: &[u8]) -> &[u8] {
+    if let Some(pos) = buf.iter().position(|b| ! b.is_ascii_whitespace()) {
+        &buf[pos..]
+    } else {
+        buf
+    }
+}
