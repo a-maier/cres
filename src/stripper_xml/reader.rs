@@ -19,7 +19,7 @@ impl Reader {
         path: PathBuf,
         scaling: &HashMap<String, N64>,
     ) -> Result<Self, CreateError> {
-        let file = File::open(&path)?;
+        let mut file = File::open(&path)?;
         let input = file.try_clone()?;
         let mut input = auto_decompress(BufReader::new(input));
         let buf = input.fill_buf()?;
@@ -32,6 +32,7 @@ impl Reader {
         let Some(scale) = scaling.get(&name).copied() else {
             panic!("No scaling factor")
         };
+        file.rewind()?;
         Ok(Self {
             file,
             events: Vec::new(),
