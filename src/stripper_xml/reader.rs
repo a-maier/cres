@@ -76,10 +76,16 @@ impl Iterator for Reader {
             }
         }
         debug_assert!(self.eof_reached);
-        self.events.pop().map(|mut e| {
+        let res = self.events.pop().map(|mut e| {
             e.weight *= f64::from(self.scale);
             Ok((&e).into())
-        })
+        });
+        if res.is_none() {
+            // free memory
+            debug_assert!(self.events.is_empty());
+            self.events.shrink_to_fit();
+        }
+        res
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
