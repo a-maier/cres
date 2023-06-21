@@ -23,7 +23,9 @@ impl Reader {
         let input = file.try_clone()?;
         let mut input = auto_decompress(BufReader::new(input));
         let buf = input.fill_buf()?;
-        let tag = extract_xml_info(path.as_path(), buf)?;
+        let tag = extract_xml_info(path.as_path(), buf).map_err(
+            |err| CreateError::XmlError(path, err)
+        )?;
         let XMLTag::Eventrecord { name, nevents } = tag else {
             panic!("Can no longer find Eventrecord")
         };

@@ -112,8 +112,8 @@ pub enum CreateError {
     XMLUnsupported(PathBuf),
 
     #[cfg(feature = "stripper-xml")]
-    #[error("Failed to read XML file: `{0}`")]
-    XmlError(#[from] crate::stripper_xml::XMLError),
+    #[error("Failed to read XML file `{0}`: {1}")]
+    XmlError(PathBuf, crate::stripper_xml::XMLError),
     #[cfg(feature = "stripper-xml")]
     #[error("Missing normalization for part `{0}`")]
     NoScale(String),
@@ -232,7 +232,9 @@ impl Reader<FileReader> {
                 Ok(buf) => {
                     let buf = trim_ascii_start(buf);
                     if buf.starts_with(b"<?xml") {
-                        let tag = extract_xml_info(path.as_ref(), buf)?;
+                        let tag = extract_xml_info(path.as_ref(), buf).map_err(
+                            |err| CreateError::XmlError(path.as_ref().to_owned(), err)
+                        )?;
                         match tag {
                             XMLTag::Normalization { name, scale } => {
                                 let mut entry = rescale.entry(name).or_default();
