@@ -34,6 +34,7 @@ pub fn extract_xml_info(
                     b"Eventrecord" => {
                         let mut name = None;
                         let mut nevents = None;
+                        let mut nsubevents = None;
                         let attributes = e.attributes()
                             .filter_map(|a| match a {
                                 Ok(a) => Some(a),
@@ -42,6 +43,7 @@ pub fn extract_xml_info(
                         for attr in attributes {
                             match attr.key.0 {
                                 b"nevents" => nevents = Some(parse_u64(attr.value.as_ref())?),
+                                b"nsubevents" => nsubevents = Some(parse_u64(attr.value.as_ref())?),
                                 b"name" => name = Some(to_string(attr.value)?),
                                 _ => { }
                             }
@@ -49,10 +51,13 @@ pub fn extract_xml_info(
                         let Some(name) = name else {
                             return Err(NoEventrecordAttr(path.to_owned(), "name"));
                         };
+                        let Some(nsubevents) = nsubevents else {
+                            return Err(NoEventrecordAttr(path.to_owned(), "nsubevents"));
+                        };
                         let Some(nevents) = nevents else {
                             return Err(NoEventrecordAttr(path.to_owned(), "nevents"));
                         };
-                        return Ok(XMLTag::Eventrecord { name, nevents });
+                        return Ok(XMLTag::Eventrecord { name, nevents, nsubevents });
                     },
                     _name => return Err(BadTag(path.to_owned()))
                 }
@@ -79,7 +84,7 @@ fn parse_u64(num: &[u8]) -> Result<u64, XMLError> {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum XMLTag {
     Normalization{ name: String, scale: N64 },
-    Eventrecord{ name: String, nevents: u64 },
+    Eventrecord{ name: String, nevents: u64, nsubevents: u64 },
 }
 
 #[derive(Debug, Error)]

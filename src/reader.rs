@@ -241,7 +241,7 @@ impl Reader<FileReader> {
                                 entry.0 = scale;
                                 // don't need the file anymore
                             },
-                            XMLTag::Eventrecord { name, nevents } => {
+                            XMLTag::Eventrecord { name, nevents, .. } => {
                                 let mut entry = rescale.entry(name)
                                     .or_insert((n64(-1.), 0));
                                 entry.1 += nevents;
