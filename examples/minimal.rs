@@ -3,7 +3,7 @@
 // set the environment variable `RUST_LOG=info` for command-line output
 use std::error::Error;
 
-use cres::hepmc2::{Converter, WriterBuilder};
+use cres::hepmc2::WriterBuilder;
 use cres::prelude::*;
 
 use env_logger;

@@ -30,6 +30,8 @@ pub mod cell;
 pub mod cell_collector;
 /// Output compression
 pub mod compression;
+/// Conversion between input events and internal format
+pub mod converter;
 /// Jet clustering helpers
 pub mod cluster;
 pub mod cres;

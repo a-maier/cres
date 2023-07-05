@@ -1,10 +1,5 @@
-use std::cmp::min;
 use std::io::{Error, ErrorKind, BufReader, BufRead, Seek};
 use std::fmt::{Debug, Display};
-
-use hepmc2::Event;
-use hepmc2::event::{Particle, Vertex, CrossSection};
-use lhef::{HEPEUP, HEPRUP};
 
 use crate::auto_decompress::auto_decompress;
 use crate::file::File;
@@ -47,81 +42,15 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<Event, EventReadError>;
+    type Item = Result<avery::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader.hepeup()
             .transpose()
             .map(|r| match r{
-                Ok(hepeup) => Ok(into_event(self.reader.heprup(), hepeup)),
+                Ok(hepeup) => Ok((self.reader.heprup().to_owned(), hepeup).into()),
                 Err(err) => Err(err.into()),
             })
-    }
-}
-
-// convert to HepMC event
-fn into_event(
-    heprup: &HEPRUP,
-    hepeup: HEPEUP
-) -> Event {
-    // vertex id most be any non-positive number according to HepMC standard?
-    const VTX_ID: i32 = -1;
-
-    const LHEF_INCOMING: i32 = -1;
-    const LHEF_OUTGOING: i32 = 1;
-
-    const HEPMC_INCOMING: i32 = 4;
-    const HEPMC_OUTGOING: i32 = 1;
-
-    assert!(hepeup.NUP >= 0);
-    let nparticles = hepeup.NUP as usize;
-    let mut incoming = Vec::with_capacity(2);
-    let mut outgoing = Vec::with_capacity(min(2, nparticles) - 2);
-    for i in 0..nparticles {
-        let p = hepeup.PUP[i];
-        let p = [p[3], p[0], p[1], p[2]];
-        let mut p = Particle {
-            id: hepeup.IDUP[i],
-            p: hepmc2::event::FourVector(p),
-            m: hepeup.PUP[i][4],
-            ..Default::default()
-        };
-        match hepeup.ISTUP[i] {
-            LHEF_INCOMING => {
-                p.status = HEPMC_INCOMING;
-                p.end_vtx = VTX_ID;
-                incoming.push(p)
-            },
-            LHEF_OUTGOING => {
-                p.status = HEPMC_OUTGOING;
-                outgoing.push(p)
-            },
-            _ => { } // ignore intermediate particles
-        }
-    }
-    let vertices = vec![Vertex {
-        particles_in: incoming,
-        particles_out: outgoing,
-        barcode: VTX_ID,
-        ..Default::default()
-    }];
-    let xs_err = heprup.XERRUP.iter()
-        .map(|e| e * e)
-        .sum::<f64>()
-        .sqrt();
-    let xs = CrossSection{
-        cross_section: heprup.XSECUP.iter().sum(),
-        cross_section_error: xs_err,
-    };
-    Event {
-        number: hepeup.IDRUP,
-        scale: hepeup.SCALUP,
-        alpha_qcd: hepeup.AQCDUP,
-        alpha_qed: hepeup.AQEDUP,
-        weights: vec![hepeup.XWGTUP],
-        vertices,
-        xs,
-        ..Default::default()
     }
 }
 

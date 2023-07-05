@@ -6,7 +6,7 @@ use crate::opt::{FileFormat, parse_compr};
 
 use anyhow::{Result, Context};
 use clap::Parser;
-use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::Reader, hepmc2::ClusteringConverter, traits::{TryConvert, Distance, Rewind, Progress}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar};
+use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::Reader, traits::{Distance, Rewind, Progress, TryConvert}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar, converter::ClusteringConverter};
 use env_logger::Env;
 use log::{info, debug, error, trace};
 use opt::{JetDefinition, parse_npartitions};
@@ -190,7 +190,7 @@ fn main() -> Result<()> {
     reader.rewind()?;
     for (n, event) in reader.enumerate() {
         let event = event?;
-        writers.write(partition[n], &event)?;
+        writers.write(partition[n], &event.into())?;
     }
 
     #[allow(irrefutable_let_patterns)]

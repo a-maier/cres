@@ -32,9 +32,12 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<hepmc2::Event, EventReadError>;
+    type Item = Result<avery::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.reader.next().map(|i| i.map_err(|err| err.into()))
+        self.reader.next().map(|i| match i {
+            Ok(ev) => Ok(ev.into()),
+            Err(err) => Err(err.into()),
+        })
     }
 }

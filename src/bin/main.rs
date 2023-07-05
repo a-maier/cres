@@ -7,6 +7,7 @@ use crate::opt::{Opt, Search, FileFormat};
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use cres::converter::ClusteringConverter;
 use cres::reader::Reader;
 use cres::{
     cell_collector::CellCollector,
@@ -79,7 +80,7 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
-    let mut converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+    let mut converter = ClusteringConverter::new(opt.jet_def.into());
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
     }

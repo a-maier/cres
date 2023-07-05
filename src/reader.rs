@@ -21,7 +21,7 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<hepmc2::Event, EventReadError>;
+    type Item = Result<avery::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -177,7 +177,7 @@ impl Reader<FileReader> {
 }
 
 pub trait EventFileReader:
-    Iterator<Item = Result<hepmc2::Event, EventReadError>>
+    Iterator<Item = Result<avery::Event, EventReadError>>
     + Rewind<Error = RewindError> {
     }
 

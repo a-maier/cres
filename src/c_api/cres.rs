@@ -2,6 +2,7 @@
 #![allow(clippy::unnecessary_cast)]
 use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
+use crate::converter::ClusteringConverter;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::hepmc2;
 use crate::cluster;
@@ -188,7 +189,7 @@ where
             .map(|f| OsStr::from_bytes(f.to_bytes())),
     )?;
 
-    let converter = hepmc2::ClusteringConverter::new(opt.jet_def.into());
+    let converter = ClusteringConverter::new(opt.jet_def.into());
 
     // TODO: unweighting
     let unweighter = NO_UNWEIGHTING;

@@ -40,7 +40,7 @@ impl WriterBuilder<BufWriter<File>> {
 
 impl<E, R, T: std::io::Write> Write<R> for Writer<T>
 where
-    R: Iterator<Item = Result<hepmc2::Event, E>>,
+    R: Iterator<Item = Result<avery::Event, E>>,
     E: std::error::Error,
 {
     type Error = WriteError<E>;
@@ -81,23 +81,25 @@ where
             }
         }
 
-        let mut hepmc_events = reader.enumerate();
+        let mut reader_events = reader.enumerate();
         let progress = ProgressBar::new(events.len() as u64, "events written:");
         for event in events {
-            let (hepmc_id, hepmc_event) = hepmc_events.next().unwrap();
-            let mut hepmc_event = hepmc_event.map_err(ReadErr)?;
-            if hepmc_id < event.id() {
-                for _ in hepmc_id..event.id() {
-                    let (_id, ev) = hepmc_events.next().unwrap();
-                    hepmc_event = ev.map_err(ReadErr)?;
+            let (read_id, read_event) = reader_events.next().unwrap();
+            let mut read_event = read_event.map_err(ReadErr)?;
+            if read_id < event.id() {
+                for _ in read_id..event.id() {
+                    let (_id, ev) = reader_events.next().unwrap();
+                    read_event = ev.map_err(ReadErr)?;
                 }
             }
-            let old_weight = hepmc_event.weights.first().unwrap();
-            let reweight: f64 = (event.weight / old_weight).into();
-            for weight in &mut hepmc_event.weights {
-                *weight *= reweight
+            if read_event.id.is_none() {
+                read_event.id = Some(event.id() as i32);
             }
-            writer.write(&hepmc_event)?;
+            // TODO: return error
+            let weight = read_event.weights.first_mut().unwrap();
+            weight.weight = Some(f64::from(event.weight));
+            let out_event = read_event.into();
+            writer.write(&out_event)?;
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to
                     .get(&event.id())
@@ -105,7 +107,7 @@ where
                     .unwrap_or_default();
                 for cellnum in cellnums {
                     let cell_writer = cell_writers.get_mut(cellnum).unwrap();
-                    cell_writer.write(&hepmc_event)?;
+                    cell_writer.write(&out_event)?;
                 }
             }
             progress.inc(1);

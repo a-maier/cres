@@ -4,6 +4,7 @@ use std::convert::From;
 use std::default::Default;
 
 use noisy_float::prelude::*;
+use particle_id::ParticleID;
 
 pub type MomentumSet = Box<[FourVector]>;
 
@@ -12,7 +13,7 @@ pub type MomentumSet = Box<[FourVector]>;
 pub struct EventBuilder {
     weight: N64,
 
-    outgoing_by_pid: Vec<(i32, FourVector)>,
+    outgoing_by_pid: Vec<(ParticleID, FourVector)>,
 }
 
 impl EventBuilder {
@@ -36,7 +37,7 @@ impl EventBuilder {
     ///
     /// The particle id should follow the
     /// [PDG Monte Carlo Particle Numbering Scheme](https://pdg.lbl.gov/2021/mcdata/mc_particle_id_contents.html)
-    pub fn add_outgoing(&mut self, pid: i32, p: FourVector) -> &mut Self {
+    pub fn add_outgoing(&mut self, pid: ParticleID, p: FourVector) -> &mut Self {
         self.outgoing_by_pid.push((pid, p));
         self
     }
@@ -65,10 +66,10 @@ impl From<EventBuilder> for Event {
 }
 
 fn compress_outgoing(
-    mut out: Vec<(i32, FourVector)>,
-) -> Box<[(i32, MomentumSet)]> {
+    mut out: Vec<(ParticleID, FourVector)>,
+) -> Box<[(ParticleID, MomentumSet)]> {
     out.sort_unstable_by(|a, b| b.cmp(a));
-    let mut outgoing_by_pid: Vec<(i32, Vec<_>)> = Vec::new();
+    let mut outgoing_by_pid: Vec<(ParticleID, Vec<_>)> = Vec::new();
     for (id, p) in out {
         match outgoing_by_pid.last_mut() {
             Some((pid, v)) if *pid == id => v.push(p),
@@ -88,7 +89,7 @@ pub struct Event {
     pub id: usize,
     pub weight: N64,
 
-    outgoing_by_pid: Box<[(i32, MomentumSet)]>,
+    outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
 }
 
 const EMPTY_SLICE: &[FourVector] = &[];
@@ -104,12 +105,12 @@ impl Event {
     }
 
     /// Access the outgoing particle momenta grouped by particle id
-    pub fn outgoing(&self) -> &[(i32, MomentumSet)] {
+    pub fn outgoing(&self) -> &[(ParticleID, MomentumSet)] {
         &self.outgoing_by_pid
     }
 
     /// Access the outgoing particle momenta with the given particle id
-    pub fn outgoing_with_pid(&self, pid: i32) -> &[FourVector] {
+    pub fn outgoing_with_pid(&self, pid: ParticleID) -> &[FourVector] {
         let idx = self
             .outgoing_by_pid
             .binary_search_by(|probe| pid.cmp(&probe.0));
@@ -121,7 +122,7 @@ impl Event {
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
-    pub fn into_outgoing(self) -> Box<[(i32, MomentumSet)]> {
+    pub fn into_outgoing(self) -> Box<[(ParticleID, MomentumSet)]> {
         self.outgoing_by_pid
     }
 }

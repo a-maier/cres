@@ -3,4 +3,5 @@ pub use crate::{
     reader::Reader,
     resampler::ResamplerBuilder,
     unweight::{Unweighter, NO_UNWEIGHTING},
+    converter::{Converter, ClusteringConverter}
 };

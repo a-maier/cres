@@ -66,7 +66,7 @@ fn extract_typesets(ev: &Event) -> Vec<TypeSet> {
     ev.outgoing()
         .iter()
         .map(|(id, p)| TypeSet {
-            pid: *id,
+            pid: id.id(),
             momenta: p
                 .iter()
                 .map(|p| [p[0].into(), p[1].into(), p[2].into(), p[3].into()])

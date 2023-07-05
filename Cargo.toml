@@ -47,6 +47,7 @@ argfile = "0.1"
 clap_complete = "4.0"
 dirs = "5.0"
 lhef = { version = "0.5", optional = true }
+avery = "0.1"
 
 [lib]
 name = "cres"
