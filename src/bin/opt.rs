@@ -125,7 +125,7 @@ pub(crate) struct JetDefinition {
     #[clap(short = 'R', long)]
     pub jetradius: f64,
     #[clap(short = 'p', long)]
-    /// Minimum jet transverse momentum.
+    /// Minimum jet transverse momentum in GeV.
     pub jetpt: f64,
 }
 
@@ -151,7 +151,7 @@ pub(crate) struct LeptonDefinition {
     #[clap(long)]
     pub leptonradius: Option<f64>,
     #[clap(long)]
-    /// Minimum lepton transverse momentum.
+    /// Minimum lepton transverse momentum in GeV.
     pub leptonpt: Option<f64>,
 }
 
@@ -272,7 +272,7 @@ variable."
     )]
     pub(crate) threads: usize,
 
-    /// Maximum cell size.
+    /// Maximum cell size in GeV.
     ///
     /// Limiting the cell size ensures that event weights are only
     /// redistributed between events that are sufficiently similar.

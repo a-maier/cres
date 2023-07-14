@@ -45,17 +45,23 @@ Usage
 
 The basic usage is
 
-    cres -a JETALGO -R JETR --jetpt JETPT -o OUT.HEPMC2 IN.HEPMC2
+    cres -a JETALGO -R JETR --jetpt JETPT --max-cell-size R -o OUT.HEPMC2 IN.HEPMC2
 
 This takes a file `IN.HEPMC2` in hepmc2 format with mixed-weight
 events and produces a file `OUT.HEPMC2` where all event weights are
 positive. The input file can be compressed with bzip2, gzip, zstd, or
 lz4.
 
-We recommend to set the jet algorithm `JETALGO`, jet radius
-`JETR`, and minimum jet transverse momentum `JETPT` to the same values
-that were used to generate the input events. The supported jet
-algorithms are anti-kt, kt, and Cambridge-Aachen.
+We recommend to set the jet algorithm `JETALGO`, jet radius `JETR`,
+and minimum jet transverse momentum `JETPT` to the same values that
+were used to generate the input events. The supported jet algorithms
+are anti-kt, kt, and Cambridge-Aachen.
+
+Setting a maximum cell radius `R` is optional, but highly
+recommended. Lower values lead to much faster resampling and smaller
+smearing effects. Larger values eliminate a larger fraction of
+negative weights. It is recommended to start with a value between 1
+and 10 and adjust as needed.
 
 Options
 -------
