@@ -149,6 +149,15 @@ path. To install `cres` with ntuple support, run
 
     cargo install cres --features ntuple
 
+This requires a recent version of `libclang`.
+
+Linking may fail due to a
+[cargo bug](https://github.com/rust-lang/cargo/issues/12326). In that
+case, determine the necessary flags by running `root-config --libs`
+and manually add them, e.g.
+
+    RUSTFLAGS='-C link-arg=-lCore' cargo install cres --features ntuple
+
 Input files are recognised automatically, the output file format can
 be chosen with the `--outformat` flag.
 
