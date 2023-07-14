@@ -29,12 +29,12 @@ impl Rewind for Reader {
 }
 
 impl Iterator for Reader {
-    type Item = Result<hepmc2::Event, EventReadError>;
+    type Item = Result<avery::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.0.next() {
             Some(Err(err)) => Some(Err(err.into())),
-            Some(Ok(ev)) => Some(Ok((&ev).into())),
+            Some(Ok(ev)) => Some(Ok(ev.into())),
             None => None
         }
     }

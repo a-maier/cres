@@ -23,14 +23,12 @@ pub struct Writer {
 
 impl<E, R> Write<R> for Writer
 where
-    R: Iterator<Item = Result<hepmc2::Event, E>>,
+    R: Iterator<Item = Result<avery::Event, E>>,
     E: std::error::Error,
 {
     type Error = WriteError<E>;
 
     /// Write all `events`.
-    ///
-    /// See hepmc2::Writer for details.
     fn write(
         &mut self,
         reader: &mut R,
@@ -59,23 +57,21 @@ where
             }
         }
 
-        let mut hepmc_events = reader.enumerate();
+        let mut reader_events = reader.enumerate();
         let progress = ProgressBar::new(events.len() as u64, "events written:");
         for event in events {
-            let (hepmc_id, hepmc_event) = hepmc_events.next().unwrap();
-            let mut hepmc_event = hepmc_event.map_err(ReadErr)?;
-            if hepmc_id < event.id() {
-                for _ in hepmc_id..event.id() {
-                    let (_id, ev) = hepmc_events.next().unwrap();
-                    hepmc_event = ev.map_err(ReadErr)?;
+            let (reader_id, reader_event) = reader_events.next().unwrap();
+            let mut read_event = reader_event.map_err(ReadErr)?;
+            if reader_id < event.id() {
+                for _ in reader_id..event.id() {
+                    let (_id, ev) = reader_events.next().unwrap();
+                    read_event = ev.map_err(ReadErr)?;
                 }
             }
-            let old_weight = hepmc_event.weights.first().unwrap();
-            let reweight: f64 = (event.weight / old_weight).into();
-            for weight in &mut hepmc_event.weights {
-                *weight *= reweight
-            }
-            let out_event = (&hepmc_event).into();
+            // TODO: return error
+            let weight = read_event.weights.first_mut().unwrap();
+            weight.weight = Some(f64::from(event.weight));
+            let out_event = avery::convert(read_event);
             writer.write(&out_event)?;
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to

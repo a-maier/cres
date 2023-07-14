@@ -16,7 +16,7 @@ autobins = false
 [dependencies]
 anyhow = "1.0"
 argfile = "0.1"
-avery = "0.1"
+avery = "0.2"
 bzip2 = "0.4"
 clap = { version = "4.3", features = ["derive"] }
 clap_complete = "4.0"
@@ -35,7 +35,7 @@ log = "0.4"
 logbar = "0.1"
 lz4 = "1.23"
 noisy_float = "0.2"
-ntuple = { version = "0.7", optional = true, features = ["hepmc2"] }
+ntuple = { version = "0.7", optional = true }
 num-traits = "0.2"
 particle_id = "0.4"
 pathfinding = "4.2"
@@ -68,7 +68,7 @@ path = "src/bin/shell_completion.rs"
 
 [features]
 default = ["lhef"]
-ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple"]
+ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple", "avery/ntuple"]
 
 [build-dependencies]
 anyhow = "1.0"

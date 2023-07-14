@@ -218,7 +218,7 @@ impl Writers {
                 writers[idx].write(event).map_err(|e| e.into()),
             #[cfg(feature = "ntuple")]
             Writers::NTuple(writers) =>
-                writers[idx].write(&event.into()).map_err(|e| e.into())
+                writers[idx].write(&avery::convert(event.to_owned())).map_err(|e| e.into())
         }
     }
 }
