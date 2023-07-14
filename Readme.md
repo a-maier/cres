@@ -47,10 +47,10 @@ The basic usage is
 
     cres -a JETALGO -R JETR --jetpt JETPT --max-cell-size R -o OUT.HEPMC2 IN.HEPMC2
 
-This takes a file `IN.HEPMC2` in hepmc2 format with mixed-weight
-events and produces a file `OUT.HEPMC2` where all event weights are
-positive. The input file can be compressed with bzip2, gzip, zstd, or
-lz4.
+This takes a file `IN.HEPMC2` (or several files) in hepmc2 or Les
+Houches Event format with mixed-weight events and produces a file
+`OUT.HEPMC2` with a smaller contribution from negative weights. The
+input file can be compressed with bzip2, gzip, zstd, or lz4.
 
 We recommend to set the jet algorithm `JETALGO`, jet radius `JETR`,
 and minimum jet transverse momentum `JETPT` to the same values that
