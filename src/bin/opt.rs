@@ -188,6 +188,8 @@ pub(crate) struct UnweightOpt {
 pub(crate) enum FileFormat {
     #[default]
     HepMC2,
+    #[cfg(feature = "lhef")]
+    Lhef,
     #[cfg(feature = "ntuple")]
     Root
 }
@@ -196,6 +198,8 @@ impl From<FileFormat> for OutputFormat {
     fn from(source: FileFormat) -> Self {
         match source {
             FileFormat::HepMC2 => OutputFormat::HepMC2,
+            #[cfg(feature = "lhef")]
+            FileFormat::Lhef => OutputFormat::Lhef,
             #[cfg(feature = "ntuple")]
             FileFormat::Root => OutputFormat::Root,
         }

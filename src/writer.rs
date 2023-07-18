@@ -16,6 +16,9 @@ pub enum OutputFormat {
     /// website](https://gitlab.cern.ch/hepmc/HepMC3) for details.
     #[default]
     HepMC2,
+    /// The [Les Houches Event File](https://arxiv.org/abs/hep-ph/0109068v1) format
+    #[cfg(feature = "lhef")]
+    Lhef,
     /// The [ROOT ntuple](https://arxiv.org/abs/1310.7439) format
     #[cfg(feature = "ntuple")]
     Root
@@ -124,6 +127,8 @@ where
         use OutputFormat::*;
         match self.format {
             HepMC2 => self.write_all(crate::hepmc2::Writer::try_new, r, events),
+            #[cfg(feature = "lhef")]
+            Lhef => self.write_all(crate::lhef::Writer::try_new, r, events),
             #[cfg(feature = "ntuple")]
             Root => self.write_all(crate::ntuple::Writer::try_new, r, events),
         }

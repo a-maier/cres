@@ -6,7 +6,7 @@ use crate::opt::{FileFormat, parse_compr};
 
 use anyhow::{Result, Context};
 use clap::Parser;
-use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, traits::{Distance, Rewind, Progress, TryConvert}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar, converter::ClusteringConverter};
+use cres::{compression::Compression, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, traits::{Distance, Rewind, Progress, TryConvert, WriteEvent}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, progress_bar::ProgressBar, converter::ClusteringConverter};
 use env_logger::Env;
 use log::{info, debug, error, trace};
 use opt::{JetDefinition, parse_npartitions};
@@ -132,19 +132,15 @@ fn main() -> Result<()> {
         }
     }
 
-    let extension = match opt.outformat {
-        FileFormat::HepMC2 => {
-            let base = "hepmc2".to_string();
-            match opt.compression {
-                Some(Compression::Bzip2) => base + ".bz2",
-                Some(Compression::Gzip(_)) => base + ".gz",
-                Some(Compression::Lz4(_)) => base + ".lz4",
-                Some(Compression::Zstd(_)) => base + ".zst",
-                None => base
-            }}
-        ,
-        #[cfg(feature = "ntuple")]
-        FileFormat::Root => "root".to_string()
+    let extension = {
+        let base = opt.outformat.to_string();
+        match opt.compression {
+            Some(Compression::Bzip2) => base + ".bz2",
+            Some(Compression::Gzip(_)) => base + ".gz",
+            Some(Compression::Lz4(_)) => base + ".lz4",
+            Some(Compression::Zstd(_)) => base + ".zst",
+            None => base
+        }
     };
     info!(
         "Writing output to {outfile}0.{extension}...{outfile}{}.{extension}",
@@ -163,26 +159,23 @@ fn main() -> Result<()> {
 
     let mut writers: Writers = match opt.outformat {
         FileFormat::HepMC2 => {
-            let make_hepmc2_writer = |f| -> Result<hepmc2::Writer<Box<dyn Write>>> {
-                let file = File::create(&f).with_context(
-                    || format!("Failed to open {f:?}")
-                )?;
-                let writer = compress_writer(file, opt.compression)?;
-                let writer = hepmc2::Writer::new(writer)?;
-                Ok(writer)
-            };
-            let writers: Result<Vec<_>, _> = outfiles.map(make_hepmc2_writer).collect();
+            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
+                cres::hepmc2::Writer::try_new(&f, opt.compression)
+            }).collect();
             Writers::HepMC(writers?)
         },
+        #[cfg(feature = "lhef")]
+        FileFormat::Lhef => {
+            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
+                cres::lhef::Writer::try_new(&f, opt.compression)
+            }).collect();
+            Writers::Lhef(writers?)
+        }
         #[cfg(feature = "ntuple")]
         FileFormat::Root => {
-            use anyhow::anyhow;
             let writers: Result<Vec<_>, _> = outfiles.map(|f| {
-                ntuple::Writer::new(
-                    &f, "cres ntuple"
-                ).ok_or_else(
-                    || anyhow!("Failed to construct ntuple writer for {f:?}")
-                )}).collect();
+                cres::ntuple::Writer::try_new(&f, opt.compression)
+            }).collect();
             Writers::NTuple(writers?)
         }
     };
@@ -190,35 +183,51 @@ fn main() -> Result<()> {
     reader.rewind()?;
     for (n, event) in reader.enumerate() {
         let event = event?;
-        writers.write(partition[n], &event.into())?;
+        writers.write(partition[n], event)?;
     }
 
-    #[allow(irrefutable_let_patterns)]
-    if let Writers::HepMC(writers) = writers {
-        for writer in writers {
-            if let Err(err) = writer.finish() {
-                error!("{err}")
+    match writers {
+        Writers::HepMC(writers) => {
+            for writer in writers {
+                if let Err(err) = writer.finish() {
+                    error!("{err}")
+                }
             }
-        }
+        },
+        #[cfg(feature = "lhef")]
+        Writers::Lhef(writers) => {
+            for writer in writers {
+                if let Err(err) = writer.finish() {
+                    error!("{err}")
+                }
+            }
+        },
+        #[cfg(feature = "ntuple")]
+        _ => { }
     }
 
     Ok(())
 }
 
 enum Writers {
-    HepMC(Vec<hepmc2::Writer<Box<dyn Write>>>),
+    HepMC(Vec<cres::hepmc2::Writer<Box<dyn Write>>>),
+    #[cfg(feature = "lhef")]
+    Lhef(Vec<cres::lhef::Writer<Box<dyn Write>>>),
     #[cfg(feature = "ntuple")]
-    NTuple(Vec<ntuple::Writer>),
+    NTuple(Vec<cres::ntuple::Writer>),
 }
 
 impl Writers {
-    fn write(&mut self, idx: usize, event: &hepmc2::Event) -> Result<()> {
+    fn write(&mut self, idx: usize, event: avery::Event) -> Result<()> {
         match self {
             Writers::HepMC(writers) =>
                 writers[idx].write(event).map_err(|e| e.into()),
+            #[cfg(feature = "lhef")]
+            Writers::Lhef(writers) =>
+                writers[idx].write(event).map_err(|e| e.into()),
             #[cfg(feature = "ntuple")]
             Writers::NTuple(writers) =>
-                writers[idx].write(&avery::convert(event.to_owned())).map_err(|e| e.into())
+                writers[idx].write(event).map_err(|e| e.into())
         }
     }
 }
