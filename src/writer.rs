@@ -87,7 +87,6 @@ impl FileWriter {
             // TODO: return error
             let weight = read_event.weights.first_mut().unwrap();
             weight.weight = Some(f64::from(event.weight));
-            let out_event = avery::Event::from(read_event);
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to
                     .get(&event.id())
@@ -95,10 +94,10 @@ impl FileWriter {
                     .unwrap_or_default();
                 for cellnum in cellnums {
                     let cell_writer = cell_writers.get_mut(cellnum).unwrap();
-                    cell_writer.write(out_event.clone()).map_err(WriteErr)?;
+                    cell_writer.write(read_event.clone()).map_err(WriteErr)?;
                 }
             }
-            writer.write(out_event).map_err(WriteErr)?;
+            writer.write(read_event).map_err(WriteErr)?;
             progress.inc(1);
         }
         writer.finish().map_err(WriteErr)?;
