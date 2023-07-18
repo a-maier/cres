@@ -3,22 +3,20 @@ mod opt;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::opt::{Opt, Search, FileFormat};
+use crate::opt::{Opt, Search};
 
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::converter::ClusteringConverter;
 use cres::reader::Reader;
+use cres::writer::Writer;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
-    hepmc2,
     prelude::*,
     neighbour_search::{NeighbourData, NeighbourSearch, NaiveNeighbourSearch, TreeSearch},
     resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
 };
-#[cfg(feature = "ntuple")]
-use cres::ntuple;
 use env_logger::Env;
 use log::{debug, info};
 use rand::SeedableRng;
@@ -84,43 +82,22 @@ where
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
     }
-    match opt.outformat {
-        FileFormat::HepMC2 => {
-            let writer = hepmc2::WriterBuilder::default()
-                .to_filename(&opt.outfile)
-                .with_context(|| {
-                    format!("Failed to open {:?} for writing", opt.outfile)
-                })?
-                .cell_collector(cell_collector)
-                .compression(opt.compression)
-                .build()?;
+    let writer = Writer::builder()
+        .filename(opt.outfile.clone())
+        .format(opt.outformat.into())
+        .compression(opt.compression)
+        .cell_collector(cell_collector)
+        .build();
 
-            let mut cres = CresBuilder {
-                reader,
-                converter,
-                resampler,
-                unweighter,
-                writer,
-            }.build();
-            cres.run()?;
-        },
-        #[cfg(feature = "ntuple")]
-        FileFormat::Root => {
-            let writer = ntuple::WriterBuilder::default()
-                .path(opt.outfile)
-                .cell_collector(cell_collector)
-                .build()?;
+    let mut cres = CresBuilder {
+        reader,
+        converter,
+        resampler,
+        unweighter,
+        writer,
 
-            let mut cres = CresBuilder {
-                reader,
-                converter,
-                resampler,
-                unweighter,
-                writer,
-            }.build();
-            cres.run()?;
-        }
-    };
+    }.build();
+    cres.run()?;
 
     Ok(())
 }

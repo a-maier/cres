@@ -4,7 +4,6 @@ use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::converter::ClusteringConverter;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
-use crate::hepmc2;
 use crate::cluster;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::reader::Reader;
@@ -16,6 +15,7 @@ use crate::neighbour_search::{
     NaiveNeighbourSearch,
     TreeSearch
 };
+use crate::writer::Writer;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
@@ -180,7 +180,6 @@ where
     let outfile = unsafe { CStr::from_ptr(opt.outfile) };
     let outfile = OsStr::from_bytes(outfile.to_bytes());
     debug!("Will write output to {:?}", outfile);
-    let outfile = std::fs::File::create(outfile)?;
 
     let reader = Reader::from_files(
         infiles
@@ -194,9 +193,10 @@ where
     // TODO: unweighting
     let unweighter = NO_UNWEIGHTING;
 
-    let writer = hepmc2::WriterBuilder::default()
-        .writer(outfile)
-        .build()?;
+    // TODO: other output formats
+    let writer = Writer::builder()
+        .filename(outfile.into())
+        .build();
 
     // TODO: seeds, observer, partitions
     let resampler = ResamplerBuilder::default()

@@ -61,6 +61,8 @@ pub mod seeds;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
+/// Event writer
+pub mod writer;
 /// LesHouches Event File interface
 #[cfg(feature = "lhef")]
 pub mod lhef;

@@ -54,6 +54,19 @@ pub trait Write<Reader> {
         -> Result<(), Self::Error>;
 }
 
+/// Write a single event
+pub trait WriteEvent<Ev> {
+    type Error;
+
+    /// Write an event
+    fn write(&mut self, e: Ev) -> Result<(), Self::Error>;
+
+    /// Wrap up (optional)
+    fn finish(self) -> Result<(), Self::Error> where Self: Sized {
+        Ok(())
+    }
+}
+
 /// Try to clone this object
 ///
 /// This trait is similar to [std::clone::Clone], but is allowed to fail.

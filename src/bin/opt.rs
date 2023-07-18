@@ -7,6 +7,7 @@ use cres::cluster::JetAlgorithm;
 use cres::seeds::Strategy;
 
 use clap::{ValueEnum, Parser};
+use cres::writer::OutputFormat;
 use lazy_static::lazy_static;
 use regex::Regex;
 use thiserror::Error;
@@ -190,6 +191,17 @@ pub(crate) enum FileFormat {
     #[cfg(feature = "ntuple")]
     Root
 }
+
+impl From<FileFormat> for OutputFormat {
+    fn from(source: FileFormat) -> Self {
+        match source {
+            FileFormat::HepMC2 => OutputFormat::HepMC2,
+            #[cfg(feature = "ntuple")]
+            FileFormat::Root => OutputFormat::Root,
+        }
+    }
+}
+
 
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
