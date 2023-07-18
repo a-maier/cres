@@ -1,7 +1,8 @@
 pub use crate::{
     cres::{Cres, CresBuilder},
-    reader::Reader,
+    reader::{FileReader, CombinedReader},
     resampler::ResamplerBuilder,
     unweight::{Unweighter, NO_UNWEIGHTING},
-    converter::{Converter, ClusteringConverter}
+    converter::{Converter, ClusteringConverter},
+    writer::FileWriter,
 };

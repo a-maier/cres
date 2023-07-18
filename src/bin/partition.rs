@@ -6,7 +6,7 @@ use crate::opt::{FileFormat, parse_compr};
 
 use anyhow::{Result, Context};
 use clap::Parser;
-use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::Reader, traits::{Distance, Rewind, Progress, TryConvert}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar, converter::ClusteringConverter};
+use cres::{compression::{Compression, compress_writer}, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, traits::{Distance, Rewind, Progress, TryConvert}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, file::File, progress_bar::ProgressBar, converter::ClusteringConverter};
 use env_logger::Env;
 use log::{info, debug, error, trace};
 use opt::{JetDefinition, parse_npartitions};
@@ -93,7 +93,7 @@ fn main() -> Result<()> {
     debug!("settings: {:#?}", opt);
 
     //TODO: code duplication with Cres
-    let mut reader = Reader::from_files(opt.infiles)?;
+    let mut reader = CombinedReader::from_files(opt.infiles)?;
     let expected_nevents = reader.size_hint().0;
     let event_progress = if expected_nevents > 0 {
         ProgressBar::new(expected_nevents as u64, "events read")

@@ -6,7 +6,7 @@ use crate::converter::ClusteringConverter;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
 use crate::cluster;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
-use crate::reader::Reader;
+use crate::reader::CombinedReader;
 use crate::resampler::ResamplerBuilder;
 
 use crate::neighbour_search::{
@@ -15,7 +15,7 @@ use crate::neighbour_search::{
     NaiveNeighbourSearch,
     TreeSearch
 };
-use crate::writer::Writer;
+use crate::writer::FileWriter;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
@@ -181,7 +181,7 @@ where
     let outfile = OsStr::from_bytes(outfile.to_bytes());
     debug!("Will write output to {:?}", outfile);
 
-    let reader = Reader::from_files(
+    let reader = CombinedReader::from_files(
         infiles
             .iter()
             .rev()
@@ -194,7 +194,7 @@ where
     let unweighter = NO_UNWEIGHTING;
 
     // TODO: other output formats
-    let writer = Writer::builder()
+    let writer = FileWriter::builder()
         .filename(outfile.into())
         .build();
 

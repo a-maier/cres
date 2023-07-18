@@ -8,6 +8,7 @@ use crate::{traits::Rewind, file::File, auto_decompress::auto_decompress};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
+/// Event file reader
 pub struct FileReader (
     Box<dyn EventFileReader>
 );
@@ -107,18 +108,18 @@ pub enum EventReadError {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Reader<R> {
+pub struct CombinedReader<R> {
     readers: Vec<R>,
     current: usize,
 }
 
-impl<R> Reader<R> {
+impl<R> CombinedReader<R> {
     fn new(readers: Vec<R>) -> Self {
         Self{ readers, current: 0 }
     }
 }
 
-impl<R: Rewind> Rewind for Reader<R> {
+impl<R: Rewind> Rewind for CombinedReader<R> {
     type Error = <R as Rewind>::Error;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
@@ -130,7 +131,7 @@ impl<R: Rewind> Rewind for Reader<R> {
     }
 }
 
-impl<R: Iterator> Iterator for Reader<R> {
+impl<R: Iterator> Iterator for CombinedReader<R> {
     type Item = <R as Iterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -158,7 +159,7 @@ impl<R: Iterator> Iterator for Reader<R> {
     }
 }
 
-impl Reader<FileReader> {
+impl CombinedReader<FileReader> {
     /// Construct a new reader reading from the files with the given names
     pub fn from_files<I, P>(
         files: I

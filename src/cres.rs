@@ -5,13 +5,13 @@
 //!
 //! This requires
 //! 1. A reader for the input events
-//!    (e.g. [hepmc2::Reader](crate::hepmc2::Reader)).
+//!    (e.g. [CombinedReader](crate::reader::CombinedReader)).
 //! 2. A converter to the internal format
-//!    (e.g. [hepmc2::ClusteringConverter](crate::hepmc2::ClusteringConverter))
+//!    (e.g. [ClusteringConverter](crate::converter::ClusteringConverter))
 //! 3. A [Resampler](crate::traits::Resample).
 //! 4. An [Unweighter](crate::traits::Unweight)
 //!    (e.g. [NO_UNWEIGHTING](crate::unweight::NO_UNWEIGHTING)).
-//! 5. A [Writer](crate::traits::Write) (e.g. [hepmc2::Writer](crate::hepmc2::Writer)).
+//! 5. A [Writer](crate::traits::Write) (e.g. [FileWriter](crate::writer::FileWriter)).
 //!
 //! Finally, call [Cres::run].
 //!
@@ -22,10 +22,10 @@
 //! use cres::prelude::*;
 //!
 //! // Define `reader`, `converter`, `resampler`, `unweighter`, `writer`
-//!# let reader = Reader::from_files(vec![""])?;
+//!# let reader = CombinedReader::from_files(vec![""])?;
 //!# let converter = cres::Converter::new();
 //!# let resampler = cres::resampler::ResamplerBuilder::default().build();
-//!# let writer = cres::hepmc2::WriterBuilder::default().to_filename("")?.build()?;
+//!# let writer = cres::FileWriter::builder().filename("out.hepmc").build();
 //!# let unweighter = cres::unweight::NO_UNWEIGHTING;
 //!
 //! // Build the resampler

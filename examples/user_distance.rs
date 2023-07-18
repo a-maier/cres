@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let infile = args.next().unwrap();
     let outfile = args.next().unwrap();
 
-    let reader = Reader::from_files(vec![infile])?;
+    let reader = CombinedReader::from_files(vec![infile])?;
 
     let converter = Converter::new();
 

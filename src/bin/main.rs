@@ -8,8 +8,8 @@ use crate::opt::{Opt, Search};
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::converter::ClusteringConverter;
-use cres::reader::Reader;
-use cres::writer::Writer;
+use cres::reader::CombinedReader;
+use cres::writer::FileWriter;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
@@ -59,7 +59,7 @@ where
 
     debug!("settings: {:#?}", opt);
 
-    let reader = Reader::from_files(opt.infiles)?;
+    let reader = CombinedReader::from_files(opt.infiles)?;
 
     let cell_collector = if opt.dumpcells {
         Some(Rc::new(RefCell::new(CellCollector::new())))
@@ -82,7 +82,7 @@ where
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
     }
-    let writer = Writer::builder()
+    let writer = FileWriter::builder()
         .filename(opt.outfile.clone())
         .format(opt.outformat.into())
         .compression(opt.compression)

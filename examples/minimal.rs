@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let outfile = args.next().unwrap();
 
     // How to read events
-    let reader = Reader::from_files(vec![infile])?;
+    let reader = CombinedReader::from_files(vec![infile])?;
 
     // How to convert into internal event format
     // To perform jet clustering use `ClusteringConverter` instead
