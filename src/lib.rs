@@ -4,6 +4,10 @@
 //! J. Andersen, A. Maier\
 //! [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
 //!
+//! Efficient negative-weight elimination in large high-multiplicity Monte Carlo event samples\
+//! Jeppe R. Andersen, Andreas Maier, Daniel Maître\
+//! [arXiv:2303.15246](https://arxiv.org/abs/2303.15246)
+//!
 //! # How to use
 //!
 //! Probably the best way to get started is to look at the examples, starting with
@@ -13,7 +17,8 @@
 //!
 //! - [prelude] exports a list of the most relevant classes and objects
 //! - [cres] contains the main class and list the steps that are performed
-//! - [hepmc2] contains a reader, converter, and writer for the HepMC 2 format
+//! - [reader] defines readers from one or more event files
+//! - [writer] for writing events to a file
 //! - [event] for the internal event format
 //! - [distance] for user-defined distance functions
 //! - [seeds] and [resampler] for the resampling

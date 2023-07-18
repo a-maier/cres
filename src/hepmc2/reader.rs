@@ -3,12 +3,14 @@ use std::io::{Seek, BufRead, BufReader};
 
 use crate::{traits::{TryClone, Rewind}, reader::{RewindError, EventReadError}, file::File, auto_decompress::auto_decompress};
 
+/// Reader for a single (potentially compressed) HepMC2 event file
 pub struct FileReader {
     reader: hepmc2::Reader<Box<dyn BufRead>>,
     source: File,
 }
 
 impl FileReader {
+    /// Construct a reader for the given (potentially compressed) HepMC2 event file
     pub fn new(source: File) -> Result<Self, std::io::Error> {
         let cloned_source = source.try_clone()?;
         Ok(FileReader {

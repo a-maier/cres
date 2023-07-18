@@ -23,9 +23,9 @@
 //!
 //! // Define `reader`, `converter`, `resampler`, `unweighter`, `writer`
 //!# let reader = CombinedReader::from_files(vec![""])?;
-//!# let converter = cres::Converter::new();
+//!# let converter = cres::converter::Converter::new();
 //!# let resampler = cres::resampler::ResamplerBuilder::default().build();
-//!# let writer = cres::FileWriter::builder().filename("out.hepmc").build();
+//!# let writer = cres::writer::FileWriter::builder().filename("out.hepmc".into()).build();
 //!# let unweighter = cres::unweight::NO_UNWEIGHTING;
 //!
 //! // Build the resampler

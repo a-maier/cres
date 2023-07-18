@@ -5,12 +5,14 @@ use std::path::PathBuf;
 use crate::reader::{EventReadError, RewindError};
 use crate::traits::Rewind;
 
+/// Reader for a single ROOT ntuple event file
 #[derive(Debug)]
 pub struct Reader (
     ntuple::Reader,
 );
 
 impl Reader {
+    /// Construct a reader for the ROOT ntuple file with the given name
     pub fn new(file: PathBuf) -> Result<Self, Error> {
         let r = ntuple::Reader::new(&file).ok_or_else(
             || create_error(file)

@@ -3,7 +3,6 @@
 // set the environment variable `RUST_LOG=info` for command-line output
 use std::error::Error;
 
-use cres::hepmc2::WriterBuilder;
 use cres::prelude::*;
 
 use env_logger;
@@ -28,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let resampler = ResamplerBuilder::default().build();
 
     // Where to write the output
-    let writer = WriterBuilder::default().to_filename(outfile)?.build()?;
+    let writer = FileWriter::builder().filename(outfile.into()).build();
 
     let mut cres = CresBuilder {
         reader,

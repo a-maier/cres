@@ -8,7 +8,11 @@ use crate::{traits::Rewind, file::File, auto_decompress::auto_decompress};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
-/// Event file reader
+/// Reader for a single event file
+///
+/// The format is determined automatically. If you know the format
+/// beforehand, you can use
+/// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
 pub struct FileReader (
     Box<dyn EventFileReader>
 );
@@ -107,6 +111,7 @@ pub enum EventReadError {
     LHEFError(#[from] ::lhef::reader::ReadError),
 }
 
+/// Combined sequential reader from several sources (e.g. files)
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct CombinedReader<R> {
     readers: Vec<R>,
@@ -114,7 +119,8 @@ pub struct CombinedReader<R> {
 }
 
 impl<R> CombinedReader<R> {
-    fn new(readers: Vec<R>) -> Self {
+    /// Combine multiple readers into a single one
+    pub fn new(readers: Vec<R>) -> Self {
         Self{ readers, current: 0 }
     }
 }

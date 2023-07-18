@@ -6,15 +6,22 @@ use typed_builder::TypedBuilder;
 
 use crate::{traits::{Write, WriteEvent}, event::Event, progress_bar::{ProgressBar, Progress}, compression::Compression, cell_collector::CellCollector};
 
+/// Supported output formats
 #[derive(Copy, Clone, Debug, Default, Display, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[strum(serialize_all = "lowercase")]
 pub enum OutputFormat {
+    /// The HepMC2 format
+    ///
+    /// Also called `IO_GenEvent`. See the [official HepMC3
+    /// website](https://gitlab.cern.ch/hepmc/HepMC3) for details.
     #[default]
     HepMC2,
+    /// The [ROOT ntuple](https://arxiv.org/abs/1310.7439) format
     #[cfg(feature = "ntuple")]
     Root
 }
 
+/// General-purpose writer to some event file
 #[derive(Debug, TypedBuilder)]
 pub struct FileWriter {
     filename: PathBuf,

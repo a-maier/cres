@@ -5,7 +5,6 @@ use std::error::Error;
 
 use cres::distance::Distance;
 use cres::event::Event;
-use cres::hepmc2::{Converter, WriterBuilder};
 use cres::prelude::*;
 
 use env_logger;
@@ -56,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .distance(MyDistance { e_fact: n64(0.5) })
         .build();
 
-    let writer = WriterBuilder::default().to_filename(outfile)?.build()?;
+    let writer = FileWriter::builder().filename(outfile.into()).build();
 
     let mut cres = CresBuilder {
         reader,

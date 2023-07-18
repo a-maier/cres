@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::traits::WriteEvent;
 use crate::compression::Compression;
 
-/// Write events to ntuple format
+/// Write events in ROOT ntuple format
 #[derive(Debug)]
 pub struct Writer(ntuple::Writer);
 
