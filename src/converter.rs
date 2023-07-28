@@ -11,17 +11,24 @@ use particle_id::ParticleID;
 pub struct ClusteringConverter {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
+    include_neutrinos: bool,
 }
 
 impl ClusteringConverter {
     /// Construct a new converter using the given jet clustering
     pub fn new(jet_def: JetDefinition) -> Self {
-        Self { jet_def, lepton_def: None }
+        Self { jet_def, lepton_def: None, include_neutrinos: false }
     }
 
     /// Enable lepton clustering
     pub fn with_lepton_def(mut self, lepton_def: JetDefinition) -> Self {
         self.lepton_def = Some(lepton_def);
+        self
+    }
+
+    /// Whether to include neutrinos in final event record
+    pub fn include_neutrinos(mut self, include: bool) -> Self {
+        self.include_neutrinos = include;
         self
     }
 
@@ -52,7 +59,7 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
                 partons.push(p.into());
             } else if self.is_clustered_to_lepton(id) {
                 leptons.push(p.into());
-            } else {
+            } else if self.include_neutrinos || !is_neutrino(id) {
                 let p = [
                     n64(p[0]),
                     n64(p[1]),
@@ -76,6 +83,10 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         }
         Ok(builder.build())
     }
+}
+
+fn is_neutrino(id: ParticleID) -> bool {
+    id.abs().is_neutrino()
 }
 
 /// Straightforward conversion of HepMC events to internal format

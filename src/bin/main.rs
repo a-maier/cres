@@ -78,7 +78,8 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
-    let mut converter = ClusteringConverter::new(opt.jet_def.into());
+    let mut converter = ClusteringConverter::new(opt.jet_def.into())
+        .include_neutrinos(opt.include_neutrinos);
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
     }

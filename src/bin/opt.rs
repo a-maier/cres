@@ -220,6 +220,10 @@ pub(crate) struct Opt {
     #[clap(flatten)]
     pub(crate) lepton_def: LeptonDefinition,
 
+    /// Whether to include neutrinos in the distance measure
+    #[clap(long, default_value_t)]
+    pub(crate) include_neutrinos: bool,
+
     #[clap(flatten)]
     pub(crate) unweight: UnweightOpt,
 
