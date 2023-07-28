@@ -89,7 +89,8 @@ impl FileWriter {
             }
             // TODO: return error
             let weight = read_event.weights.first_mut().unwrap();
-            weight.weight = Some(f64::from(event.weight));
+            // TODO: more weights
+            weight.weight = Some(f64::from(event.weight()));
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to
                     .get(&event.id())

@@ -44,7 +44,8 @@ impl Distance for DistanceFn {
             type_sets1.iter().map(TypeSet::view).collect();
         let event_view1 = EventView {
             id: ev1.id(),
-            weight: ev1.weight.into(),
+            weights: ev1.weights.as_ptr() as *const f64,
+            n_weights: ev1.weights.len(),
             type_sets: type_set_views1.as_ptr(),
             n_type_sets: type_set_views1.len(),
         };
@@ -53,7 +54,8 @@ impl Distance for DistanceFn {
             type_sets2.iter().map(TypeSet::view).collect();
         let event_view2 = EventView {
             id: ev2.id(),
-            weight: ev2.weight.into(),
+            weights: ev2.weights.as_ptr() as *const f64,
+            n_weights: ev2.weights.len(),
             type_sets: type_set_views2.as_ptr(),
             n_type_sets: type_set_views2.len(),
         };

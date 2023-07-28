@@ -39,11 +39,11 @@ impl<R: Rng> Unweight for Unweighter<R> {
         if min_wt == 0. || events.is_empty() {
             return Ok(events);
         }
-        let orig_wt_sum: N64 = events.par_iter().map(|e| e.weight).sum();
+        let orig_wt_sum: N64 = events.par_iter().map(|e| e.weight()).sum();
 
         let distr = Uniform::from(0.0..min_wt);
         let keep = |e: &Event| {
-            let wt: f64 = e.weight.into();
+            let wt: f64 = e.weight().into();
             let awt = wt.abs();
             if awt > min_wt {
                 true
@@ -55,17 +55,23 @@ impl<R: Rng> Unweight for Unweighter<R> {
 
         let nmin_wt = n64(min_wt);
         events.par_iter_mut().for_each(|e| {
-            let wt: f64 = e.weight.into();
+            let wt: f64 = e.weight().into();
             let awt = wt.abs();
             if awt < min_wt {
-                e.weight = if wt > 0. { nmin_wt } else { -nmin_wt }
+                for wt in e.weights.iter_mut() {
+                    *wt *= nmin_wt / awt
+                }
             }
         });
 
         // rescale to ensure that the sum of weights is preserved exactly
-        let final_wt_sum: N64 = events.par_iter().map(|e| e.weight).sum();
+        let final_wt_sum: N64 = events.par_iter().map(|e| e.weight()).sum();
         let reweight = orig_wt_sum / final_wt_sum;
-        events.par_iter_mut().for_each(|e| e.weight *= reweight);
+        events.par_iter_mut().for_each(|e| {
+            for wt in e.weights.iter_mut() {
+                *wt *= reweight
+            }
+        });
         Ok(events)
     }
 }

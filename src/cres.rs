@@ -195,10 +195,10 @@ where
             self.unweighter.unweight(events).map_err(UnweightErr)?;
         events.par_sort_unstable();
 
-        let sum_wt: N64 = events.par_iter().map(|e| e.weight).sum();
-        let sum_neg_wt: N64 = events.par_iter().map(|e| e.weight).filter(|&w| w < 0.).sum();
+        let sum_wt: N64 = events.par_iter().map(|e| e.weight()).sum();
+        let sum_neg_wt: N64 = events.par_iter().map(|e| e.weight()).filter(|&w| w < 0.).sum();
         let sum_wtsqr: N64 =
-            events.par_iter().map(|e| e.weight * e.weight).sum();
+            events.par_iter().map(|e| e.weight() * e.weight()).sum();
         info!("Final sum of weights: {sum_wt:.3e} ± {:.3e}", sum_wtsqr.sqrt());
         info!("Final negative weight fraction: {:.3}", -sum_neg_wt / (sum_wt - sum_neg_wt * 2.));
 

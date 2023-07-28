@@ -11,16 +11,16 @@ pub type MomentumSet = Box<[FourVector]>;
 /// Build an [Event]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]
 pub struct EventBuilder {
-    weight: N64,
+    weights: Vec<N64>,
 
     outgoing_by_pid: Vec<(ParticleID, FourVector)>,
 }
 
 impl EventBuilder {
-    /// New event with vanishing weight and no particles
+    /// New event without weights or particles
     pub fn new() -> Self {
         Self {
-            weight: n64(0.),
+            weights: vec![],
             outgoing_by_pid: Vec::new(),
         }
     }
@@ -28,7 +28,7 @@ impl EventBuilder {
     /// New event with space reserved for the given number of particles
     pub fn with_capacity(cap: usize) -> Self {
         Self {
-            weight: n64(0.),
+            weights: vec![],
             outgoing_by_pid: Vec::with_capacity(cap),
         }
     }
@@ -42,9 +42,9 @@ impl EventBuilder {
         self
     }
 
-    /// Set the event weight
-    pub fn weight(&mut self, weight: N64) -> &mut Self {
-        self.weight = weight;
+    /// Set the event weights
+    pub fn weights(&mut self, weights: Vec<N64>) -> &mut Self {
+        self.weights = weights;
         self
     }
 
@@ -53,7 +53,7 @@ impl EventBuilder {
         let outgoing_by_pid = compress_outgoing(self.outgoing_by_pid);
         Event {
             id: Default::default(),
-            weight: self.weight,
+            weights: self.weights.into_boxed_slice(),
             outgoing_by_pid,
         }
     }
@@ -87,7 +87,7 @@ fn compress_outgoing(
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub struct Event {
     pub id: usize,
-    pub weight: N64,
+    pub weights: Box<[N64]>,
 
     outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
 }
@@ -119,6 +119,10 @@ impl Event {
         } else {
             EMPTY_SLICE
         }
+    }
+
+    pub fn weight(&self) -> N64 {
+        self.weights[0]
     }
 
     /// Extract the outgoing particle momenta grouped by particle id

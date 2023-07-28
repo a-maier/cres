@@ -57,16 +57,16 @@ impl SelectSeeds for StrategicSelector {
         let mut neg_weight: Vec<_> = events
             .par_iter()
             .enumerate()
-            .filter(|(_n, e)| e.weight < 0.)
+            .filter(|(_n, e)| e.weight() < 0.)
             .map(|(n, _e)| n)
             .collect();
         match self.strategy {
             Next => {}
             MostNegative => {
-                neg_weight.par_sort_unstable_by_key(|&n| events[n].weight)
+                neg_weight.par_sort_unstable_by_key(|&n| events[n].weight())
             }
             LeastNegative => neg_weight.par_sort_unstable_by(|&n, &m| {
-                events[m].weight.cmp(&events[n].weight)
+                events[m].weight().cmp(&events[n].weight())
             }),
         }
         neg_weight.into_iter()

@@ -9,10 +9,12 @@ use std::os::raw::c_double;
 pub struct EventView<'a> {
     /// Event id
     pub id: usize,
-    /// Event weight
-    pub weight: c_double,
+    /// Event weights
+    pub weights: *const c_double,
     /// Sets of particles of a given type
     pub type_sets: *const TypeSetView<'a>,
+    /// Number of event weights
+    pub n_weights: usize,
     /// Number of particle sets
     pub n_type_sets: usize,
 }

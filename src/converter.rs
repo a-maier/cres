@@ -47,8 +47,9 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         let mut partons = Vec::new();
         let mut leptons = Vec::new();
         let mut builder = EventBuilder::new();
+        // TODO: take exactly those weights we want
         let weight = event.weights.first().unwrap().weight.unwrap();
-        builder.weight(n64(weight));
+        builder.weights(vec![n64(weight)]);
         let outgoing = event.particles.into_iter().filter(
             |p| p.status == Some(Status::Outgoing)
         );
@@ -107,8 +108,9 @@ impl TryConvert<avery::Event, Event> for Converter {
         event: avery::Event,
     ) -> Result<Event, Self::Error> {
         let mut builder = EventBuilder::new();
+        // TODO: take exactly those weights we want
         let weight = event.weights.first().unwrap().weight.unwrap();
-        builder.weight(n64(weight));
+        builder.weights(vec![n64(weight)]);
         let outgoing = event.particles.into_iter().filter(
             |p| p.status == Some(Status::Outgoing)
         );

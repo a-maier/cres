@@ -2,6 +2,7 @@ use crate::distance::{Distance, PtDistance};
 use crate::event::Event;
 use crate::traits::NeighbourSearch;
 
+use itertools::zip_eq;
 use log::{debug, trace};
 use noisy_float::prelude::*;
 
@@ -31,7 +32,7 @@ impl<'a> Cell<'a> {
         for<'x, 'y> N: NeighbourSearch<PtDistance<'x, 'y, F>>,
         for<'x, 'y>  <N as NeighbourSearch<PtDistance<'x, 'y, F>>>::Iter: Iterator<Item=(usize, N64)>,
     {
-        let mut weight_sum = events[seed_idx].weight;
+        let mut weight_sum = events[seed_idx].weight();
         debug_assert!(weight_sum < 0.);
         debug!("Cell seed with weight {:e}", weight_sum);
         let mut members = vec![seed_idx];
@@ -45,9 +46,9 @@ impl<'a> Cell<'a> {
         for (next_idx, dist) in neighbours {
             trace!(
                 "adding event with distance {dist}, weight {:e} to cell",
-                events[next_idx].weight
+                events[next_idx].weight()
             );
-            weight_sum += events[next_idx].weight;
+            weight_sum += events[next_idx].weight();
             members.push(next_idx);
             radius = dist;
             if weight_sum >= 0. {
@@ -70,10 +71,19 @@ impl<'a> Cell<'a> {
     /// The current implementation sets all weights to the mean weight
     /// over the cell.
     pub fn resample(&mut self) {
-        let avg_wt = self.weight_sum() / (self.nmembers() as f64);
-        for &idx in &self.members {
-            self.events[idx].weight = avg_wt;
+        let (&first, rest) = self.members.split_first().unwrap();
+        let mut avg_wts = std::mem::take(&mut self.events[first].weights);
+        for &idx in rest {
+            add_assign(&mut avg_wts, &self.events[idx].weights);
         }
+        let inv_norm = n64(1. / self.nmembers() as f64);
+        for wt in avg_wts.iter_mut() {
+            *wt *= inv_norm;
+        }
+        for &idx in rest {
+            self.events[idx].weights.copy_from_slice(&avg_wts);
+        }
+        self.events[first].weights = avg_wts;
     }
 
     /// Number of events in cell
@@ -85,7 +95,7 @@ impl<'a> Cell<'a> {
     pub fn nneg_weights(&self) -> usize {
         self.members
             .iter()
-            .filter(|&&idx| self.events[idx].weight < 0.)
+            .filter(|&&idx| self.events[idx].weight() < 0.)
             .count()
     }
 
@@ -96,7 +106,7 @@ impl<'a> Cell<'a> {
         self.radius
     }
 
-    /// Sum of event weights inside the cell
+    /// Sum of central event weights inside the cell
     pub fn weight_sum(&self) -> N64 {
         self.weight_sum
     }
@@ -106,5 +116,11 @@ impl<'a> Cell<'a> {
         &'a self,
     ) -> impl std::iter::Iterator<Item = &'a Event> + 'a {
         self.members.iter().map(move |idx| &self.events[*idx])
+    }
+}
+
+fn add_assign(acc: &mut [N64], rhs: &[N64]) {
+    for (lhs, rhs) in zip_eq(acc, rhs) {
+        *lhs += rhs;
     }
 }
