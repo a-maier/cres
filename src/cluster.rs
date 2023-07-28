@@ -1,6 +1,6 @@
 use std::{fmt::{Display, self}, str::FromStr};
 
-use jetty::{PseudoJet, cluster_if, anti_kt_f, kt_f, cambridge_aachen_f};
+use jetty::{Cluster, PseudoJet, anti_kt_f, kt_f, cambridge_aachen_f};
 use particle_id::{ParticleID, sm_elementary_particles::{photon, electron, gluon, muon, bottom}};
 use thiserror::Error;
 
@@ -74,10 +74,10 @@ pub fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJe
     let cut = |jet: PseudoJet| jet.pt2() > minpt2;
     let r = jet_def.radius;
     match jet_def.algorithm {
-        JetAlgorithm::AntiKt => cluster_if(partons, &anti_kt_f(r), cut),
-        JetAlgorithm::Kt => cluster_if(partons, &kt_f(r), cut),
+        JetAlgorithm::AntiKt => partons.cluster_if(anti_kt_f(r), cut),
+        JetAlgorithm::Kt => partons.cluster_if(kt_f(r), cut),
         JetAlgorithm::CambridgeAachen => {
-            cluster_if(partons, &cambridge_aachen_f(r), cut)
+            partons.cluster_if(cambridge_aachen_f(r), cut)
         }
     }
 }
