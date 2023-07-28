@@ -66,22 +66,13 @@ impl<'a> Cell<'a> {
     ///
     /// This redistributes weights in such a way that all weights have
     /// the same sign.
+    ///
+    /// The current implementation sets all weights to the mean weight
+    /// over the cell.
     pub fn resample(&mut self) {
-        let orig_weight_sum = self.weight_sum();
-        if orig_weight_sum == n64(0.) {
-            for &idx in &self.members {
-                self.events[idx].weight = n64(0.);
-            }
-        } else {
-            let mut abs_weight_sum = n64(0.);
-            for &idx in &self.members {
-                let awt = self.events[idx].weight.abs();
-                self.events[idx].weight = awt;
-                abs_weight_sum += awt;
-            }
-            for &idx in &self.members {
-                self.events[idx].weight *= orig_weight_sum / abs_weight_sum;
-            }
+        let avg_wt = self.weight_sum() / (self.nmembers() as f64);
+        for &idx in &self.members {
+            self.events[idx].weight = avg_wt;
         }
     }
 
