@@ -16,7 +16,7 @@
 //! ## Most relevant modules
 //!
 //! - [prelude] exports a list of the most relevant classes and objects
-//! - [cres] contains the main class and list the steps that are performed
+//! - [cres] contains the main class and lists the steps that are performed
 //! - [reader] defines readers from one or more event files
 //! - [writer] for writing events to a file
 //! - [event] for the internal event format

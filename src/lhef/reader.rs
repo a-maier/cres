@@ -6,6 +6,7 @@ use crate::file::File;
 use crate::reader::{RewindError, EventReadError};
 use crate::traits::{Rewind, TryClone};
 
+/// Read events in [Les Houches Event File](https://arxiv.org/abs/hep-ph/0109068v1) format from a (potentially compressed) file
 pub struct FileReader {
     reader: ::lhef::Reader<Box<dyn BufRead>>,
     source: File,

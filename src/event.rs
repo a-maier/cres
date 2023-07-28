@@ -8,7 +8,7 @@ use particle_id::ParticleID;
 
 pub type MomentumSet = Box<[FourVector]>;
 
-/// Build and `Event'
+/// Build an [Event]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]
 pub struct EventBuilder {
     weight: N64,
