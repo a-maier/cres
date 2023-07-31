@@ -8,6 +8,7 @@ use vergen::EmitBuilder;
 
 fn main() -> Result<()> {
     EmitBuilder::builder()
+        .git_branch()
         .git_sha(true)
         .emit()?;
 
