@@ -17,7 +17,7 @@ use cres::{
     distance::{EuclWithScaledPt, PtDistance},
     prelude::*,
     neighbour_search::{NeighbourData, NeighbourSearch, NaiveNeighbourSearch, TreeSearch},
-    resampler::DefaultResamplerBuilder, GIT_BRANCH, GIT_REV, VERSION,
+    resampler::DefaultResamplerBuilder, FEATURES, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
 use log::{debug, info};
@@ -54,9 +54,9 @@ where
         .build_global()?;
 
     if let (Some(rev), Some(branch)) = (GIT_REV, GIT_BRANCH) {
-        info!("cres {} rev {} ({})", VERSION, rev, branch);
+        info!("cres {VERSION} rev {rev} ({branch}) {FEATURES:?}");
     } else {
-        info!("cres {}", VERSION);
+        info!("cres {VERSION} {FEATURES:?}");
     }
 
     debug!("settings: {:#?}", opt);

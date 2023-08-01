@@ -91,3 +91,27 @@ lazy_static! {
 }
 pub const GIT_REV: Option<&str> = option_env!("VERGEN_GIT_SHA");
 pub const GIT_BRANCH: Option<&str> = option_env!("VERGEN_GIT_BRANCH");
+
+pub const FEATURES: [&str; NFEATURES] = [
+    #[cfg(feature = "lhef")]
+    "lhef",
+    #[cfg(feature = "multiweight")]
+    "multiweight",
+    #[cfg(feature = "ntuple")]
+    "ntuple",
+    #[cfg(feature = "capi")]
+    "capi",
+];
+
+const NFEATURES: usize = {
+    let mut nfeatures = 0;
+    #[cfg(feature = "lhef")]
+    { nfeatures += 1; }
+    #[cfg(feature = "multiweight")]
+    { nfeatures += 1; }
+    #[cfg(feature = "ntuple")]
+    { nfeatures += 1; }
+    #[cfg(feature = "capi")]
+    { nfeatures += 1; }
+    nfeatures
+};
