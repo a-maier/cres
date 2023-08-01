@@ -68,7 +68,7 @@ name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 
 [features]
-default = ["lhef", "multiweight", "capi"]
+default = ["lhef", "multiweight"]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple", "avery/ntuple"]
 capi = ["multiweight"]
 multiweight = []
