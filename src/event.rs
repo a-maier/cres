@@ -62,7 +62,10 @@ impl EventBuilder {
         let outgoing_by_pid = compress_outgoing(self.outgoing_by_pid);
         Event {
             id: Default::default(),
-            weights: self.weights.into(),
+            #[cfg(feature = "multiweight")]
+            weights: self.weights.into_boxed_slice(),
+            #[cfg(not(feature = "multiweight"))]
+            weights: self.weights,
             outgoing_by_pid,
         }
     }
