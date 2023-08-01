@@ -306,6 +306,7 @@ variable."
     /// names will be averaged within each cell.
     // Would be nice to use a HashSet here, but clap refuses to parse
     // that out of the box
+    #[cfg(feature = "multiweight")]
     #[clap(long, value_delimiter = ',')]
     pub(crate) weights: Vec<String>,
 

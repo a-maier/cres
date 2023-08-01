@@ -8,10 +8,19 @@ use particle_id::ParticleID;
 
 pub type MomentumSet = Box<[FourVector]>;
 
+#[cfg(feature = "multiweight")]
+type BuilderWeights = Vec<N64>;
+#[cfg(feature = "multiweight")]
+type Weights = Box<[N64]>;
+#[cfg(not(feature = "multiweight"))]
+type BuilderWeights = N64;
+#[cfg(not(feature = "multiweight"))]
+type Weights = N64;
+
 /// Build an [Event]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]
 pub struct EventBuilder {
-    weights: Vec<N64>,
+    weights: BuilderWeights,
 
     outgoing_by_pid: Vec<(ParticleID, FourVector)>,
 }
@@ -20,7 +29,7 @@ impl EventBuilder {
     /// New event without weights or particles
     pub fn new() -> Self {
         Self {
-            weights: vec![],
+            weights: Default::default(),
             outgoing_by_pid: Vec::new(),
         }
     }
@@ -28,7 +37,7 @@ impl EventBuilder {
     /// New event with space reserved for the given number of particles
     pub fn with_capacity(cap: usize) -> Self {
         Self {
-            weights: vec![],
+            weights: Default::default(),
             outgoing_by_pid: Vec::with_capacity(cap),
         }
     }
@@ -43,7 +52,7 @@ impl EventBuilder {
     }
 
     /// Set the event weights
-    pub fn weights(&mut self, weights: Vec<N64>) -> &mut Self {
+    pub fn weights(&mut self, weights: BuilderWeights) -> &mut Self {
         self.weights = weights;
         self
     }
@@ -53,7 +62,7 @@ impl EventBuilder {
         let outgoing_by_pid = compress_outgoing(self.outgoing_by_pid);
         Event {
             id: Default::default(),
-            weights: self.weights.into_boxed_slice(),
+            weights: self.weights.into(),
             outgoing_by_pid,
         }
     }
@@ -87,7 +96,7 @@ fn compress_outgoing(
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub struct Event {
     pub id: usize,
-    pub weights: Box<[N64]>,
+    pub weights: Weights,
 
     outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
 }
@@ -121,12 +130,38 @@ impl Event {
         }
     }
 
+    /// The central event weight
     pub fn weight(&self) -> N64 {
-        self.weights[0]
+        #[cfg(feature = "multiweight")]
+        return self.weights[0];
+
+        #[cfg(not(feature = "multiweight"))]
+        self.weights
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
     pub fn into_outgoing(self) -> Box<[(ParticleID, MomentumSet)]> {
         self.outgoing_by_pid
+    }
+
+    /// Number of weights
+    pub fn n_weights(&self) -> usize {
+        #[cfg(feature = "multiweight")]
+        return self.weights.len();
+
+        #[cfg(not(feature = "multiweight"))]
+        1
+    }
+
+    /// Rescale weights by some factor
+    pub fn rescale_weights(&mut self, scale: N64) {
+        #[cfg(feature = "multiweight")]
+        for wt in self.weights.iter_mut() {
+            *wt *= scale
+        }
+        #[cfg(not(feature = "multiweight"))]
+        {
+            self.weights *= scale;
+        }
     }
 }

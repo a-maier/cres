@@ -2,7 +2,6 @@ use crate::distance::{Distance, PtDistance};
 use crate::event::Event;
 use crate::traits::NeighbourSearch;
 
-use itertools::zip_eq;
 use log::{debug, trace};
 use noisy_float::prelude::*;
 
@@ -70,7 +69,16 @@ impl<'a> Cell<'a> {
     ///
     /// The current implementation sets all weights to the mean weight
     /// over the cell.
+    #[cfg(feature = "multiweight")]
     pub fn resample(&mut self) {
+
+        fn add_assign(acc: &mut [N64], rhs: &[N64]) {
+            use itertools::zip_eq;
+            for (lhs, rhs) in zip_eq(acc, rhs) {
+                *lhs += rhs;
+            }
+        }
+
         let (&first, rest) = self.members.split_first().unwrap();
         let mut avg_wts = std::mem::take(&mut self.events[first].weights);
         for &idx in rest {
@@ -84,6 +92,14 @@ impl<'a> Cell<'a> {
             self.events[idx].weights.copy_from_slice(&avg_wts);
         }
         self.events[first].weights = avg_wts;
+    }
+
+    #[cfg(not(feature = "multiweight"))]
+    pub fn resample(&mut self) {
+         let avg_wt = self.weight_sum() / (self.nmembers() as f64);
+         for &idx in &self.members {
+             self.events[idx].weights = avg_wt;
+         }
     }
 
     /// Number of events in cell
@@ -116,11 +132,5 @@ impl<'a> Cell<'a> {
         &'a self,
     ) -> impl std::iter::Iterator<Item = &'a Event> + 'a {
         self.members.iter().map(move |idx| &self.events[*idx])
-    }
-}
-
-fn add_assign(acc: &mut [N64], rhs: &[N64]) {
-    for (lhs, rhs) in zip_eq(acc, rhs) {
-        *lhs += rhs;
     }
 }

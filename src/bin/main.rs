@@ -1,6 +1,7 @@
 mod opt;
 
 use std::cell::RefCell;
+#[cfg(feature = "multiweight")]
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -79,10 +80,14 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
+    #[cfg(feature = "multiweight")]
     let weights: HashSet<_> = opt.weights.into_iter().collect();
     let mut converter = ClusteringConverter::new(opt.jet_def.into())
-        .include_weights(weights.clone())
         .include_neutrinos(opt.include_neutrinos);
+    #[cfg(feature = "multiweight")]
+    {
+        converter = converter.include_weights(weights.clone());
+    }
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
     }
@@ -90,9 +95,10 @@ where
         .filename(opt.outfile.clone())
         .format(opt.outformat.into())
         .compression(opt.compression)
-        .overwrite_weights(weights)
-        .cell_collector(cell_collector)
-        .build();
+        .cell_collector(cell_collector);
+    #[cfg(feature = "multiweight")]
+    let writer = writer.overwrite_weights(weights);
+    let writer = writer.build();
 
     let mut cres = CresBuilder {
         reader,

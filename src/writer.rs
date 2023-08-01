@@ -1,4 +1,7 @@
-use std::{path::{PathBuf, Path}, cell::RefCell, rc::Rc, collections::{HashMap, hash_map::Entry, HashSet}};
+use std::{path::{PathBuf, Path}, cell::RefCell, rc::Rc, collections::{HashMap, hash_map::Entry}};
+#[cfg(feature = "multiweight")]
+use std::collections::HashSet;
+
 
 use strum::Display;
 use thiserror::Error;
@@ -34,6 +37,7 @@ pub struct FileWriter {
     compression: Option<Compression>,
     #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    #[cfg(feature = "multiweight")]
     #[builder(default)]
     overwrite_weights: HashSet<String>,
 }
@@ -92,11 +96,14 @@ impl FileWriter {
             // TODO: return error
             let weight = read_event.weights.first_mut().unwrap();
             weight.weight = Some(f64::from(event.weight()));
-            let mut resampled_weights = event.weights.into_iter().skip(1);
-            for wt in &mut read_event.weights {
-                if let Some(name) = wt.name.as_ref() {
-                    if self.overwrite_weights.contains(name) {
-                        wt.weight = Some(f64::from(*resampled_weights.next().unwrap()))
+            #[cfg(feature = "multiweight")]
+            {
+                let mut resampled_weights = event.weights.into_iter().skip(1);
+                for wt in &mut read_event.weights {
+                    if let Some(name) = wt.name.as_ref() {
+                        if self.overwrite_weights.contains(name) {
+                            wt.weight = Some(f64::from(*resampled_weights.next().unwrap()))
+                        }
                     }
                 }
             }

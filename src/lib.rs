@@ -29,6 +29,7 @@ pub mod auto_decompress;
 /// Partition events by iterative bisection
 pub mod bisect;
 #[cfg(target_family = "unix")]
+#[cfg(feature = "multiweight")]
 pub mod c_api;
 /// Definition of event cells
 pub mod cell;

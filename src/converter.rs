@@ -1,3 +1,4 @@
+#[cfg(feature = "multiweight")]
 use std::collections::{HashSet, HashMap};
 
 use crate::cluster::{JetDefinition, is_parton, is_light_lepton, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON, is_hadron};
@@ -15,6 +16,7 @@ pub struct ClusteringConverter {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
     include_neutrinos: bool,
+    #[cfg(feature = "multiweight")]
     weight_names: HashSet<String>,
 }
 
@@ -25,6 +27,7 @@ impl ClusteringConverter {
             jet_def,
             lepton_def: None,
             include_neutrinos: false,
+            #[cfg(feature = "multiweight")]
             weight_names: HashSet::new(),
         }
     }
@@ -44,6 +47,7 @@ impl ClusteringConverter {
     /// Names of additional weights to include in the converted event
     ///
     /// By default, only the main weight is kept
+    #[cfg(feature = "multiweight")]
     pub fn include_weights(mut self, weight_names: HashSet<String>) -> Self {
         self.weight_names = weight_names;
         self
@@ -64,7 +68,11 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         let mut partons = Vec::new();
         let mut leptons = Vec::new();
         let mut builder = EventBuilder::new();
+        #[cfg(feature = "multiweight")]
         builder.weights(extract_weights(&event, &self.weight_names)?);
+        #[cfg(not(feature = "multiweight"))]
+        builder.weights(n64(event.weights.first().unwrap().weight.unwrap()));
+
         let outgoing = event.particles.into_iter().filter(
             |p| p.status == Some(Status::Outgoing)
         );
@@ -108,6 +116,7 @@ fn is_neutrino(id: ParticleID) -> bool {
 /// Straightforward conversion into internal format
 #[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct Converter {
+    #[cfg(feature = "multiweight")]
     weight_names: HashSet<String>,
 }
 
@@ -119,6 +128,7 @@ impl Converter {
     /// Names of additional weights to include in the converted event
     ///
     /// By default, only the main weight is kept
+    #[cfg(feature = "multiweight")]
     pub fn include_weights(mut self, weight_names: HashSet<String>) -> Self {
         self.weight_names = weight_names;
         self
@@ -134,7 +144,10 @@ impl TryConvert<avery::Event, Event> for Converter {
         event: avery::Event,
     ) -> Result<Event, Self::Error> {
         let mut builder = EventBuilder::new();
+        #[cfg(feature = "multiweight")]
         builder.weights(extract_weights(&event, &self.weight_names)?);
+        #[cfg(not(feature = "multiweight"))]
+        builder.weights(n64(event.weights.first().unwrap().weight.unwrap()));
 
         let outgoing = event.particles.into_iter().filter(
             |p| p.status == Some(Status::Outgoing)
@@ -153,6 +166,7 @@ impl TryConvert<avery::Event, Event> for Converter {
     }
 }
 
+#[cfg(feature = "multiweight")]
 fn extract_weights(
     event: &avery::Event,
     weight_names: &HashSet<String>
@@ -185,6 +199,7 @@ fn extract_weights(
 
 #[derive(Debug, Error)]
 pub enum ConversionError {
+    #[cfg(feature = "multiweight")]
     #[error("Failed to find event weight \"{0}\": Event has weights {1:?}")]
     WeightNotFound(String, Vec<String>)
 }
