@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, cell::RefCell, rc::Rc, collections::{HashMap, hash_map::Entry}};
+use std::{path::{PathBuf, Path}, cell::RefCell, rc::Rc, collections::{HashMap, hash_map::Entry, HashSet}};
 
 use strum::Display;
 use thiserror::Error;
@@ -34,6 +34,8 @@ pub struct FileWriter {
     compression: Option<Compression>,
     #[builder(default)]
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    #[builder(default)]
+    overwrite_weights: HashSet<String>,
 }
 
 impl FileWriter {
@@ -89,8 +91,15 @@ impl FileWriter {
             }
             // TODO: return error
             let weight = read_event.weights.first_mut().unwrap();
-            // TODO: more weights
             weight.weight = Some(f64::from(event.weight()));
+            let mut resampled_weights = event.weights.into_iter().skip(1);
+            for wt in &mut read_event.weights {
+                if let Some(name) = wt.name.as_ref() {
+                    if self.overwrite_weights.contains(name) {
+                        wt.weight = Some(f64::from(*resampled_weights.next().unwrap()))
+                    }
+                }
+            }
             if let Some(dump_event_to) = dump_event_to.as_ref() {
                 let cellnums: &[usize] = dump_event_to
                     .get(&event.id())

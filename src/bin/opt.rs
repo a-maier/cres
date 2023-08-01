@@ -300,6 +300,15 @@ variable."
     #[clap(long)]
     pub(crate) max_cell_size: Option<f64>,
 
+    /// Comma-separated list of weights to include in the resampling
+    ///
+    /// In addition to the main event weight, weights with the given
+    /// names will be averaged within each cell.
+    // Would be nice to use a HashSet here, but clap refuses to parse
+    // that out of the box
+    #[clap(long, value_delimiter = ',')]
+    pub(crate) weights: Vec<String>,
+
     /// Input files
     #[clap(name = "INFILES", value_parser)]
     pub(crate) infiles: Vec<PathBuf>,

@@ -1,6 +1,7 @@
 mod opt;
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::opt::{Opt, Search};
@@ -78,7 +79,9 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
+    let weights: HashSet<_> = opt.weights.into_iter().collect();
     let mut converter = ClusteringConverter::new(opt.jet_def.into())
+        .include_weights(weights.clone())
         .include_neutrinos(opt.include_neutrinos);
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
@@ -87,6 +90,7 @@ where
         .filename(opt.outfile.clone())
         .format(opt.outformat.into())
         .compression(opt.compression)
+        .overwrite_weights(weights)
         .cell_collector(cell_collector)
         .build();
 

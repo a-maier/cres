@@ -1,3 +1,5 @@
+use std::collections::{HashSet, HashMap};
+
 use crate::cluster::{JetDefinition, is_parton, is_light_lepton, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON, is_hadron};
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
@@ -5,19 +7,26 @@ use crate::traits::TryConvert;
 use avery::event::Status;
 use noisy_float::prelude::*;
 use particle_id::ParticleID;
+use thiserror::Error;
 
 /// Convert an input event into internal format with jet clustering
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ClusteringConverter {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
     include_neutrinos: bool,
+    weight_names: HashSet<String>,
 }
 
 impl ClusteringConverter {
     /// Construct a new converter using the given jet clustering
     pub fn new(jet_def: JetDefinition) -> Self {
-        Self { jet_def, lepton_def: None, include_neutrinos: false }
+        Self {
+            jet_def,
+            lepton_def: None,
+            include_neutrinos: false,
+            weight_names: HashSet::new(),
+        }
     }
 
     /// Enable lepton clustering
@@ -32,13 +41,21 @@ impl ClusteringConverter {
         self
     }
 
+    /// Names of additional weights to include in the converted event
+    ///
+    /// By default, only the main weight is kept
+    pub fn include_weights(mut self, weight_names: HashSet<String>) -> Self {
+        self.weight_names = weight_names;
+        self
+    }
+
     fn is_clustered_to_lepton(&self, id: ParticleID) -> bool {
         self.lepton_def.is_some() && (is_light_lepton(id.abs()) || is_photon(id))
     }
 }
 
 impl TryConvert<avery::Event, Event> for ClusteringConverter {
-    type Error = std::convert::Infallible;
+    type Error = ConversionError;
 
     fn try_convert(
         &mut self,
@@ -47,9 +64,7 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         let mut partons = Vec::new();
         let mut leptons = Vec::new();
         let mut builder = EventBuilder::new();
-        // TODO: take exactly those weights we want
-        let weight = event.weights.first().unwrap().weight.unwrap();
-        builder.weights(vec![n64(weight)]);
+        builder.weights(extract_weights(&event, &self.weight_names)?);
         let outgoing = event.particles.into_iter().filter(
             |p| p.status == Some(Status::Outgoing)
         );
@@ -90,27 +105,37 @@ fn is_neutrino(id: ParticleID) -> bool {
     id.abs().is_neutrino()
 }
 
-/// Straightforward conversion of HepMC events to internal format
-#[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Converter {}
+/// Straightforward conversion into internal format
+#[derive(Clone, Default, Debug, Eq, PartialEq)]
+pub struct Converter {
+    weight_names: HashSet<String>,
+}
 
 impl Converter {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Names of additional weights to include in the converted event
+    ///
+    /// By default, only the main weight is kept
+    pub fn include_weights(mut self, weight_names: HashSet<String>) -> Self {
+        self.weight_names = weight_names;
+        self
+    }
+
 }
 
 impl TryConvert<avery::Event, Event> for Converter {
-    type Error = std::convert::Infallible;
+    type Error = ConversionError;
 
     fn try_convert(
         &mut self,
         event: avery::Event,
     ) -> Result<Event, Self::Error> {
         let mut builder = EventBuilder::new();
-        // TODO: take exactly those weights we want
-        let weight = event.weights.first().unwrap().weight.unwrap();
-        builder.weights(vec![n64(weight)]);
+        builder.weights(extract_weights(&event, &self.weight_names)?);
+
         let outgoing = event.particles.into_iter().filter(
             |p| p.status == Some(Status::Outgoing)
         );
@@ -126,4 +151,40 @@ impl TryConvert<avery::Event, Event> for Converter {
         }
         Ok(builder.build())
     }
+}
+
+fn extract_weights(
+    event: &avery::Event,
+    weight_names: &HashSet<String>
+) -> Result<Vec<N64>, ConversionError> {
+    let mut weights = Vec::with_capacity(weight_names.len() + 1);
+    let weight = event.weights.first().unwrap().weight.unwrap();
+    weights.push(n64(weight));
+    let mut weight_seen: HashMap<_, _> = weight_names.iter()
+        .map(|n| (n, false))
+        .collect();
+    for wt in &event.weights {
+        if let Some(name) = wt.name.as_ref() {
+            if let Some(seen) = weight_seen.get_mut(name) {
+                *seen = true;
+                weights.push(n64(wt.weight.unwrap()))
+            }
+        }
+    }
+    let missing = weight_seen.into_iter()
+        .find_map(|(name, seen)| if seen { None } else { Some(name) });
+    if let Some(missing) = missing {
+        let all_names = event.weights.iter()
+            .filter_map(|wt| wt.name.clone())
+            .collect();
+        Err(ConversionError::WeightNotFound(missing.to_owned(), all_names))
+    } else {
+        Ok(weights)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ConversionError {
+    #[error("Failed to find event weight \"{0}\": Event has weights {1:?}")]
+    WeightNotFound(String, Vec<String>)
 }
