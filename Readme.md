@@ -29,6 +29,8 @@ To install the development version, clone this repository and run
 
     cargo install --path path/to/local/cres/repository
 
+Check the [Features section](#Features) for more options.
+
 To generate shell command completion, run
 
     cres-generate-shell-completion SHELL
@@ -50,7 +52,9 @@ The basic usage is
 This takes a file `IN.HEPMC2` (or several files) in hepmc2 or Les
 Houches Event format with mixed-weight events and produces a file
 `OUT.HEPMC2` with a smaller contribution from negative weights. The
-input file can be compressed with bzip2, gzip, zstd, or lz4.
+input file can be compressed with bzip2, gzip, zstd, or lz4. The input
+format is detected automatically, the output format can be set with
+the `--outformat` option and defaults to hepmc2.
 
 We recommend to set the jet algorithm `JETALGO`, jet radius `JETR`,
 and minimum jet transverse momentum `JETPT` to the same values that
@@ -140,32 +144,48 @@ samples, limiting the number of threads can be faster. You can set the
 number of threads with the `--threads` command line option or with the
 `RAYON_NUM_THREADS` environment variable.
 
-Support for ntuple files
-------------------------
+## Features
 
-To read and write [ROOT ntuple files](https://arxiv.org/abs/1310.7439),
-ROOT has to be installed and `root-config` has to be in the executable
-path. To install `cres` with ntuple support, run
+To install cres with additional features, add `--features name1,name2`
+to your installation command. Default features don't have to be added
+manually. To disable them, add the `--no-default-features` flag.
 
-    cargo install cres --features ntuple
+### Default features
 
-This requires a recent version of `libclang`.
+- `multiweight`: Enables the `--weights` option for treating multiple
+  weights in one run. If you only want to consider a single weight you
+  can disable this feature to save some memory and computing time.
 
-Linking may fail due to a
-[cargo bug](https://github.com/rust-lang/cargo/issues/12326). In that
-case, determine the necessary flags by running `root-config --libs`
-and manually add them, e.g.
+- `lhef`: Support for reading and writing files in the Les
+  Houches Event format.
 
-    RUSTFLAGS='-C link-arg=-lCore' cargo install cres --features ntuple
+### Non-default features
 
-Input files are recognised automatically, the output file format can
-be chosen with the `--outformat` flag.
+- `ntuple`: Support for reading and writing [ROOT ntuple
+  files](https://arxiv.org/abs/1310.7439). This requires a recent
+  version of `libclang` and a [ROOT](https://root.cern.ch/)
+  installation with `root-config` in the executable path.
+
+  Linking may fail due to a
+  [cargo bug](https://github.com/rust-lang/cargo/issues/12326). In that
+  case, determine the necessary flags by running `root-config --libs`
+  and manually add them, e.g.
+
+  ```
+     RUSTFLAGS='-C link-arg=-lCore' cargo install cres --features ntuple
+  ```
+
+- `capi`: Enables the C API for using `cres` as a C library. For
+  examples, see the
+  [examples](https://github.com/a-maier/cres/tree/master/examples)
+  subdirectory. The API is limited and only available on unixoid
+  platforms. It will be extended on request.
 
 Use as a library
 ----------------
 
 For full flexibility like custom distance functions `cres` can be used
-as a library from Rust and C. For examples, see the `examples`
-subdirectory. The Rust API is documented on
-[docs.rs](https://docs.rs/crate/cres/). The C API is still limited and
-only available on unixoid platforms. It will be extended on request.
+as a library. For examples, see the
+[examples](https://github.com/a-maier/cres/tree/master/examples)
+subdirectory. The API is documented on
+[docs.rs](https://docs.rs/crate/cres/).
