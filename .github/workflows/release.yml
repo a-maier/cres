@@ -42,7 +42,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --target ${{ matrix.target }} --release
+          args: --target ${{ matrix.target }} --release --features capi
       - run: ci/make_tarball.sh ${{ matrix.target }}
       - uses: svenstaro/upload-release-action@v2
         with:
@@ -66,7 +66,7 @@ jobs:
         with:
           use-cross: true
           command: build
-          args: --target x86_64-apple-darwin --release
+          args: --target x86_64-apple-darwin --release --features capi
       - run: ci/make_tarball.sh x86_64-apple-darwin
       - uses: svenstaro/upload-release-action@v2
         with:
