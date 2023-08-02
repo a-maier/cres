@@ -1,7 +1,8 @@
 use std::io::{Error, ErrorKind, BufReader, BufRead, Seek};
 use std::fmt::{Debug, Display};
 
-use crate::auto_decompress::auto_decompress;
+use audec::auto_decompress;
+
 use crate::file::File;
 use crate::reader::{RewindError, EventReadError};
 use crate::traits::{Rewind, TryClone};

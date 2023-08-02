@@ -1,10 +1,11 @@
 use std::{path::{Path, PathBuf}, io::{BufReader, BufRead}};
 
+use audec::auto_decompress;
 use hepmc2::reader::LineParseError;
 use log::debug;
 use thiserror::Error;
 
-use crate::{traits::Rewind, file::File, auto_decompress::auto_decompress};
+use crate::{traits::Rewind, file::File};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 

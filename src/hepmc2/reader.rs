@@ -1,7 +1,8 @@
 use std::io::{Seek, BufRead, BufReader};
 
+use audec::auto_decompress;
 
-use crate::{traits::{TryClone, Rewind}, reader::{RewindError, EventReadError}, file::File, auto_decompress::auto_decompress};
+use crate::{traits::{TryClone, Rewind}, reader::{RewindError, EventReadError}, file::File};
 
 /// Reader for a single (potentially compressed) HepMC2 event file
 pub struct FileReader {

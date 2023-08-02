@@ -24,8 +24,6 @@
 //! - [seeds] and [resampler] for the resampling
 //!
 
-/// Automatic input decompression
-pub mod auto_decompress;
 /// Partition events by iterative bisection
 pub mod bisect;
 #[cfg(target_family = "unix")]
