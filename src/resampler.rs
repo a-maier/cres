@@ -83,48 +83,32 @@ where
         let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
 
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
-        if self.num_partitions > 1 {
-            info!("Splitting events into {} parts", self.num_partitions);
-        }
-        let depth = log2(self.num_partitions);
-        let parts = circle_partition_with_progress(
-            &mut events,
-            |e1, e2| self.distance.distance(e1, e2),
-            depth
+
+        info!("Initialising nearest-neighbour search");
+        let mut neighbour_search = N::new_with_dist(
+            events.len(),
+            PtDistance::new(&self.distance, &events),
+            max_cell_size,
         );
-        debug_assert_eq!(parts.len(), self.num_partitions as usize);
 
         info!("Resampling {nneg_weight} cells");
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
-        parts.into_par_iter().enumerate().for_each(|(n, events)| {
-            debug!("Selecting seeds for partition {n}");
-            let seeds = self.seeds.select_seeds(events);
-            debug!("Initialising nearest-neighbour search for part {n}");
-            let mut neighbour_search = N::new_with_dist(
-                events.len(),
-                PtDistance::new(&self.distance, events),
-                max_cell_size,
-            );
-            debug!("Resampling part {n}");
-            for seed in seeds.take(nneg_weight) {
-                if seed >= events.len() {
-                    break;
-                }
-                progress.inc(1);
-                if events[seed].weight() > 0. {
-                    continue;
-                }
-                trace!("New cell around event {}", events[seed].id());
-
-                let mut cell = Cell::new(
-                    events,
-                    seed,
-                    &self.distance,
-                    &mut neighbour_search
-                );
-                cell.resample();
-                self.observer.observe_cell(&cell);
+        let seeds = self.seeds.select_seeds(&events);
+        seeds.take(nneg_weight).for_each(|seed| {
+            assert!(seed < events.len());
+            if events[seed].weight() > 0. {
+                return;
             }
+            trace!("New cell around event {}", events[seed].id());
+            let mut cell = Cell::new(
+                &mut events,
+                seed,
+                &self.distance,
+                &mut neighbour_search
+            );
+            cell.resample();
+            self.observer.observe_cell(&cell);
+            progress.inc(1);
         });
         progress.finish();
         debug!("Combining cell observations");
