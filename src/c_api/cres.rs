@@ -55,8 +55,6 @@ pub struct Opt {
     jet_def: JetDefinition,
     /// Algorithm for finding nearest-neigbour events,
     neighbour_search: Search,
-    /// Number of partitions
-    num_partitions: u32,
     /// Maximum cell radius
     ///
     /// Set to INFINITY for unlimited cell sizes
@@ -198,12 +196,11 @@ where
         .filename(outfile.into())
         .build();
 
-    // TODO: seeds, observer, partitions
+    // TODO: seeds, observer
     let resampler = ResamplerBuilder::default()
         .max_cell_size(Some(opt.max_cell_size as f64))
         .distance(dist)
         .neighbour_search::<N>()
-        .num_partitions(opt.num_partitions)
         .build();
 
     let mut cres = CresBuilder {

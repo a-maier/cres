@@ -70,7 +70,6 @@ where
     };
     let resampler = DefaultResamplerBuilder::default()
         .max_cell_size(opt.max_cell_size)
-        .num_partitions(opt.partitions)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
         .cell_collector(cell_collector.clone())

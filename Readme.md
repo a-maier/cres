@@ -86,18 +86,6 @@ The most important options are
   and gradually increase the value if too many negative weights are
   left.
 
-- `--partitions` the initial sample is divided into the given number
-  of partitions. The number of partitions has to be a power of two.
-  On the one hand, values larger than one accelerate the
-  nearest-neighbour search and are necessary to parallelise the
-  default search strategy. On the other hand, nearest neighbours may
-  be missed for cells close to partitions boundaries.
-
-  Recommended values are 1 for slow, but exact resampling, or a number
-  up to about twice the number of cores for faster approximate
-  resampling. Increasing the number of partitions is better than
-  increasing the number of runs with different event input files.
-
 - `--ptweight` specifies how much transverse momenta affect distances
   between particles with momenta p and q according to the formula
 

@@ -64,7 +64,6 @@ int main(int argc, char** argv) {
   opt.jet_def.radius = 0.4;
   opt.jet_def.min_pt = 30.;
   opt.neighbour_search = Tree;
-  opt.num_partitions = 1;
   opt.max_cell_size = INFINITY;
 
   /* custom distance function with `E_fact` as extra data */

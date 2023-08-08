@@ -30,8 +30,6 @@ use thread_local::ThreadLocal;
 
 #[derive(Debug, Error)]
 pub enum ResamplingError{
-    #[error("Number of partitions is {0}, but has to be a power of two")]
-    NPartition(u32)
 }
 
 /// Main resampling class
@@ -40,7 +38,6 @@ pub struct Resampler<D, N, O, S> {
     distance: D,
     neighbour_search: PhantomData<N>,
     observer: O,
-    num_partitions: u32,
     max_cell_size: Option<f64>,
 }
 
@@ -75,9 +72,6 @@ where
         &mut self,
         events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
-        if !self.num_partitions.is_power_of_two() {
-            return Err(ResamplingError::NPartition(self.num_partitions))
-        }
         self.print_wt_sum(&events);
 
         let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
@@ -130,7 +124,6 @@ pub struct ResamplerBuilder<D, O, S, N=TreeSearch> {
     distance: D,
     neighbour_search: PhantomData<N>,
     observer: O,
-    num_partitions: u32,
     max_cell_size: Option<f64>,
 }
 
@@ -142,7 +135,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance: self.distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -158,7 +150,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance: self.distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -173,7 +164,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -188,7 +178,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance: self.distance,
             neighbour_search: PhantomData,
             observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -205,18 +194,7 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance: self.distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
-        }
-    }
-
-    /// Define the number of partitions into which events should be split
-    ///
-    /// The default number of partitions is 1.
-    pub fn num_partitions(self, num_partitions: u32) -> ResamplerBuilder<D, O, S, N> {
-        ResamplerBuilder {
-            num_partitions,
-            ..self
         }
     }
 
@@ -242,7 +220,6 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
             distance: Default::default(),
             neighbour_search: PhantomData,
             observer: Default::default(),
-            num_partitions: 1,
             max_cell_size: Default::default(),
         }
     }
@@ -252,7 +229,6 @@ pub struct DefaultResampler<N=TreeSearch> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
-    num_partitions: u32,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     neighbour_search: PhantomData<N>,
 }
@@ -284,7 +260,6 @@ where
         let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
-            .num_partitions(self.num_partitions)
             .max_cell_size(self.max_cell_size)
             .observer(observer)
             .neighbour_search::<N>()
@@ -313,7 +288,6 @@ pub struct DefaultResamplerBuilder<N> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
-    num_partitions: u32,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     neighbour_search: PhantomData<N>,
 }
@@ -324,7 +298,6 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
             ptweight: 0.,
             strategy: Strategy::default(),
             max_cell_size: None,
-            num_partitions: 1,
             cell_collector: None,
             neighbour_search: PhantomData
         }
@@ -347,11 +320,6 @@ impl<N> DefaultResamplerBuilder<N> {
         self
     }
 
-    pub fn num_partitions(mut self, value: u32) -> Self {
-        self.num_partitions = value;
-        self
-    }
-
     pub fn cell_collector(mut self, value: Option<Rc<RefCell<CellCollector>>>) -> Self {
         self.cell_collector = value;
         self
@@ -367,7 +335,6 @@ impl<N> DefaultResamplerBuilder<N> {
             ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
-            num_partitions: self.num_partitions,
             cell_collector: self.cell_collector,
             neighbour_search: PhantomData,
         }
@@ -378,7 +345,6 @@ impl<N> DefaultResamplerBuilder<N> {
             ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
-            num_partitions: self.num_partitions,
             cell_collector: self.cell_collector,
             neighbour_search: PhantomData,
         }
