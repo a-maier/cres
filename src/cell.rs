@@ -83,7 +83,7 @@ impl<'a> Cell<'a> {
         self.members.sort_unstable();         // sort to prevent deadlocks
         let mut member_weights = Vec::from_iter(
             self.members.iter().map(
-                |i| self.events[*i].weights.lock()
+                |i| self.events[*i].weights.write()
             )
         );
         let (first, rest) = member_weights.split_first_mut().unwrap();

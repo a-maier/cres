@@ -5,7 +5,7 @@ use std::default::Default;
 
 use derivative::Derivative;
 use noisy_float::prelude::*;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use particle_id::ParticleID;
 
 pub type MomentumSet = Box<[FourVector]>;
@@ -65,7 +65,7 @@ impl EventBuilder {
         Event {
             id: Default::default(),
             #[cfg(feature = "multiweight")]
-            weights: Mutex::new(self.weights.into_boxed_slice()),
+            weights: RwLock::new(self.weights.into_boxed_slice()),
             #[cfg(not(feature = "multiweight"))]
             weights: self.weights,
             outgoing_by_pid,
@@ -105,7 +105,7 @@ pub struct Event {
     #[derivative(PartialEq = "ignore")]
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
-    pub weights: Mutex<Weights>,
+    pub weights: RwLock<Weights>,
 
     outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
 }
@@ -142,10 +142,10 @@ impl Event {
     /// The central event weight
     pub fn weight(&self) -> N64 {
         #[cfg(feature = "multiweight")]
-        return self.weights.lock()[0];
+        return self.weights.read()[0];
 
         #[cfg(not(feature = "multiweight"))]
-        self.weights.lock()
+        self.weights.read()
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
@@ -156,7 +156,7 @@ impl Event {
     /// Number of weights
     pub fn n_weights(&self) -> usize {
         #[cfg(feature = "multiweight")]
-        return self.weights.lock().len();
+        return self.weights.read().len();
 
         #[cfg(not(feature = "multiweight"))]
         1
@@ -164,7 +164,7 @@ impl Event {
 
     /// Rescale weights by some factor
     pub fn rescale_weights(&mut self, scale: N64) {
-        let mut weights = self.weights.lock();
+        let mut weights = self.weights.write();
         #[cfg(feature = "multiweight")]
         for wt in weights.iter_mut() {
             *wt *= scale

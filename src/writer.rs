@@ -98,7 +98,7 @@ impl FileWriter {
             weight.weight = Some(f64::from(event.weight()));
             #[cfg(feature = "multiweight")]
             {
-                let weights = event.weights.lock();
+                let weights = event.weights.read();
                 let mut resampled_weights = weights.iter().skip(1);
                 for wt in &mut read_event.weights {
                     if let Some(name) = wt.name.as_ref() {
