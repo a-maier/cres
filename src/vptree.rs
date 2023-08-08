@@ -271,7 +271,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
             outside_offset: median_idx
         });
         [inside, outside].into_par_iter().for_each(|region| {
-            Self::build_tree(region, dist)
+            Self::par_build_tree(region, dist)
         });
     }
 
