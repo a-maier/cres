@@ -20,6 +20,7 @@ bzip2 = "0.4"
 clap = { version = "4.3", features = ["derive"] }
 clap_complete = "4.0"
 console = "0.15"
+derivative = "2.2.0"
 derive_builder = "0.12"
 dirs = "5.0"
 env_logger = "0.10"
@@ -36,6 +37,7 @@ lz4 = "1.23"
 noisy_float = "0.2"
 ntuple = { version = "0.7", optional = true }
 num-traits = "0.2"
+parking_lot = "0.12"
 particle_id = "0.4"
 pathfinding = "4.2"
 permutohedron = "0.2"
@@ -67,10 +69,11 @@ name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 
 [features]
-default = ["lhef", "multiweight"]
+default = ["lhef", "multiweight", "hardware-lock-elision"]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple", "avery/ntuple"]
 capi = ["multiweight"]
 multiweight = []
+hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
 
 [build-dependencies]
 anyhow = "1.0"

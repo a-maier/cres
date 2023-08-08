@@ -3,7 +3,9 @@ use crate::four_vector::FourVector;
 use std::convert::From;
 use std::default::Default;
 
+use derivative::Derivative;
 use noisy_float::prelude::*;
+use parking_lot::Mutex;
 use particle_id::ParticleID;
 
 pub type MomentumSet = Box<[FourVector]>;
@@ -63,7 +65,7 @@ impl EventBuilder {
         Event {
             id: Default::default(),
             #[cfg(feature = "multiweight")]
-            weights: self.weights.into_boxed_slice(),
+            weights: Mutex::new(self.weights.into_boxed_slice()),
             #[cfg(not(feature = "multiweight"))]
             weights: self.weights,
             outgoing_by_pid,
@@ -96,10 +98,14 @@ fn compress_outgoing(
 }
 
 /// A Monte Carlo scattering event
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
+#[derive(Debug, Default, Derivative)]
+#[derivative(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Event {
     pub id: usize,
-    pub weights: Weights,
+    #[derivative(PartialEq = "ignore")]
+    #[derivative(PartialOrd = "ignore")]
+    #[derivative(Ord = "ignore")]
+    pub weights: Mutex<Weights>,
 
     outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
 }
@@ -136,10 +142,10 @@ impl Event {
     /// The central event weight
     pub fn weight(&self) -> N64 {
         #[cfg(feature = "multiweight")]
-        return self.weights[0];
+        return self.weights.lock()[0];
 
         #[cfg(not(feature = "multiweight"))]
-        self.weights
+        self.weights.lock()
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
@@ -150,7 +156,7 @@ impl Event {
     /// Number of weights
     pub fn n_weights(&self) -> usize {
         #[cfg(feature = "multiweight")]
-        return self.weights.len();
+        return self.weights.lock().len();
 
         #[cfg(not(feature = "multiweight"))]
         1
@@ -158,13 +164,14 @@ impl Event {
 
     /// Rescale weights by some factor
     pub fn rescale_weights(&mut self, scale: N64) {
+        let mut weights = self.weights.lock();
         #[cfg(feature = "multiweight")]
-        for wt in self.weights.iter_mut() {
+        for wt in weights.iter_mut() {
             *wt *= scale
         }
         #[cfg(not(feature = "multiweight"))]
         {
-            self.weights *= scale;
+            weights *= scale;
         }
     }
 }

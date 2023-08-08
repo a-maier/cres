@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::default::Default;
 use std::marker::PhantomData;
 use std::rc::Rc;
+use std::sync::Arc;
 
-use crate::bisect::circle_partition_with_progress;
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
@@ -57,11 +57,11 @@ impl<D, N, O, S> Resampler<D, N, O, S> {
 impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
-    N: NeighbourData,
+    N: NeighbourData + Clone + Send + Sync,
     for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
     for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
-    S: SelectSeeds<Iter = T> + Send + Sync,
-    T: Iterator<Item = usize>,
+    S: SelectSeeds<ParallelIter = T> + Send + Sync,
+    T: ParallelIterator<Item = usize>,
     O: ObserveCell + Send + Sync,
 {
     type Error = ResamplingError;
@@ -73,7 +73,7 @@ where
     /// Seeds with non-negative weight are ignored.
     fn resample(
         &mut self,
-        mut events: Vec<Event>,
+        events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
         if !self.num_partitions.is_power_of_two() {
             return Err(ResamplingError::NPartition(self.num_partitions))
@@ -85,26 +85,31 @@ where
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
 
         info!("Initialising nearest-neighbour search");
-        let mut neighbour_search = N::new_with_dist(
+        let neighbour_search = N::new_with_dist(
             events.len(),
             PtDistance::new(&self.distance, &events),
             max_cell_size,
         );
+        let search = Arc::new(ThreadLocal::new());
 
         info!("Resampling {nneg_weight} cells");
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
         let seeds = self.seeds.select_seeds(&events);
-        seeds.take(nneg_weight).for_each(|seed| {
+        seeds.for_each(|seed| {
             assert!(seed < events.len());
             if events[seed].weight() > 0. {
                 return;
             }
             trace!("New cell around event {}", events[seed].id());
+            let local_search = search.clone();
+            let search = local_search.get_or(
+                || RefCell::new(neighbour_search.clone())
+            );
             let mut cell = Cell::new(
-                &mut events,
+                &events,
                 seed,
                 &self.distance,
-                &mut neighbour_search
+                &mut search.borrow_mut()
             );
             cell.resample();
             self.observer.observe_cell(&cell);
@@ -145,8 +150,8 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     /// Define how and in which order to choose cell seeds
     pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS, N>
     where
-        SS: SelectSeeds<Iter = T>,
-        T: Iterator<Item = usize>,
+        SS: SelectSeeds<ParallelIter = T>,
+        T: ParallelIterator<Item = usize>,
     {
         ResamplerBuilder {
             seeds,
@@ -254,7 +259,7 @@ pub struct DefaultResampler<N=TreeSearch> {
 
 impl<N> Resample for DefaultResampler<N>
 where
-    N: NeighbourData,
+    N: NeighbourData + Clone + Send + Sync,
     for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
     for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
 {

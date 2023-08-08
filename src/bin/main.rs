@@ -42,7 +42,7 @@ fn main() -> Result<()> {
 
 fn run_main<N>(opt: Opt) -> Result<()>
 where
-    N: NeighbourData,
+    N: NeighbourData + Clone + Send + Sync,
     for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
     for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
 {
