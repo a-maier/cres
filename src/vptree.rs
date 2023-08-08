@@ -46,6 +46,17 @@ impl<P: Copy + PartialEq> VPTree<P> {
         dist: DF
     ) -> Self
     where
+        DF: Distance<P> + Send + Sync,
+        P: Send + Sync
+    {
+        Self::par_new(nodes, dist)
+    }
+
+    pub fn seq_new<DF>(
+        nodes: Vec<P>,
+        dist: DF
+    ) -> Self
+    where
         DF: Distance<P>
     {
         Self::from_iter_with_dist(nodes.into_iter(), dist)
