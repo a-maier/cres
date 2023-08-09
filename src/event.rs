@@ -67,7 +67,7 @@ impl EventBuilder {
             #[cfg(feature = "multiweight")]
             weights: RwLock::new(self.weights.into_boxed_slice()),
             #[cfg(not(feature = "multiweight"))]
-            weights: self.weights,
+            weights: RwLock::new(self.weights),
             outgoing_by_pid,
         }
     }
@@ -145,7 +145,7 @@ impl Event {
         return self.weights.read()[0];
 
         #[cfg(not(feature = "multiweight"))]
-        self.weights.read()
+        *self.weights.read()
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
@@ -171,7 +171,7 @@ impl Event {
         }
         #[cfg(not(feature = "multiweight"))]
         {
-            weights *= scale;
+            *weights *= scale;
         }
     }
 }

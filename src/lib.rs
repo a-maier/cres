@@ -102,6 +102,7 @@ pub const FEATURES: [&str; NFEATURES] = [
 ];
 
 const NFEATURES: usize = {
+    #[allow(unused_mut)]
     let mut nfeatures = 0;
     #[cfg(feature = "lhef")]
     { nfeatures += 1; }

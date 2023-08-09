@@ -106,7 +106,7 @@ impl<'a> Cell<'a> {
     pub fn resample(&mut self) {
          let avg_wt = self.weight_sum() / (self.nmembers() as f64);
          for &idx in &self.members {
-             self.events[idx].weights = avg_wt;
+             *self.events[idx].weights.write() = avg_wt;
          }
     }
 
