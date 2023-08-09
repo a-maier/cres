@@ -73,6 +73,9 @@ pub mod lhef;
 /// ntuple interface
 #[cfg(feature = "ntuple")]
 pub mod ntuple;
+/// STRIPPER XML interface
+#[cfg(feature = "stripper-xml")]
+pub mod stripper_xml;
 
 mod vptree;
 
@@ -97,6 +100,8 @@ pub const FEATURES: [&str; NFEATURES] = [
     "multiweight",
     #[cfg(feature = "ntuple")]
     "ntuple",
+    #[cfg(feature = "stripper-xml")]
+    "stripper-xml",
     #[cfg(feature = "capi")]
     "capi",
 ];
@@ -109,6 +114,8 @@ const NFEATURES: usize = {
     #[cfg(feature = "multiweight")]
     { nfeatures += 1; }
     #[cfg(feature = "ntuple")]
+    { nfeatures += 1; }
+    #[cfg(feature = "stripper-xml")]
     { nfeatures += 1; }
     #[cfg(feature = "capi")]
     { nfeatures += 1; }

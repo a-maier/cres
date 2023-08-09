@@ -45,6 +45,7 @@ rand = "0.8"
 rand_xoshiro = "0.6"
 rayon = "1.5"
 regex = "1.5"
+stripper-xml = { version = "0.4", optional = true }
 strum = { version = "0.25", features = ["derive"] }
 thiserror = "1.0"
 thread_local = "1.1"
@@ -71,6 +72,7 @@ path = "src/bin/shell_completion.rs"
 [features]
 default = ["lhef", "multiweight", "hardware-lock-elision"]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple", "avery/ntuple"]
+stripper-xml = ["dep:stripper-xml", "avery/stripper-xml"]
 capi = ["multiweight"]
 multiweight = []
 hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
