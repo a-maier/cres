@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::default::Default;
 use std::marker::PhantomData;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
@@ -55,8 +54,8 @@ impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
     S: SelectSeeds<ParallelIter = T> + Send + Sync,
     T: ParallelIterator<Item = usize>,
     O: ObserveCell + Send + Sync,
@@ -84,7 +83,6 @@ where
             PtDistance::new(&self.distance, &events),
             max_cell_size,
         );
-        let search = Arc::new(ThreadLocal::new());
 
         info!("Resampling {nneg_weight} cells");
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
@@ -95,15 +93,11 @@ where
                 return;
             }
             trace!("New cell around event {}", events[seed].id());
-            let local_search = search.clone();
-            let search = local_search.get_or(
-                || RefCell::new(neighbour_search.clone())
-            );
             let mut cell = Cell::new(
                 &events,
                 seed,
                 &self.distance,
-                &mut search.borrow_mut()
+                &neighbour_search
             );
             cell.resample();
             self.observer.observe_cell(&cell);
@@ -186,8 +180,8 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN>
     where
         NN: NeighbourData,
-        for <'x, 'y, 'z> &'x mut NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
-        for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+        for <'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
+        for <'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
     {
         ResamplerBuilder {
             seeds: self.seeds,
@@ -236,8 +230,8 @@ pub struct DefaultResampler<N=TreeSearch> {
 impl<N> Resample for DefaultResampler<N>
 where
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
 {
     type Error = ResamplingError;
 
@@ -328,8 +322,8 @@ impl<N> DefaultResamplerBuilder<N> {
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
     where
         NN: NeighbourData,
-        for <'x, 'y, 'z> &'x mut NN: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-        for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+        for <'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+        for <'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
     {
         DefaultResamplerBuilder {
             ptweight: self.ptweight,

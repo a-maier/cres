@@ -1,5 +1,7 @@
 use std::cmp::{PartialEq, PartialOrd};
+use std::collections::HashSet;
 use std::default::Default;
+use std::hash::Hash;
 use std::iter::{Iterator, FromIterator};
 
 use log::{debug, trace};
@@ -23,15 +25,7 @@ impl<P> Default for VPTree<P> {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 struct Node<P> {
     vantage_pt: P,
-    cache: Cache<P>,
     children: Option<Children>
-}
-
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-struct Cache<P> {
-    pt: P,
-    dist: N64,
-    used: bool,
 }
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
@@ -40,7 +34,7 @@ struct Children {
     outside_offset: usize,
 }
 
-impl<P: Copy + PartialEq> VPTree<P> {
+impl<P: Copy + PartialEq + Eq> VPTree<P> {
     pub fn new<DF>(
         nodes: Vec<P>,
         dist: DF
@@ -93,12 +87,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
             iter.into_iter().map(
                 |vantage_pt| {
                     // reserve first element for storing distances
-                    let cache = Cache {
-                        pt: vantage_pt,
-                        dist: Default::default(),
-                        used: false,
-                    };
-                    (Default::default(), Node{ vantage_pt, children: None, cache })
+                    (Default::default(), Node{ vantage_pt, children: None })
                 }
             )
         );
@@ -128,12 +117,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         let mut nodes: Vec<_> = iter.map(
             |vantage_pt| {
                 // reserve first element for storing distances
-                let cache = Cache {
-                    pt: vantage_pt,
-                    dist: Default::default(),
-                    used: false,
-                };
-                (Default::default(), Node{ vantage_pt, children: None, cache })
+                (Default::default(), Node{ vantage_pt, children: None })
             }
         ).collect();
 
@@ -275,7 +259,10 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         });
     }
 
-    pub fn nearest_in<DF>(&mut self, pt: &P, dist: DF) -> NearestNeighbourIter<'_, P, DF>
+}
+
+impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
+    pub fn nearest_in<DF>(&self, pt: &P, dist: DF) -> NearestNeighbourIter<'_, P, DF>
     where
         DF: Distance<P>
     {
@@ -283,25 +270,32 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
             tree: self,
             pt: *pt,
             dist,
+            exclude: HashSet::new()
         }
     }
 
-    fn nearest_in_impl<DF>(&mut self, pt: &P, dist: DF, max_dist: N64) -> Option<(P, N64)>
+    fn nearest_in_impl<DF>(
+        &self,
+        pt: &P,
+        dist: DF,
+        max_dist: N64,
+        exclude: &HashSet<P>
+    ) -> Option<(P, N64)>
     where
         DF: Distance<P>
     {
         debug!("Starting nearest neighbour search");
         let idx = Self::nearest_in_subtree(
-            self.nodes.as_mut_slice(),
+            self.nodes.as_slice(),
             *pt,
             & dist,
             0,
             max_dist,
+            exclude,
         );
         if let Some((idx, d)) = idx {
             trace!("nearest is at index {idx}");
             if d <= self.max_dist {
-                self.nodes[idx].cache.used = true;
                 Some((self.nodes[idx].vantage_pt, d))
             } else {
                 None
@@ -312,40 +306,36 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
     }
 
     fn nearest_in_subtree<DF>(
-        subtree: &mut [Node<P>],
+        subtree: &[Node<P>],
         pt: P,
         dist: &DF,
         idx: usize,
         max_dist: N64,
+        exclude: &HashSet<P>
     ) -> Option<(usize, N64)>
     where
         DF: Distance<P>
     {
         trace!("node at position {idx}");
-        if let Some((node, tree)) = subtree.split_first_mut() {
-            if pt != node.cache.pt {
-                node.cache = Cache{
-                    pt,
-                    dist: dist.distance(&pt, &node.vantage_pt),
-                    used: false
-                };
-            };
-            let d = node.cache.dist;
-            let mut nearest = if node.cache.used || pt == node.vantage_pt {
+        if let Some((node, tree)) = subtree.split_first() {
+            // TODO: use cache
+            let d = dist.distance(&pt, &node.vantage_pt);
+            let mut nearest = if pt == node.vantage_pt || exclude.contains(&node.vantage_pt) {
                 trace!("excluding {idx}");
                 None
             } else {
                 Some((idx, d))
             };
             if let Some(children) = &node.children {
-                let mut subtrees = tree.split_at_mut(children.outside_offset);
+                let mut subtrees = tree.split_at(children.outside_offset);
                 let mut offsets = (1, children.outside_offset + 1);
                 let nearest_in_sub = |sub, idx| Self::nearest_in_subtree(
                     sub,
                     pt,
                     dist,
                     idx,
-                    max_dist
+                    max_dist,
+                    exclude
                 );
                 if d > children.radius {
                     std::mem::swap(&mut subtrees.0, &mut subtrees.1);
@@ -386,13 +376,14 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
     }
 }
 
-pub struct NearestNeighbourIter<'a, P, DF> {
+pub struct NearestNeighbourIter<'a, P: Hash + Eq, DF> {
     pt: P,
     dist: DF,
-    tree: &'a mut VPTree<P>,
+    tree: &'a VPTree<P>,
+    exclude: HashSet<P>
 }
 
-impl<'a, P, DF> Iterator for NearestNeighbourIter<'a, P, DF>
+impl<'a, P: Hash + Eq, DF> Iterator for NearestNeighbourIter<'a, P, DF>
 where
     P: Copy + PartialEq,
     DF: Distance<P>,
@@ -400,6 +391,15 @@ where
     type Item = (P, N64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.tree.nearest_in_impl(&self.pt, &self.dist, self.tree.max_dist)
+        let res = self.tree.nearest_in_impl(
+            &self.pt,
+            &self.dist,
+            self.tree.max_dist,
+            &self.exclude,
+        );
+        if let Some((pt, _)) = res {
+            self.exclude.insert(pt);
+        }
+        res
     }
 }

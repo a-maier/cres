@@ -40,7 +40,7 @@ pub trait NeighbourData {
 /// Nearest-neighbour search using a vantage point tree
 pub type TreeSearch = VPTree<usize>;
 
-impl<'a, D> NeighbourSearch<D> for &'a mut TreeSearch
+impl<'a, D> NeighbourSearch<D> for &'a TreeSearch
 where D: Distance<usize> + Send + Sync
 {
     type Iter = NearestNeighbourIter<'a, usize, D>;
@@ -74,10 +74,10 @@ pub struct NaiveNeighbourSearch {
     max_dist: N64,
 }
 
-impl<'a, D> NeighbourSearch<D> for &'a mut NaiveNeighbourSearch
+impl<D> NeighbourSearch<D> for &NaiveNeighbourSearch
 where D: Distance<usize> + Send + Sync
 {
-    type Iter = NaiveNeighbourIter<'a>;
+    type Iter = NaiveNeighbourIter;
 
     fn nearest_in(
         self,
@@ -86,10 +86,11 @@ where D: Distance<usize> + Send + Sync
     ) -> Self::Iter
     {
         let max_dist = self.max_dist;
-        self.dist.par_iter_mut().for_each(|(id, dist)| {
+        let mut dist = self.dist.clone();
+        dist.par_iter_mut().for_each(|(id, dist)| {
             *dist = d.distance(id, point);
         });
-        NaiveNeighbourIter::new(&self.dist, *point, max_dist)
+        NaiveNeighbourIter::new(dist, *point, max_dist)
     }
 }
 
@@ -109,15 +110,15 @@ impl NeighbourData for NaiveNeighbourSearch {
 }
 
 #[derive(PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
-pub struct NaiveNeighbourIter<'a>{
-    dist: &'a [(usize, N64)],
+pub struct NaiveNeighbourIter{
+    dist: Vec<(usize, N64)>,
     candidates: Vec<usize>,
     max_dist: N64,
 }
 
-impl<'a>  NaiveNeighbourIter<'a>{
+impl  NaiveNeighbourIter{
     fn new(
-        dist: &'a [(usize, N64)],
+        dist: Vec<(usize, N64)>,
         seed: usize,
         max_dist: N64,
     ) -> Self {
@@ -131,7 +132,7 @@ impl<'a>  NaiveNeighbourIter<'a>{
     }
 }
 
-impl<'a> Iterator for NaiveNeighbourIter<'a> {
+impl Iterator for NaiveNeighbourIter {
     type Item = (usize, N64);
 
     fn next(&mut self) -> Option<Self::Item> {

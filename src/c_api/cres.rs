@@ -164,8 +164,8 @@ fn cres_run_with<D, N>(opt: &Opt, dist: D) -> Result<(), Error>
 where
     D: Distance + Send + Sync,
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
 {
     debug!("Settings: {:#?}", opt);
 
