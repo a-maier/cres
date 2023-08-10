@@ -1,11 +1,15 @@
-use std::{path::{Path, PathBuf}, io::{BufReader, BufRead}};
+use std::{
+    collections::HashMap,
+    io::{BufReader, BufRead},
+    path::{Path, PathBuf},
+};
 
 use audec::auto_decompress;
 use hepmc2::reader::LineParseError;
 use log::debug;
 use thiserror::Error;
 
-use crate::{traits::Rewind, file::File};
+use crate::{traits::Rewind, file::File, util::trim_ascii_start};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -43,6 +47,13 @@ impl FileReader {
     pub fn new<P: AsRef<Path>>(
         path: P
     ) -> Result<FileReader, CreateError> {
+        Self::with_scaling(path, &HashMap::new())
+    }
+
+    pub fn with_scaling<P: AsRef<Path>>(
+        path: P,
+        _scaling: &HashMap<String, f64> // only used in "stripper-xml" feature
+    ) -> Result<FileReader, CreateError> {
         use crate::hepmc2::FileReader as HepMCReader;
         let file = File::open(&path)?;
         let mut r = auto_decompress(BufReader::new(file));
@@ -63,6 +74,18 @@ impl FileReader {
             {
                 debug!("Read {path:?} as ROOT ntuple");
                 let reader = crate::ntuple::Reader::new(path)?;
+                return Ok(FileReader(Box::new(reader)))
+            }
+        } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
+            let path = path.as_ref();
+            #[cfg(not(feature = "stripper-xml"))]
+            return Err(CreateError::XMLUnsupported(path.to_owned()));
+            #[cfg(feature = "stripper-xml")]
+            {
+                debug!("Read {path:?} as STRIPPER XML file");
+                use crate::stripper_xml::FileReader as XMLReader;
+                let file = File::open(path)?;
+                let reader = XMLReader::new(file, _scaling)?;
                 return Ok(FileReader(Box::new(reader)))
             }
         }
@@ -90,6 +113,12 @@ pub enum CreateError {
 
     #[error("Cannot read ROOT ntuple event file `{0}`. Reinstall cres with `cargo install cres --features = ntuple`")]
     RootUnsupported(PathBuf),
+    #[error("Cannot read XML event file `{0}`. Reinstall cres with `cargo install cres --features = stripper-xml`")]
+    XMLUnsupported(PathBuf),
+
+    #[cfg(feature = "stripper-xml")]
+    #[error("XML Error in file `{0}`: {1}")]
+    XMLError(PathBuf, crate::stripper_xml::reader::XMLError),
 }
 
 #[derive(Debug, Error)]
@@ -107,6 +136,9 @@ pub enum EventReadError {
     #[cfg(feature = "ntuple")]
     #[error("Error reading ntuple event: {0}")]
     NTupleError(#[from] ::ntuple::reader::ReadError),
+    #[cfg(feature = "stripper-xml")]
+    #[error("Error reading STRIPPER XML event: {0}")]
+    StripperXMLError(#[from] crate::stripper_xml::reader::ReadError),
     #[cfg(feature = "lhef")]
     #[error("Error reading LHEF event: {0}")]
     LHEFError(#[from] ::lhef::reader::ReadError),
@@ -175,8 +207,26 @@ impl CombinedReader<FileReader> {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
+        #[cfg(feature = "stripper-xml")]
+        {
+            let (files, scaling) = crate::stripper_xml::reader::extract_scaling(files)?;
+            return Self::from_files_with_scaling(files, &scaling)
+        }
+
+        #[cfg(not(feature = "stripper-xml"))]
+        return Self::from_files_with_scaling(files, &HashMap::new())
+    }
+
+    fn from_files_with_scaling<I, P>(
+        files: I,
+        scaling: &HashMap<String, f64>
+    ) -> Result<Self, CreateError>
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<Path>,
+    {
         let readers: Result<_, _> = files.into_iter()
-            .map(|f| FileReader::new(f.as_ref()).map_err(
+            .map(|f| FileReader::with_scaling(f.as_ref(), &scaling).map_err(
                 |err| CreateError::FileError(f.as_ref().to_path_buf(), Box::new(err))
             ))
             .collect();

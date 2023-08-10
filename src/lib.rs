@@ -78,6 +78,7 @@ pub mod ntuple;
 pub mod stripper_xml;
 
 mod vptree;
+mod util;
 
 use lazy_static::lazy_static;
 
