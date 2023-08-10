@@ -57,9 +57,14 @@ impl Iterator for FileReader {
     type Item = Result<avery::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let name = self.reader.name().to_owned();
         self.reader.next()
             .map(|r| match r {
-                Ok(ev) => Ok(ev.into()),
+                Ok(ev) => {
+                    let mut ev = avery::Event::from(ev);
+                    ev.info = name;
+                    Ok(ev)
+                },
                 Err(err) => Err(err.into()),
             })
     }
@@ -80,6 +85,7 @@ fn create_error(
 }
 
 pub struct Reader<T> {
+    name: String,
     source: T,
     scale: f64,
     rem_subevents: usize,
@@ -93,9 +99,9 @@ impl<T: BufRead> Reader<T> {
     ) -> Result<Self, XMLError> {
         match extract_xml_info(&mut source)? {
             XMLTag::Normalization { .. } => Err(XMLError::BadTag("Normalization".to_owned())),
-            XMLTag::Eventrecord { name: _, nevents: _, nsubevents } => {
+            XMLTag::Eventrecord { name, nevents: _, nsubevents } => {
                 let rem_subevents = nsubevents as usize;
-                Ok(Self { source, scale, rem_subevents, buf: Vec::new() })
+                Ok(Self { name, source, scale, rem_subevents, buf: Vec::new() })
             },
         }
     }
@@ -109,13 +115,17 @@ impl<T: BufRead> Reader<T> {
             XMLTag::Eventrecord { name, nevents: _, nsubevents } => {
                 let rem_subevents = nsubevents as usize;
                 let scale = scaling.get(&name).copied().unwrap_or(1.);
-                Ok(Self { source, scale, rem_subevents, buf: Vec::new() })
+                Ok(Self { name, source, scale, rem_subevents, buf: Vec::new() })
             },
         }
     }
 
     pub fn scale(&self) -> f64 {
         self.scale
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
