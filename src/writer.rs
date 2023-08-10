@@ -24,7 +24,10 @@ pub enum OutputFormat {
     Lhef,
     /// The [ROOT ntuple](https://arxiv.org/abs/1310.7439) format
     #[cfg(feature = "ntuple")]
-    Root
+    Root,
+    /// The STRIPPER XML format
+    #[cfg(feature = "stripper-xml")]
+    StripperXml,
 }
 
 /// General-purpose writer to some event file
@@ -149,6 +152,8 @@ where
             Lhef => self.write_all(crate::lhef::Writer::try_new, r, events),
             #[cfg(feature = "ntuple")]
             Root => self.write_all(crate::ntuple::Writer::try_new, r, events),
+            #[cfg(feature = "stripper-xml")]
+            StripperXml => self.write_all(crate::stripper_xml::Writer::try_new, r, events),
         }
     }
 }

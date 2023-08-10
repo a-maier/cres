@@ -190,7 +190,9 @@ pub(crate) enum FileFormat {
     #[cfg(feature = "lhef")]
     Lhef,
     #[cfg(feature = "ntuple")]
-    Root
+    Root,
+    #[cfg(feature = "stripper-xml")]
+    StripperXml,
 }
 
 impl From<FileFormat> for OutputFormat {
@@ -201,6 +203,8 @@ impl From<FileFormat> for OutputFormat {
             FileFormat::Lhef => OutputFormat::Lhef,
             #[cfg(feature = "ntuple")]
             FileFormat::Root => OutputFormat::Root,
+            #[cfg(feature = "stripper-xml")]
+            FileFormat::StripperXml => OutputFormat::StripperXml,
         }
     }
 }

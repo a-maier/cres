@@ -1,5 +1,5 @@
 pub mod reader;
-//pub mod writer;
+pub mod writer;
 
 pub use reader::FileReader;
-//pub use writer::Writer;
+pub use writer::Writer;
