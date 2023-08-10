@@ -63,6 +63,10 @@ impl Iterator for FileReader {
                 Ok(ev) => {
                     let mut ev = avery::Event::from(ev);
                     ev.info = name;
+                    ev.attr.insert(
+                        "wtscale".to_owned(),
+                        self.reader.scale().to_string()
+                    );
                     Ok(ev)
                 },
                 Err(err) => Err(err.into()),
