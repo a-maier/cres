@@ -86,6 +86,11 @@ The most important options are
   and gradually increase the value if too many negative weights are
   left.
 
+- `--leptonalgorithm`, `--leptonradius`, `--leptonpt` enable
+  clustering for leptons and photons. These options should be set
+  whenever QED corrections are included, for example through
+  showering.
+
 - `--ptweight` specifies how much transverse momenta affect distances
   between particles with momenta p and q according to the formula
 
