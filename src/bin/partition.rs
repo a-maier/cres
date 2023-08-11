@@ -170,14 +170,21 @@ fn main() -> Result<()> {
                 cres::lhef::Writer::try_new(&f, opt.compression)
             }).collect();
             Writers::Lhef(writers?)
-        }
+        },
         #[cfg(feature = "ntuple")]
         FileFormat::Root => {
             let writers: Result<Vec<_>, _> = outfiles.map(|f| {
                 cres::ntuple::Writer::try_new(&f, opt.compression)
             }).collect();
             Writers::NTuple(writers?)
-        }
+        },
+        #[cfg(feature = "stripper-xml")]
+        FileFormat::StripperXml => {
+            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
+                cres::stripper_xml::Writer::try_new(&f, opt.compression)
+            }).collect();
+            Writers::StripperXml(writers?)
+        },
     };
 
     reader.rewind()?;
@@ -202,6 +209,14 @@ fn main() -> Result<()> {
                 }
             }
         },
+        #[cfg(feature = "stripper-xml")]
+        Writers::StripperXml(writers) => {
+            for writer in writers {
+                if let Err(err) = writer.finish() {
+                    error!("{err}")
+                }
+            }
+        },
         #[cfg(feature = "ntuple")]
         _ => { }
     }
@@ -215,6 +230,8 @@ enum Writers {
     Lhef(Vec<cres::lhef::Writer<Box<dyn Write>>>),
     #[cfg(feature = "ntuple")]
     NTuple(Vec<cres::ntuple::Writer>),
+    #[cfg(feature = "stripper-xml")]
+    StripperXml(Vec<cres::stripper_xml::Writer<Box<dyn Write>>>),
 }
 
 impl Writers {
@@ -227,7 +244,10 @@ impl Writers {
                 writers[idx].write(event).map_err(|e| e.into()),
             #[cfg(feature = "ntuple")]
             Writers::NTuple(writers) =>
-                writers[idx].write(event).map_err(|e| e.into())
+                writers[idx].write(event).map_err(|e| e.into()),
+            #[cfg(feature = "stripper-xml")]
+            Writers::StripperXml(writers) =>
+                writers[idx].write(event).map_err(|e| e.into()),
         }
     }
 }
