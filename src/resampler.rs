@@ -3,7 +3,6 @@ use std::default::Default;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::bisect::circle_partition_with_progress;
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
@@ -30,8 +29,6 @@ use thread_local::ThreadLocal;
 
 #[derive(Debug, Error)]
 pub enum ResamplingError{
-    #[error("Number of partitions is {0}, but has to be a power of two")]
-    NPartition(u32)
 }
 
 /// Main resampling class
@@ -40,7 +37,6 @@ pub struct Resampler<D, N, O, S> {
     distance: D,
     neighbour_search: PhantomData<N>,
     observer: O,
-    num_partitions: u32,
     max_cell_size: Option<f64>,
 }
 
@@ -57,11 +53,11 @@ impl<D, N, O, S> Resampler<D, N, O, S> {
 impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
-    N: NeighbourData,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
-    S: SelectSeeds<Iter = T> + Send + Sync,
-    T: Iterator<Item = usize>,
+    N: NeighbourData + Clone + Send + Sync,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    S: SelectSeeds<ParallelIter = T> + Send + Sync,
+    T: ParallelIterator<Item = usize>,
     O: ObserveCell + Send + Sync,
 {
     type Error = ResamplingError;
@@ -73,58 +69,39 @@ where
     /// Seeds with non-negative weight are ignored.
     fn resample(
         &mut self,
-        mut events: Vec<Event>,
+        events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
-        if !self.num_partitions.is_power_of_two() {
-            return Err(ResamplingError::NPartition(self.num_partitions))
-        }
         self.print_wt_sum(&events);
 
         let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
 
         let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
-        if self.num_partitions > 1 {
-            info!("Splitting events into {} parts", self.num_partitions);
-        }
-        let depth = log2(self.num_partitions);
-        let parts = circle_partition_with_progress(
-            &mut events,
-            |e1, e2| self.distance.distance(e1, e2),
-            depth
+
+        info!("Initialising nearest-neighbour search");
+        let neighbour_search = N::new_with_dist(
+            events.len(),
+            PtDistance::new(&self.distance, &events),
+            max_cell_size,
         );
-        debug_assert_eq!(parts.len(), self.num_partitions as usize);
 
         info!("Resampling {nneg_weight} cells");
         let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
-        parts.into_par_iter().enumerate().for_each(|(n, events)| {
-            debug!("Selecting seeds for partition {n}");
-            let seeds = self.seeds.select_seeds(events);
-            debug!("Initialising nearest-neighbour search for part {n}");
-            let mut neighbour_search = N::new_with_dist(
-                events.len(),
-                PtDistance::new(&self.distance, events),
-                max_cell_size,
-            );
-            debug!("Resampling part {n}");
-            for seed in seeds.take(nneg_weight) {
-                if seed >= events.len() {
-                    break;
-                }
-                progress.inc(1);
-                if events[seed].weight() > 0. {
-                    continue;
-                }
-                trace!("New cell around event {}", events[seed].id());
-
-                let mut cell = Cell::new(
-                    events,
-                    seed,
-                    &self.distance,
-                    &mut neighbour_search
-                );
-                cell.resample();
-                self.observer.observe_cell(&cell);
+        let seeds = self.seeds.select_seeds(&events);
+        seeds.for_each(|seed| {
+            assert!(seed < events.len());
+            if events[seed].weight() > 0. {
+                return;
             }
+            trace!("New cell around event {}", events[seed].id());
+            let mut cell = Cell::new(
+                &events,
+                seed,
+                &self.distance,
+                &neighbour_search
+            );
+            cell.resample();
+            self.observer.observe_cell(&cell);
+            progress.inc(1);
         });
         progress.finish();
         debug!("Combining cell observations");
@@ -141,7 +118,6 @@ pub struct ResamplerBuilder<D, O, S, N=TreeSearch> {
     distance: D,
     neighbour_search: PhantomData<N>,
     observer: O,
-    num_partitions: u32,
     max_cell_size: Option<f64>,
 }
 
@@ -153,7 +129,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance: self.distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -161,15 +136,14 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     /// Define how and in which order to choose cell seeds
     pub fn seeds<SS, T>(self, seeds: SS) -> ResamplerBuilder<D, O, SS, N>
     where
-        SS: SelectSeeds<Iter = T>,
-        T: Iterator<Item = usize>,
+        SS: SelectSeeds<ParallelIter = T>,
+        T: ParallelIterator<Item = usize>,
     {
         ResamplerBuilder {
             seeds,
             distance: self.distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -184,7 +158,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -199,7 +172,6 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
             distance: self.distance,
             neighbour_search: PhantomData,
             observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
         }
     }
@@ -208,26 +180,15 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN>
     where
         NN: NeighbourData,
-        for <'x, 'y, 'z> &'x mut NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
-        for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+        for <'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
+        for <'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
     {
         ResamplerBuilder {
             seeds: self.seeds,
             distance: self.distance,
             neighbour_search: PhantomData,
             observer: self.observer,
-            num_partitions: self.num_partitions,
             max_cell_size: self.max_cell_size,
-        }
-    }
-
-    /// Define the number of partitions into which events should be split
-    ///
-    /// The default number of partitions is 1.
-    pub fn num_partitions(self, num_partitions: u32) -> ResamplerBuilder<D, O, S, N> {
-        ResamplerBuilder {
-            num_partitions,
-            ..self
         }
     }
 
@@ -253,7 +214,6 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
             distance: Default::default(),
             neighbour_search: PhantomData,
             observer: Default::default(),
-            num_partitions: 1,
             max_cell_size: Default::default(),
         }
     }
@@ -263,16 +223,15 @@ pub struct DefaultResampler<N=TreeSearch> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
-    num_partitions: u32,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     neighbour_search: PhantomData<N>,
 }
 
 impl<N> Resample for DefaultResampler<N>
 where
-    N: NeighbourData,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+    N: NeighbourData + Clone + Send + Sync,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
 {
     type Error = ResamplingError;
 
@@ -295,7 +254,6 @@ where
         let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
-            .num_partitions(self.num_partitions)
             .max_cell_size(self.max_cell_size)
             .observer(observer)
             .neighbour_search::<N>()
@@ -324,7 +282,6 @@ pub struct DefaultResamplerBuilder<N> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
-    num_partitions: u32,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     neighbour_search: PhantomData<N>,
 }
@@ -335,7 +292,6 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
             ptweight: 0.,
             strategy: Strategy::default(),
             max_cell_size: None,
-            num_partitions: 1,
             cell_collector: None,
             neighbour_search: PhantomData
         }
@@ -358,11 +314,6 @@ impl<N> DefaultResamplerBuilder<N> {
         self
     }
 
-    pub fn num_partitions(mut self, value: u32) -> Self {
-        self.num_partitions = value;
-        self
-    }
-
     pub fn cell_collector(mut self, value: Option<Rc<RefCell<CellCollector>>>) -> Self {
         self.cell_collector = value;
         self
@@ -371,14 +322,13 @@ impl<N> DefaultResamplerBuilder<N> {
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
     where
         NN: NeighbourData,
-        for <'x, 'y, 'z> &'x mut NN: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-        for <'x, 'y, 'z> <&'x mut NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+        for <'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+        for <'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
     {
         DefaultResamplerBuilder {
             ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
-            num_partitions: self.num_partitions,
             cell_collector: self.cell_collector,
             neighbour_search: PhantomData,
         }
@@ -389,7 +339,6 @@ impl<N> DefaultResamplerBuilder<N> {
             ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
-            num_partitions: self.num_partitions,
             cell_collector: self.cell_collector,
             neighbour_search: PhantomData,
         }

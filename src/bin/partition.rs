@@ -9,7 +9,7 @@ use clap::Parser;
 use cres::{compression::Compression, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, traits::{Distance, Rewind, Progress, TryConvert, WriteEvent}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, progress_bar::ProgressBar, converter::ClusteringConverter};
 use env_logger::Env;
 use log::{info, debug, error, trace};
-use opt::{JetDefinition, parse_npartitions};
+use opt::JetDefinition;
 use noisy_float::prelude::*;
 
 // TODO: code duplication with opt::Opt
@@ -229,5 +229,18 @@ impl Writers {
             Writers::NTuple(writers) =>
                 writers[idx].write(event).map_err(|e| e.into())
         }
+    }
+}
+
+fn parse_npartitions(s: &str) -> Result<u32, String> {
+    use std::str::FromStr;
+
+    match u32::from_str(s) {
+        Ok(n) => if n.is_power_of_two() {
+            Ok(n)
+        } else {
+            Err("has to be a power of two".to_string())
+        }
+        Err(err) => Err(err.to_string())
     }
 }

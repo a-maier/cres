@@ -6,17 +6,17 @@ use rayon::prelude::*;
 pub trait SelectSeeds {
     /// The output type
     ///
-    /// This has to implement `Iterator<Item = usize>`. At the moment
+    /// This has to implement `ParallelIterator<Item = usize>`. At the moment
     /// it is unfortunately impossible to enforce this constraint at
     /// the trait level.
-    type Iter;
+    type ParallelIter;
 
     /// Select seeds for cell construction from the given event.
     ///
     /// The return value should be an iterator over the indices of the
     /// seeds in `events`, in the order in which cells are to be
     /// constructed.
-    fn select_seeds(&self, events: &[Event]) -> Self::Iter;
+    fn select_seeds(&self, events: &[Event]) -> Self::ParallelIter;
 }
 
 /// Strategy for seeds selection
@@ -50,9 +50,9 @@ impl StrategicSelector {
 }
 
 impl SelectSeeds for StrategicSelector {
-    type Iter = std::vec::IntoIter<usize>;
+    type ParallelIter = rayon::vec::IntoIter<usize>;
 
-    fn select_seeds(&self, events: &[Event]) -> Self::Iter {
+    fn select_seeds(&self, events: &[Event]) -> Self::ParallelIter {
         use Strategy::*;
         let mut neg_weight: Vec<_> = events
             .par_iter()
@@ -69,6 +69,6 @@ impl SelectSeeds for StrategicSelector {
                 events[m].weight().cmp(&events[n].weight())
             }),
         }
-        neg_weight.into_iter()
+        neg_weight.into_par_iter()
     }
 }

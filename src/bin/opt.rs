@@ -1,6 +1,5 @@
 use std::fmt::{self, Display};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use cres::compression::Compression;
 use cres::cluster::JetAlgorithm;
@@ -257,19 +256,7 @@ Possible values with increasing amount of output are
     )]
     pub(crate) loglevel: String,
 
-    #[clap(long, default_value = "1", value_parser = parse_npartitions,
-        help = "Number of partitions.
-
-The input event sample is split into the given number of partitions,
-which has to be a power of two. Each partition is resampled
-separately in parallel."
-    )]
-    pub(crate) partitions: u32,
-
     /// Algorithm for finding nearest-neighbour events.
-    ///
-    /// Note that the 'tree' search is not parallelised. To benefit from
-    /// parallelisation use the `--partitions` options in addition.
     #[clap(value_enum, short, long, default_value = "tree")]
     pub(crate) search: Search,
 
@@ -313,17 +300,6 @@ variable."
     /// Input files
     #[clap(name = "INFILES", value_parser)]
     pub(crate) infiles: Vec<PathBuf>,
-}
-
-pub(crate) fn parse_npartitions(s: &str) -> Result<u32, String> {
-    match u32::from_str(s) {
-        Ok(n) => if n.is_power_of_two() {
-            Ok(n)
-        } else {
-            Err("has to be a power of two".to_string())
-        }
-        Err(err) => Err(err.to_string())
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Error)]

@@ -10,7 +10,7 @@ use noisy_float::prelude::*;
 /// See [arXiv:2109.07851](https://arxiv.org/abs/2109.07851) for details
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Cell<'a> {
-    events: &'a mut [Event],
+    events: &'a [Event],
     members: Vec<usize>,
     radius: N64,
     weight_sum: N64,
@@ -22,7 +22,7 @@ pub struct Cell<'a> {
 /// the first tuple element is used to store distances
 impl<'a> Cell<'a> {
     pub fn new<'b: 'a, 'c, F: Distance + Sync + Send, N>(
-        events: &'b mut [Event],
+        events: &'b [Event],
         seed_idx: usize,
         distance: &F,
         neighbour_search: N,
@@ -33,7 +33,7 @@ impl<'a> Cell<'a> {
     {
         let mut weight_sum = events[seed_idx].weight();
         debug_assert!(weight_sum < 0.);
-        debug!("Cell seed with weight {:e}", weight_sum);
+        debug!("Cell seed {seed_idx}  with weight {:e}", weight_sum);
         let mut members = vec![seed_idx];
         let mut radius = n64(0.);
 
@@ -44,7 +44,7 @@ impl<'a> Cell<'a> {
 
         for (next_idx, dist) in neighbours {
             trace!(
-                "adding event with distance {dist}, weight {:e} to cell",
+                "adding event {next_idx} with distance {dist}, weight {:e} to cell",
                 events[next_idx].weight()
             );
             weight_sum += events[next_idx].weight();
@@ -71,6 +71,7 @@ impl<'a> Cell<'a> {
     /// over the cell.
     #[cfg(feature = "multiweight")]
     pub fn resample(&mut self) {
+        use std::ops::{Deref, DerefMut};
 
         fn add_assign(acc: &mut [N64], rhs: &[N64]) {
             use itertools::zip_eq;
@@ -79,26 +80,33 @@ impl<'a> Cell<'a> {
             }
         }
 
-        let (&first, rest) = self.members.split_first().unwrap();
-        let mut avg_wts = std::mem::take(&mut self.events[first].weights);
-        for &idx in rest {
-            add_assign(&mut avg_wts, &self.events[idx].weights);
+        self.members.sort_unstable();         // sort to prevent deadlocks
+        let mut member_weights = Vec::from_iter(
+            self.members.iter().map(
+                |i| self.events[*i].weights.write()
+            )
+        );
+        let (first, rest) = member_weights.split_first_mut().unwrap();
+
+        let mut avg_wts = std::mem::take(first.deref_mut());
+        for idx in rest.iter() {
+            add_assign(&mut avg_wts, idx.deref());
         }
         let inv_norm = n64(1. / self.nmembers() as f64);
         for wt in avg_wts.iter_mut() {
             *wt *= inv_norm;
         }
-        for &idx in rest {
-            self.events[idx].weights.copy_from_slice(&avg_wts);
+        for idx in rest {
+            idx.copy_from_slice(&avg_wts);
         }
-        self.events[first].weights = avg_wts;
+        *first.deref_mut() = avg_wts;
     }
 
     #[cfg(not(feature = "multiweight"))]
     pub fn resample(&mut self) {
          let avg_wt = self.weight_sum() / (self.nmembers() as f64);
          for &idx in &self.members {
-             self.events[idx].weights = avg_wt;
+             *self.events[idx].weights.write() = avg_wt;
          }
     }
 

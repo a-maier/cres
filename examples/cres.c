@@ -60,8 +60,6 @@ int main(int argc, char** argv) {
 
   /* algorithm for finding nearest-neighbour events */
   opt.neighbour_search = Tree;
-  /* number of partitions (a power of two) */
-  opt.num_partitions = 1;
 
   /* distance function
    *

@@ -42,9 +42,9 @@ fn main() -> Result<()> {
 
 fn run_main<N>(opt: Opt) -> Result<()>
 where
-    N: NeighbourData,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+    N: NeighbourData + Clone + Send + Sync,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
 {
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
@@ -70,7 +70,6 @@ where
     };
     let resampler = DefaultResamplerBuilder::default()
         .max_cell_size(opt.max_cell_size)
-        .num_partitions(opt.partitions)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
         .cell_collector(cell_collector.clone())

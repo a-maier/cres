@@ -55,8 +55,6 @@ pub struct Opt {
     jet_def: JetDefinition,
     /// Algorithm for finding nearest-neigbour events,
     neighbour_search: Search,
-    /// Number of partitions
-    num_partitions: u32,
     /// Maximum cell radius
     ///
     /// Set to INFINITY for unlimited cell sizes
@@ -165,9 +163,9 @@ where D: Distance + Send + Sync
 fn cres_run_with<D, N>(opt: &Opt, dist: D) -> Result<(), Error>
 where
     D: Distance + Send + Sync,
-    N: NeighbourData,
-    for <'x, 'y, 'z> &'x mut N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for <'x, 'y, 'z> <&'x mut N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    N: NeighbourData + Clone + Send + Sync,
+    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
 {
     debug!("Settings: {:#?}", opt);
 
@@ -198,12 +196,11 @@ where
         .filename(outfile.into())
         .build();
 
-    // TODO: seeds, observer, partitions
+    // TODO: seeds, observer
     let resampler = ResamplerBuilder::default()
         .max_cell_size(Some(opt.max_cell_size as f64))
         .distance(dist)
         .neighbour_search::<N>()
-        .num_partitions(opt.num_partitions)
         .build();
 
     let mut cres = CresBuilder {
