@@ -70,6 +70,13 @@ impl<T: std::io::Write> WriteEvent<avery::Event> for Writer<T> {
             .map(|s| s.parse().ok())
             .flatten()
             .unwrap_or(1.0);
+        let alpha_s_power = e.attr.get("as")
+            .map(|s| s.parse().ok())
+            .flatten();
+        if let Some(alpha_s_power) = alpha_s_power {
+            self.record.alpha_s_power = alpha_s_power;
+        }
+
         let mut subev = SubEvent::from(e);
         subev.weight /= scale;
         let ev = stripper_xml::Event {

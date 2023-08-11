@@ -67,6 +67,10 @@ impl Iterator for FileReader {
                         "wtscale".to_owned(),
                         self.reader.scale().to_string()
                     );
+                    ev.attr.insert(
+                        "as".to_owned(),
+                        self.reader.alpha_s_power().to_string()
+                    );
                     Ok(ev)
                 },
                 Err(err) => Err(err.into()),
@@ -92,6 +96,7 @@ pub struct Reader<T> {
     name: String,
     source: T,
     scale: f64,
+    alpha_s_power: u64,
     rem_subevents: usize,
     buf: Vec<u8>,
 }
@@ -103,9 +108,16 @@ impl<T: BufRead> Reader<T> {
     ) -> Result<Self, XMLError> {
         match extract_xml_info(&mut source)? {
             XMLTag::Normalization { .. } => Err(XMLError::BadTag("Normalization".to_owned())),
-            XMLTag::Eventrecord { name, nevents: _, nsubevents } => {
+            XMLTag::Eventrecord { alpha_s_power, name, nevents: _, nsubevents } => {
                 let rem_subevents = nsubevents as usize;
-                Ok(Self { name, source, scale, rem_subevents, buf: Vec::new() })
+                Ok(Self {
+                    alpha_s_power,
+                    name,
+                    source,
+                    scale,
+                    rem_subevents,
+                    buf: Vec::new()
+                })
             },
         }
     }
@@ -116,10 +128,17 @@ impl<T: BufRead> Reader<T> {
     ) -> Result<Self, XMLError> {
         match extract_xml_info(&mut source)? {
             XMLTag::Normalization { .. } => Err(XMLError::BadTag("Normalization".to_owned())),
-            XMLTag::Eventrecord { name, nevents: _, nsubevents } => {
+            XMLTag::Eventrecord { alpha_s_power, name, nevents: _, nsubevents } => {
                 let rem_subevents = nsubevents as usize;
                 let scale = scaling.get(&name).copied().unwrap_or(1.);
-                Ok(Self { name, source, scale, rem_subevents, buf: Vec::new() })
+                Ok(Self {
+                    alpha_s_power,
+                    name,
+                    source,
+                    scale,
+                    rem_subevents,
+                    buf: Vec::new()
+                })
             },
         }
     }
@@ -130,6 +149,10 @@ impl<T: BufRead> Reader<T> {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn alpha_s_power(&self) -> u64 {
+        self.alpha_s_power
     }
 }
 
@@ -297,6 +320,7 @@ pub fn extract_xml_info(
                         let mut name = None;
                         let mut nevents = None;
                         let mut nsubevents = None;
+                        let mut alpha_s_power = None;
                         let attributes = e.attributes()
                             .filter_map(|a| match a {
                                 Ok(a) => Some(a),
@@ -307,6 +331,7 @@ pub fn extract_xml_info(
                                 b"nevents" => nevents = Some(parse_u64(attr.value.as_ref())?),
                                 b"nsubevents" => nsubevents = Some(parse_u64(attr.value.as_ref())?),
                                 b"name" => name = Some(to_string(attr.value)?),
+                                b"as" => alpha_s_power = Some(parse_u64(attr.value.as_ref())?),
                                 _ => { }
                             }
                         }
@@ -319,7 +344,15 @@ pub fn extract_xml_info(
                         let Some(nevents) = nevents else {
                             return Err(NoEventrecordAttr("nevents"));
                         };
-                        return Ok(XMLTag::Eventrecord { name, nevents, nsubevents });
+                        let Some(alpha_s_power) = alpha_s_power else {
+                            return Err(NoEventrecordAttr("as"));
+                        };
+                        return Ok(XMLTag::Eventrecord {
+                            alpha_s_power,
+                            name,
+                            nevents,
+                            nsubevents
+                        });
                     },
                     name => {
                         let name = std::str::from_utf8(name)?;
@@ -350,7 +383,12 @@ fn parse_u64(num: &[u8]) -> Result<u64, XMLError> {
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum XMLTag {
     Normalization{ name: String, scale: f64 },
-    Eventrecord{ name: String, nevents: u64, nsubevents: u64 },
+    Eventrecord{
+        alpha_s_power: u64,
+        name: String,
+        nevents: u64,
+        nsubevents: u64
+    },
 }
 
 #[derive(Debug, Error)]
