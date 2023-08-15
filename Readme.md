@@ -168,6 +168,9 @@ manually. To disable them, add the `--no-default-features` flag.
      RUSTFLAGS='-C link-arg=-lCore' cargo install cres --features ntuple
   ```
 
+- `stripper-xml`: Experimental support for the XML format used by
+  [STRIPPER](https://arxiv.org/abs/1005.0274).
+
 - `capi`: Enables the C API for using `cres` as a C library. For
   examples, see the
   [examples](https://github.com/a-maier/cres/tree/master/examples)
