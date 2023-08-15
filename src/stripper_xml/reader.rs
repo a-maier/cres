@@ -258,7 +258,7 @@ fn read_into_until<T: BufRead>(
             reader.consume(pos);
             return Ok(());
         }
-        buf.extend_from_slice(&read);
+        buf.extend_from_slice(read);
         let len = read.len();
         reader.consume(len);
     }
@@ -291,7 +291,7 @@ where
     let mut rescale: HashMap<_, (f64, u64)> = HashMap::new();
     for path in paths {
         let path = path.as_ref();
-        let file = File::open(&path)?;
+        let file = File::open(path)?;
         let mut r = auto_decompress(BufReader::new(file));
         if let Ok(buf) =  r.fill_buf() {
             let buf = trim_ascii_start(buf);

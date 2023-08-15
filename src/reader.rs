@@ -210,7 +210,7 @@ impl CombinedReader<FileReader> {
         #[cfg(feature = "stripper-xml")]
         {
             let (files, scaling) = crate::stripper_xml::reader::extract_scaling(files)?;
-            return Self::from_files_with_scaling(files, &scaling)
+            Self::from_files_with_scaling(files, &scaling)
         }
 
         #[cfg(not(feature = "stripper-xml"))]
@@ -226,7 +226,7 @@ impl CombinedReader<FileReader> {
         P: AsRef<Path>,
     {
         let readers: Result<_, _> = files.into_iter()
-            .map(|f| FileReader::with_scaling(f.as_ref(), &scaling).map_err(
+            .map(|f| FileReader::with_scaling(f.as_ref(), scaling).map_err(
                 |err| CreateError::FileError(f.as_ref().to_path_buf(), Box::new(err))
             ))
             .collect();
