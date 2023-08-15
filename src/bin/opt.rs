@@ -192,6 +192,7 @@ pub(crate) enum FileFormat {
     #[cfg(feature = "ntuple")]
     Root,
     #[cfg(feature = "stripper-xml")]
+    #[clap(name = "stripper-xml")]
     StripperXml,
 }
 
