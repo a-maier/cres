@@ -94,7 +94,7 @@ fn create_error(
 
 pub struct Reader<T> {
     name: String,
-    source: T,
+    source: quick_xml::Reader<T>,
     scale: f64,
     alpha_s_power: u64,
     rem_subevents: usize,
@@ -113,7 +113,7 @@ impl<T: BufRead> Reader<T> {
                 Ok(Self {
                     alpha_s_power,
                     name,
-                    source,
+                    source: quick_xml::Reader::from_reader(source),
                     scale,
                     rem_subevents,
                     buf: Vec::new()
@@ -134,7 +134,7 @@ impl<T: BufRead> Reader<T> {
                 Ok(Self {
                     alpha_s_power,
                     name,
-                    source,
+                    source: quick_xml::Reader::from_reader(source),
                     scale,
                     rem_subevents,
                     buf: Vec::new()
@@ -164,16 +164,17 @@ impl<T: BufRead> Iterator for Reader<T> {
         use ReadError::*;
 
         self.rem_subevents = self.rem_subevents.saturating_sub(1);
-        let mut reader = quick_xml::Reader::from_reader(&mut self.source);
         loop {
             self.buf.clear();
-            let read = match reader.read_event_into(&mut self.buf) {
+            let read = match self.source.read_event_into(&mut self.buf) {
                 Ok(read) => read,
                 Err(err) => {
                     use quick_xml::Error;
                     match err {
-                        Error::UnexpectedEof(_) => return None,
-                        Error::EndEventMismatch { .. } => continue,
+                        Error::EndEventMismatch {
+                            expected: _expected,
+                            found
+                        } if found == "Eventrecord" => continue,
                         err => return Some(Err(ParseError(err)))
                     }
                 }
@@ -192,12 +193,13 @@ impl<T: BufRead> Iterator for Reader<T> {
                         // let mut de = Deserializer::from_reader(rest);
                         // SubEvent::deserialize(&mut de)
                         // ```
-                        let mut reader = reader.into_inner();
+                        let mut reader = self.source.get_mut();
                         let read = read_into_until(
                             &mut reader,
                             &mut self.buf,
                             b"</se>",
                         );
+                        self.buf.extend_from_slice(b"</se>");
                         if let Err(err) = read {
                             return Some(Err(err.into()));
                         }
@@ -220,7 +222,7 @@ impl<T: BufRead> Iterator for Reader<T> {
                     }
                 },
                 Event::End(tag) => match tag.name().as_ref() {
-                    b"e" | b"Eventrecord" => { },
+                    b"e" | b"se" | b"Eventrecord" => { },
                     tag => {
                         let tag = match std::str::from_utf8(tag) {
                             Ok(tag) => tag,
@@ -251,12 +253,9 @@ fn read_into_until<T: BufRead>(
 ) -> std::io::Result<()> {
     loop {
         let read = reader.fill_buf()?;
-        if let Some(mut pos) = memchr::memmem::find(read, until) {
-            pos += until.len();
-            assert!(pos < read.len());
+        if let Some(pos) = memchr::memmem::find(read, until) {
             buf.extend_from_slice(&read[..pos]);
             reader.consume(pos);
-            debug_assert!(buf.ends_with(until));
             return Ok(());
         }
         buf.extend_from_slice(&read);
