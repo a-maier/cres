@@ -32,12 +32,12 @@ pub mod c_api;
 /// Definition of event cells
 pub mod cell;
 pub mod cell_collector;
+/// Jet clustering helpers
+pub mod cluster;
 /// Output compression
 pub mod compression;
 /// Conversion between input events and internal format
 pub mod converter;
-/// Jet clustering helpers
-pub mod cluster;
 pub mod cres;
 /// Distance functions
 pub mod distance;
@@ -49,8 +49,14 @@ pub mod file;
 pub mod four_vector;
 /// HepMC2 interface
 pub mod hepmc2;
+/// LesHouches Event File interface
+#[cfg(feature = "lhef")]
+pub mod lhef;
 /// Nearest neighbour search algorithms
 pub mod neighbour_search;
+/// ntuple interface
+#[cfg(feature = "ntuple")]
+pub mod ntuple;
 /// Most important exports
 pub mod prelude;
 /// Progress bar
@@ -61,24 +67,18 @@ pub mod reader;
 pub mod resampler;
 /// Cell seed selection
 pub mod seeds;
+/// STRIPPER XML interface
+#[cfg(feature = "stripper-xml")]
+pub mod stripper_xml;
 /// Common traits
 pub mod traits;
 /// Unweighting
 pub mod unweight;
 /// Event writer
 pub mod writer;
-/// LesHouches Event File interface
-#[cfg(feature = "lhef")]
-pub mod lhef;
-/// ntuple interface
-#[cfg(feature = "ntuple")]
-pub mod ntuple;
-/// STRIPPER XML interface
-#[cfg(feature = "stripper-xml")]
-pub mod stripper_xml;
 
-mod vptree;
 mod util;
+mod vptree;
 
 use lazy_static::lazy_static;
 
@@ -111,14 +111,24 @@ const NFEATURES: usize = {
     #[allow(unused_mut)]
     let mut nfeatures = 0;
     #[cfg(feature = "lhef")]
-    { nfeatures += 1; }
+    {
+        nfeatures += 1;
+    }
     #[cfg(feature = "multiweight")]
-    { nfeatures += 1; }
+    {
+        nfeatures += 1;
+    }
     #[cfg(feature = "ntuple")]
-    { nfeatures += 1; }
+    {
+        nfeatures += 1;
+    }
     #[cfg(feature = "stripper-xml")]
-    { nfeatures += 1; }
+    {
+        nfeatures += 1;
+    }
     #[cfg(feature = "capi")]
-    { nfeatures += 1; }
+    {
+        nfeatures += 1;
+    }
     nfeatures
 };

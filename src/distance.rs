@@ -2,20 +2,23 @@ use crate::event::Event;
 use crate::four_vector::FourVector;
 
 use std::cmp::Ordering;
-use std::fmt::{Display, self};
+use std::fmt::{self, Display};
 use std::ops::{Index, IndexMut};
 
 use itertools::Itertools;
 use noisy_float::prelude::*;
-use pathfinding::prelude::{Weights, kuhn_munkres_min};
+use pathfinding::prelude::{kuhn_munkres_min, Weights};
 use permutohedron::LexicalPermutation;
 
 /// A metric (distance function) in the space of all events
-pub trait Distance<E=Event> {
+pub trait Distance<E = Event> {
     fn distance(&self, ev1: &E, ev2: &E) -> N64;
 }
 
-impl<D, E> Distance<E> for &D where D: Distance<E> {
+impl<D, E> Distance<E> for &D
+where
+    D: Distance<E>,
+{
     fn distance(&self, ev1: &E, ev2: &E) -> N64 {
         (*self).distance(ev1, ev2)
     }
@@ -109,7 +112,11 @@ impl EuclWithScaledPt {
         }
     }
 
-    fn min_paired_distance_naive(&self, p1: &mut [FourVector], p2: &[FourVector]) -> N64 {
+    fn min_paired_distance_naive(
+        &self,
+        p1: &mut [FourVector],
+        p2: &[FourVector],
+    ) -> N64 {
         let mut min_dist = self.paired_distance(p1, p2);
         while p1.next_permutation() {
             min_dist = std::cmp::min(min_dist, self.paired_distance(p1, p2));
@@ -117,10 +124,15 @@ impl EuclWithScaledPt {
         min_dist
     }
 
-    fn min_paired_distance_hungarian(&self, p1: &[FourVector], p2: &[FourVector]) -> N64 {
+    fn min_paired_distance_hungarian(
+        &self,
+        p1: &[FourVector],
+        p2: &[FourVector],
+    ) -> N64 {
         let weights = SquareMatrix::from_iter(
-            p1.iter().cartesian_product(p2.iter())
-                .map(|(p, q)| pt_dist(p, q, self.pt_weight))
+            p1.iter()
+                .cartesian_product(p2.iter())
+                .map(|(p, q)| pt_dist(p, q, self.pt_weight)),
         );
         kuhn_munkres_min(&weights).0
     }
@@ -157,7 +169,7 @@ pub struct PtDistance<'a, 'b, D: Distance> {
     events: &'b [Event],
 }
 
-impl<'a, 'b, D: Distance>  PtDistance<'a, 'b, D> {
+impl<'a, 'b, D: Distance> PtDistance<'a, 'b, D> {
     pub fn new(ev_dist: &'a D, events: &'b [Event]) -> Self {
         Self { ev_dist, events }
     }
@@ -206,7 +218,10 @@ impl Weights<N64> for SquareMatrix {
 
     fn neg(&self) -> Self {
         let entries = self.entries.iter().map(|e| -e).collect();
-        Self { entries, rows: self.rows }
+        Self {
+            entries,
+            rows: self.rows,
+        }
     }
 }
 
@@ -227,6 +242,9 @@ impl FromIterator<N64> for SquareMatrix {
         let entries = Vec::from_iter(iter);
         let rows = (entries.len() as f64).sqrt();
         assert_eq!(rows.fract(), 0.);
-        Self { entries, rows: rows as usize }
+        Self {
+            entries,
+            rows: rows as usize,
+        }
     }
 }

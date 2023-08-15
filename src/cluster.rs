@@ -1,7 +1,13 @@
-use std::{fmt::{Display, self}, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
-use jetty::{Cluster, PseudoJet, anti_kt_f, kt_f, cambridge_aachen_f};
-use particle_id::{ParticleID, sm_elementary_particles::{photon, electron, gluon, muon, bottom}};
+use jetty::{anti_kt_f, cambridge_aachen_f, kt_f, Cluster, PseudoJet};
+use particle_id::{
+    sm_elementary_particles::{bottom, electron, gluon, muon, photon},
+    ParticleID,
+};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -69,7 +75,10 @@ pub(crate) fn is_photon(id: ParticleID) -> bool {
 pub(crate) const PID_JET: ParticleID = ParticleID::new(81);
 pub(crate) const PID_DRESSED_LEPTON: ParticleID = ParticleID::new(82);
 
-pub fn cluster(partons: Vec<PseudoJet>, jet_def: &JetDefinition) -> Vec<PseudoJet> {
+pub fn cluster(
+    partons: Vec<PseudoJet>,
+    jet_def: &JetDefinition,
+) -> Vec<PseudoJet> {
     let minpt2 = jet_def.min_pt * jet_def.min_pt;
     let cut = |jet: PseudoJet| jet.pt2() > minpt2;
     let r = jet_def.radius;

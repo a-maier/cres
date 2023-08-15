@@ -1,15 +1,25 @@
 use std::{
-    io::{BufRead, BufReader, Error, ErrorKind, Seek, Read},
-    fmt::{Debug, Display}, collections::HashMap, path::{Path, PathBuf}, str::Utf8Error, num::ParseIntError, borrow::Cow,
+    borrow::Cow,
+    collections::HashMap,
+    fmt::{Debug, Display},
+    io::{BufRead, BufReader, Error, ErrorKind, Read, Seek},
+    num::ParseIntError,
+    path::{Path, PathBuf},
+    str::Utf8Error,
 };
 
 use audec::auto_decompress;
 use log::debug;
 use quick_xml::DeError;
-use stripper_xml::{SubEvent, normalization::Normalization};
+use stripper_xml::{normalization::Normalization, SubEvent};
 use thiserror::Error;
 
-use crate::{file::File, reader::{EventReadError, RewindError, EventFileReader, CreateError}, traits::{Rewind, TryClone}, util::trim_ascii_start};
+use crate::{
+    file::File,
+    reader::{CreateError, EventFileReader, EventReadError, RewindError},
+    traits::{Rewind, TryClone},
+    util::trim_ascii_start,
+};
 
 /// Read events in STRIPPER XML format from a (potentially compressed) file
 pub struct FileReader {
@@ -20,17 +30,13 @@ pub struct FileReader {
 impl FileReader {
     pub fn new(
         source: File,
-        scaling: &HashMap<String, f64>
+        scaling: &HashMap<String, f64>,
     ) -> Result<Self, std::io::Error> {
         let cloned_source = source.try_clone()?;
         let input = auto_decompress(BufReader::new(cloned_source));
-        let reader = Reader::with_scaling(input, scaling).map_err(
-            |err| create_error(&source, err)
-        )?;
-        Ok(FileReader {
-            source,
-            reader
-        })
+        let reader = Reader::with_scaling(input, scaling)
+            .map_err(|err| create_error(&source, err))?;
+        Ok(FileReader { source, reader })
     }
 }
 
@@ -43,38 +49,36 @@ impl Rewind for FileReader {
         let cloned_source = self.source.try_clone().map_err(CloneError)?;
         let input = auto_decompress(BufReader::new(cloned_source));
         let scale = self.reader.scale();
-        self.reader = Reader::new_scaled(input, scale).map_err(
-            |err| create_error(&self.source, err)
-        )?;
+        self.reader = Reader::new_scaled(input, scale)
+            .map_err(|err| create_error(&self.source, err))?;
 
         Ok(())
     }
 }
 
-impl EventFileReader for FileReader { }
+impl EventFileReader for FileReader {}
 
 impl Iterator for FileReader {
     type Item = Result<avery::Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let name = self.reader.name().to_owned();
-        self.reader.next()
-            .map(|r| match r {
-                Ok(ev) => {
-                    let mut ev = avery::Event::from(ev);
-                    ev.info = name;
-                    ev.attr.insert(
-                        "wtscale".to_owned(),
-                        self.reader.scale().to_string()
-                    );
-                    ev.attr.insert(
-                        "as".to_owned(),
-                        self.reader.alpha_s_power().to_string()
-                    );
-                    Ok(ev)
-                },
-                Err(err) => Err(err.into()),
-            })
+        self.reader.next().map(|r| match r {
+            Ok(ev) => {
+                let mut ev = avery::Event::from(ev);
+                ev.info = name;
+                ev.attr.insert(
+                    "wtscale".to_owned(),
+                    self.reader.scale().to_string(),
+                );
+                ev.attr.insert(
+                    "as".to_owned(),
+                    self.reader.alpha_s_power().to_string(),
+                );
+                Ok(ev)
+            }
+            Err(err) => Err(err.into()),
+        })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -82,13 +86,10 @@ impl Iterator for FileReader {
     }
 }
 
-fn create_error(
-    file: impl Debug,
-    err: impl Display
-) -> Error {
+fn create_error(file: impl Debug, err: impl Display) -> Error {
     Error::new(
         ErrorKind::Other,
-        format!("Failed to create STRIPPER XML reader for {file:?}: {err}")
+        format!("Failed to create STRIPPER XML reader for {file:?}: {err}"),
     )
 }
 
@@ -102,13 +103,17 @@ pub struct Reader<T> {
 }
 
 impl<T: BufRead> Reader<T> {
-    fn new_scaled(
-        mut source: T,
-        scale: f64
-    ) -> Result<Self, XMLError> {
+    fn new_scaled(mut source: T, scale: f64) -> Result<Self, XMLError> {
         match extract_xml_info(&mut source)? {
-            XMLTag::Normalization { .. } => Err(XMLError::BadTag("Normalization".to_owned())),
-            XMLTag::Eventrecord { alpha_s_power, name, nevents: _, nsubevents } => {
+            XMLTag::Normalization { .. } => {
+                Err(XMLError::BadTag("Normalization".to_owned()))
+            }
+            XMLTag::Eventrecord {
+                alpha_s_power,
+                name,
+                nevents: _,
+                nsubevents,
+            } => {
                 let rem_subevents = nsubevents as usize;
                 Ok(Self {
                     alpha_s_power,
@@ -116,9 +121,9 @@ impl<T: BufRead> Reader<T> {
                     source: quick_xml::Reader::from_reader(source),
                     scale,
                     rem_subevents,
-                    buf: Vec::new()
+                    buf: Vec::new(),
                 })
-            },
+            }
         }
     }
 
@@ -127,8 +132,15 @@ impl<T: BufRead> Reader<T> {
         scaling: &HashMap<String, f64>,
     ) -> Result<Self, XMLError> {
         match extract_xml_info(&mut source)? {
-            XMLTag::Normalization { .. } => Err(XMLError::BadTag("Normalization".to_owned())),
-            XMLTag::Eventrecord { alpha_s_power, name, nevents: _, nsubevents } => {
+            XMLTag::Normalization { .. } => {
+                Err(XMLError::BadTag("Normalization".to_owned()))
+            }
+            XMLTag::Eventrecord {
+                alpha_s_power,
+                name,
+                nevents: _,
+                nsubevents,
+            } => {
                 let rem_subevents = nsubevents as usize;
                 let scale = scaling.get(&name).copied().unwrap_or(1.);
                 Ok(Self {
@@ -137,9 +149,9 @@ impl<T: BufRead> Reader<T> {
                     source: quick_xml::Reader::from_reader(source),
                     scale,
                     rem_subevents,
-                    buf: Vec::new()
+                    buf: Vec::new(),
                 })
-            },
+            }
         }
     }
 
@@ -173,15 +185,15 @@ impl<T: BufRead> Iterator for Reader<T> {
                     match err {
                         Error::EndEventMismatch {
                             expected: _expected,
-                            found
+                            found,
                         } if found == "Eventrecord" => continue,
-                        err => return Some(Err(ParseError(err)))
+                        err => return Some(Err(ParseError(err))),
                     }
                 }
             };
             match read {
                 Event::Start(tag) => match tag.name().as_ref() {
-                    b"e" => { },
+                    b"e" => {}
                     b"se" => {
                         // restore tag delimiters
                         self.buf.insert(0, b'<');
@@ -205,14 +217,15 @@ impl<T: BufRead> Iterator for Reader<T> {
                         }
                         use quick_xml::de::Deserializer;
                         use serde::de::Deserialize;
-                        let mut de = Deserializer::from_reader(self.buf.as_slice());
+                        let mut de =
+                            Deserializer::from_reader(self.buf.as_slice());
                         let mut ev = match SubEvent::deserialize(&mut de) {
                             Ok(ev) => ev,
                             Err(err) => return Some(Err(err.into())),
                         };
                         ev.weight *= self.scale();
                         return Some(Ok(ev));
-                    },
+                    }
                     tag => {
                         let tag = match std::str::from_utf8(tag) {
                             Ok(tag) => tag,
@@ -222,7 +235,7 @@ impl<T: BufRead> Iterator for Reader<T> {
                     }
                 },
                 Event::End(tag) => match tag.name().as_ref() {
-                    b"e" | b"se" | b"Eventrecord" => { },
+                    b"e" | b"se" | b"Eventrecord" => {}
                     tag => {
                         let tag = match std::str::from_utf8(tag) {
                             Ok(tag) => tag,
@@ -232,11 +245,13 @@ impl<T: BufRead> Iterator for Reader<T> {
                     }
                 },
                 Event::Eof => return None,
-                Event::Comment(_) | Event::DocType(_) => { },
-                Event::Text(t) => if !trim_ascii_start(t.as_ref()).is_empty() {
-                    return Some(Err(BadEntry(format!("{t:?}"))))
-                },
-                _ => return Some(Err(BadEntry(format!("{read:?}"))))
+                Event::Comment(_) | Event::DocType(_) => {}
+                Event::Text(t) => {
+                    if !trim_ascii_start(t.as_ref()).is_empty() {
+                        return Some(Err(BadEntry(format!("{t:?}"))));
+                    }
+                }
+                _ => return Some(Err(BadEntry(format!("{read:?}")))),
             }
         }
     }
@@ -265,7 +280,7 @@ fn read_into_until<T: BufRead>(
 }
 
 #[derive(Debug, Error)]
-pub enum ReadError{
+pub enum ReadError {
     #[error("Parsing error")]
     ParseError(#[from] quick_xml::Error),
     #[error("Unexpected XML tag: {0}")]
@@ -281,7 +296,7 @@ pub enum ReadError{
 }
 
 pub fn extract_scaling<I, P>(
-    paths: I
+    paths: I,
 ) -> Result<(Vec<PathBuf>, HashMap<String, f64>), CreateError>
 where
     I: IntoIterator<Item = P>,
@@ -293,25 +308,24 @@ where
         let path = path.as_ref();
         let file = File::open(path)?;
         let mut r = auto_decompress(BufReader::new(file));
-        if let Ok(buf) =  r.fill_buf() {
+        if let Ok(buf) = r.fill_buf() {
             let buf = trim_ascii_start(buf);
             if buf.starts_with(b"<?xml") {
                 debug!("extracting scaling information from {path:?}");
-                let tag = extract_xml_info(r).map_err(
-                    |err| crate::reader::CreateError::XMLError(path.to_owned(), err)
-                )?;
+                let tag = extract_xml_info(r).map_err(|err| {
+                    crate::reader::CreateError::XMLError(path.to_owned(), err)
+                })?;
                 match tag {
                     XMLTag::Normalization { name, scale } => {
                         let entry = rescale.entry(name).or_default();
                         entry.0 = scale;
                         // don't add to vec of event files
-                    },
+                    }
                     XMLTag::Eventrecord { name, nevents, .. } => {
-                        let entry = rescale.entry(name)
-                            .or_insert((-1., 0));
+                        let entry = rescale.entry(name).or_insert((-1., 0));
                         entry.1 += nevents;
                         event_files.push(path.to_owned())
-                    },
+                    }
                 }
             } else {
                 // not a STRIPPER XML file
@@ -321,15 +335,14 @@ where
             event_files.push(path.to_owned())
         }
     }
-    let rescale = rescale.into_iter()
+    let rescale = rescale
+        .into_iter()
         .map(|(name, (scale, nevents))| (name, scale / (nevents as f64)))
         .collect();
     Ok((event_files, rescale))
 }
 
-pub fn extract_xml_info(
-    r: impl BufRead
-) -> Result<XMLTag, XMLError> {
+pub fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, XMLError> {
     use quick_xml::events::Event;
     use XMLError::*;
 
@@ -346,29 +359,39 @@ pub fn extract_xml_info(
                         buf.push(b'>');
                         let rest = reader.into_inner();
                         let all = buf.chain(rest);
-                        let norm: Normalization = quick_xml::de::from_reader(all)?;
+                        let norm: Normalization =
+                            quick_xml::de::from_reader(all)?;
                         return Ok(XMLTag::Normalization {
                             name: norm.contribution.name,
-                            scale: norm.contribution.xsection.0[0]
+                            scale: norm.contribution.xsection.0[0],
                         });
-                    },
+                    }
                     b"Eventrecord" => {
                         let mut name = None;
                         let mut nevents = None;
                         let mut nsubevents = None;
                         let mut alpha_s_power = None;
-                        let attributes = e.attributes()
-                            .filter_map(|a| match a {
+                        let attributes =
+                            e.attributes().filter_map(|a| match a {
                                 Ok(a) => Some(a),
                                 Err(_) => None,
                             });
                         for attr in attributes {
                             match attr.key.0 {
-                                b"nevents" => nevents = Some(parse_u64(attr.value.as_ref())?),
-                                b"nsubevents" => nsubevents = Some(parse_u64(attr.value.as_ref())?),
+                                b"nevents" => {
+                                    nevents =
+                                        Some(parse_u64(attr.value.as_ref())?)
+                                }
+                                b"nsubevents" => {
+                                    nsubevents =
+                                        Some(parse_u64(attr.value.as_ref())?)
+                                }
                                 b"name" => name = Some(to_string(attr.value)?),
-                                b"as" => alpha_s_power = Some(parse_u64(attr.value.as_ref())?),
-                                _ => { }
+                                b"as" => {
+                                    alpha_s_power =
+                                        Some(parse_u64(attr.value.as_ref())?)
+                                }
+                                _ => {}
                             }
                         }
                         let Some(name) = name else {
@@ -387,18 +410,17 @@ pub fn extract_xml_info(
                             alpha_s_power,
                             name,
                             nevents,
-                            nsubevents
+                            nsubevents,
                         });
-                    },
+                    }
                     name => {
                         let name = std::str::from_utf8(name)?;
-                        return Err(BadTag(name.to_owned()))
+                        return Err(BadTag(name.to_owned()));
                     }
-
                 }
-            },
-            Ok(Event::Decl(_) | Event::Text(_)) => { } // ignore,
-            _ => return Err(NoTag)
+            }
+            Ok(Event::Decl(_) | Event::Text(_)) => {} // ignore,
+            _ => return Err(NoTag),
         }
     }
 }
@@ -418,12 +440,15 @@ fn parse_u64(num: &[u8]) -> Result<u64, XMLError> {
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum XMLTag {
-    Normalization{ name: String, scale: f64 },
-    Eventrecord{
+    Normalization {
+        name: String,
+        scale: f64,
+    },
+    Eventrecord {
         alpha_s_power: u64,
         name: String,
         nevents: u64,
-        nsubevents: u64
+        nsubevents: u64,
     },
 }
 

@@ -1,16 +1,16 @@
 use std::fmt::{self, Display};
 use std::path::PathBuf;
 
-use cres::compression::Compression;
 use cres::cluster::JetAlgorithm;
+use cres::compression::Compression;
 use cres::seeds::Strategy;
 
-use clap::{ValueEnum, Parser};
+use clap::{Parser, ValueEnum};
 use cres::writer::OutputFormat;
 use lazy_static::lazy_static;
 use regex::Regex;
-use thiserror::Error;
 use strum::{Display, EnumString};
+use thiserror::Error;
 
 fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
     use Strategy::*;
@@ -168,7 +168,7 @@ impl std::convert::From<LeptonDefinition> for cres::cluster::JetDefinition {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub(crate) enum Search {
     Tree,
-    Naive
+    Naive,
 }
 
 #[derive(Debug, Copy, Clone, Parser)]
@@ -209,7 +209,6 @@ impl From<FileFormat> for OutputFormat {
         }
     }
 }
-
 
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
@@ -275,8 +274,11 @@ Possible values with increasing amount of output are
     )]
     pub(crate) strategy: Strategy,
 
-    #[clap(short, long, default_value_t,
-    help ="Number of threads.
+    #[clap(
+        short,
+        long,
+        default_value_t,
+        help = "Number of threads.
 
 If set to 0, a default number of threads is chosen.
 The default can be set with the `RAYON_NUM_THREADS` environment
@@ -318,13 +320,12 @@ impl Opt {
         let &LeptonDefinition {
             leptonalgorithm,
             leptonpt,
-            leptonradius
-        }= &self.lepton_def;
+            leptonradius,
+        } = &self.lepton_def;
         match (leptonalgorithm, leptonpt, leptonradius) {
             (Some(_), Some(_), Some(_)) => Ok(self),
             (None, None, None) => Ok(self),
             _ => Err(ValidationError::BadLeptonOpt),
         }
     }
-
 }

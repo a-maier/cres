@@ -1,16 +1,26 @@
 mod opt;
 
-use std::{path::PathBuf, io::Write};
+use std::{io::Write, path::PathBuf};
 
-use crate::opt::{FileFormat, parse_compr};
+use crate::opt::{parse_compr, FileFormat};
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use clap::Parser;
-use cres::{compression::Compression, GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, traits::{Distance, Rewind, Progress, TryConvert, WriteEvent}, resampler::log2, distance::EuclWithScaledPt, bisect::circle_partition_with_progress, progress_bar::ProgressBar, converter::ClusteringConverter};
+use cres::{
+    bisect::circle_partition_with_progress,
+    compression::Compression,
+    converter::ClusteringConverter,
+    distance::EuclWithScaledPt,
+    progress_bar::ProgressBar,
+    reader::CombinedReader,
+    resampler::log2,
+    traits::{Distance, Progress, Rewind, TryConvert, WriteEvent},
+    GIT_BRANCH, GIT_REV, VERSION,
+};
 use env_logger::Env;
-use log::{info, debug, error, trace};
-use opt::JetDefinition;
+use log::{debug, error, info, trace};
 use noisy_float::prelude::*;
+use opt::JetDefinition;
 
 // TODO: code duplication with opt::Opt
 #[derive(Debug, Parser)]
@@ -74,7 +84,8 @@ fn main() -> Result<()> {
         std::env::args_os(),
         argfile::parse_fromfile,
         argfile::PREFIX,
-    ).with_context(|| "Failed to read argument file")?;
+    )
+    .with_context(|| "Failed to read argument file")?;
     let opt = Opt::parse_from(args);
 
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
@@ -119,7 +130,7 @@ fn main() -> Result<()> {
     let parts = circle_partition_with_progress(
         &mut events,
         |e1, e2| distance.distance(e1, e2),
-        depth
+        depth,
     );
     debug_assert_eq!(parts.len(), opt.partitions as usize);
 
@@ -139,7 +150,7 @@ fn main() -> Result<()> {
             Some(Compression::Gzip(_)) => base + ".gz",
             Some(Compression::Lz4(_)) => base + ".lz4",
             Some(Compression::Zstd(_)) => base + ".zst",
-            None => base
+            None => base,
         }
     };
     info!(
@@ -150,7 +161,8 @@ fn main() -> Result<()> {
 
     let outfiles = (0..opt.partitions).map(|n| {
         let mut path = opt.outfile.clone();
-        let mut filename = opt.outfile.file_name().unwrap_or_default().to_owned();
+        let mut filename =
+            opt.outfile.file_name().unwrap_or_default().to_owned();
         filename.push(n.to_string());
         path.set_file_name(filename);
         path.set_extension(&extension);
@@ -159,32 +171,34 @@ fn main() -> Result<()> {
 
     let mut writers: Writers = match opt.outformat {
         FileFormat::HepMC2 => {
-            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
-                cres::hepmc2::Writer::try_new(&f, opt.compression)
-            }).collect();
+            let writers: Result<Vec<_>, _> = outfiles
+                .map(|f| cres::hepmc2::Writer::try_new(&f, opt.compression))
+                .collect();
             Writers::HepMC(writers?)
-        },
+        }
         #[cfg(feature = "lhef")]
         FileFormat::Lhef => {
-            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
-                cres::lhef::Writer::try_new(&f, opt.compression)
-            }).collect();
+            let writers: Result<Vec<_>, _> = outfiles
+                .map(|f| cres::lhef::Writer::try_new(&f, opt.compression))
+                .collect();
             Writers::Lhef(writers?)
-        },
+        }
         #[cfg(feature = "ntuple")]
         FileFormat::Root => {
-            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
-                cres::ntuple::Writer::try_new(&f, opt.compression)
-            }).collect();
+            let writers: Result<Vec<_>, _> = outfiles
+                .map(|f| cres::ntuple::Writer::try_new(&f, opt.compression))
+                .collect();
             Writers::NTuple(writers?)
-        },
+        }
         #[cfg(feature = "stripper-xml")]
         FileFormat::StripperXml => {
-            let writers: Result<Vec<_>, _> = outfiles.map(|f| {
-                cres::stripper_xml::Writer::try_new(&f, opt.compression)
-            }).collect();
+            let writers: Result<Vec<_>, _> = outfiles
+                .map(|f| {
+                    cres::stripper_xml::Writer::try_new(&f, opt.compression)
+                })
+                .collect();
             Writers::StripperXml(writers?)
-        },
+        }
     };
 
     reader.rewind()?;
@@ -200,7 +214,7 @@ fn main() -> Result<()> {
                     error!("{err}")
                 }
             }
-        },
+        }
         #[cfg(feature = "lhef")]
         Writers::Lhef(writers) => {
             for writer in writers {
@@ -208,7 +222,7 @@ fn main() -> Result<()> {
                     error!("{err}")
                 }
             }
-        },
+        }
         #[cfg(feature = "stripper-xml")]
         Writers::StripperXml(writers) => {
             for writer in writers {
@@ -216,9 +230,9 @@ fn main() -> Result<()> {
                     error!("{err}")
                 }
             }
-        },
+        }
         #[cfg(feature = "ntuple")]
-        _ => { }
+        _ => {}
     }
 
     Ok(())
@@ -237,17 +251,21 @@ enum Writers {
 impl Writers {
     fn write(&mut self, idx: usize, event: avery::Event) -> Result<()> {
         match self {
-            Writers::HepMC(writers) =>
-                writers[idx].write(event).map_err(|e| e.into()),
+            Writers::HepMC(writers) => {
+                writers[idx].write(event).map_err(|e| e.into())
+            }
             #[cfg(feature = "lhef")]
-            Writers::Lhef(writers) =>
-                writers[idx].write(event).map_err(|e| e.into()),
+            Writers::Lhef(writers) => {
+                writers[idx].write(event).map_err(|e| e.into())
+            }
             #[cfg(feature = "ntuple")]
-            Writers::NTuple(writers) =>
-                writers[idx].write(event).map_err(|e| e.into()),
+            Writers::NTuple(writers) => {
+                writers[idx].write(event).map_err(|e| e.into())
+            }
             #[cfg(feature = "stripper-xml")]
-            Writers::StripperXml(writers) =>
-                writers[idx].write(event).map_err(|e| e.into()),
+            Writers::StripperXml(writers) => {
+                writers[idx].write(event).map_err(|e| e.into())
+            }
         }
     }
 }
@@ -256,11 +274,13 @@ fn parse_npartitions(s: &str) -> Result<u32, String> {
     use std::str::FromStr;
 
     match u32::from_str(s) {
-        Ok(n) => if n.is_power_of_two() {
-            Ok(n)
-        } else {
-            Err("has to be a power of two".to_string())
+        Ok(n) => {
+            if n.is_power_of_two() {
+                Ok(n)
+            } else {
+                Err("has to be a power of two".to_string())
+            }
         }
-        Err(err) => Err(err.to_string())
+        Err(err) => Err(err.to_string()),
     }
 }

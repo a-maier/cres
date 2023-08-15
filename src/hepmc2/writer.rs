@@ -1,17 +1,19 @@
 use std::{io::BufWriter, path::Path};
 
-use crate::{traits::WriteEvent, compression::{Compression, compress_writer}, file::File};
+use crate::{
+    compression::{compress_writer, Compression},
+    file::File,
+    traits::WriteEvent,
+};
 
 /// Write events in HepMC 2 format
 #[derive(Debug)]
-pub struct Writer<T: std::io::Write> (
-    hepmc2::Writer<T>
-);
+pub struct Writer<T: std::io::Write>(hepmc2::Writer<T>);
 
 impl Writer<Box<dyn std::io::Write>> {
     pub fn try_new(
         filename: &Path,
-        compression: Option<Compression>
+        compression: Option<Compression>,
     ) -> Result<Self, std::io::Error> {
         let outfile = File::create(filename)?;
         let out = BufWriter::new(outfile);

@@ -7,10 +7,7 @@ use cbindgen::Language;
 use vergen::EmitBuilder;
 
 fn main() -> Result<()> {
-    EmitBuilder::builder()
-        .git_branch()
-        .git_sha(true)
-        .emit()?;
+    EmitBuilder::builder().git_branch().git_sha(true).emit()?;
 
     if cfg!(target_family = "unix") {
         write_c_header()
@@ -25,10 +22,9 @@ fn main() -> Result<()> {
 }
 
 fn write_c_header() {
-    let out: PathBuf = [
-        env::var("OUT_DIR").unwrap().as_str(),
-        "cres.h"
-    ].iter().collect();
+    let out: PathBuf = [env::var("OUT_DIR").unwrap().as_str(), "cres.h"]
+        .iter()
+        .collect();
 
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 

@@ -1,15 +1,32 @@
 mod opt;
 use crate::opt::Opt;
 
-use std::{io::{stdout, Write}, env::var_os, path::{PathBuf, Path}, fs::{File, create_dir_all}, ffi::OsStr};
+use std::{
+    env::var_os,
+    ffi::OsStr,
+    fs::{create_dir_all, File},
+    io::{stdout, Write},
+    path::{Path, PathBuf},
+};
 
-use anyhow::{Result, Context};
-use clap::{CommandFactory, ValueEnum, Parser};
+use anyhow::{Context, Result};
+use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, shells::*, Generator};
 use dirs::home_dir;
 use strum::EnumString;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, EnumString, ValueEnum)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    EnumString,
+    ValueEnum,
+)]
 enum Shell {
     Bash,
     Elvish,
@@ -22,7 +39,7 @@ enum Shell {
 struct ShellSelect {
     /// Shell for which to generate completions
     #[clap(value_enum)]
-    shell: Shell
+    shell: Shell,
 }
 
 fn gen_completion<S: Generator, W: Write>(shell: S, mut to: W) {
@@ -44,29 +61,35 @@ fn main() -> Result<()> {
 fn gen_bash_outfile() -> Result<File> {
     let mut outfile = var_os("$BASH_COMPLETION_USER_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(
-            || if let Some(dir) = var_os("XDG_DATA_HOME") {
-                PathBuf::from_iter([dir.as_os_str(), OsStr::new("bash-completion")])
+        .unwrap_or_else(|| {
+            if let Some(dir) = var_os("XDG_DATA_HOME") {
+                PathBuf::from_iter([
+                    dir.as_os_str(),
+                    OsStr::new("bash-completion"),
+                ])
             } else {
                 let mut dir = home_dir().expect("No home directory found");
-                for part in [".local", "share", "bash-completion", "completions"] {
+                for part in
+                    [".local", "share", "bash-completion", "completions"]
+                {
                     dir.push(part);
                 }
                 dir
             }
-        );
+        });
     outfile.push("cres.bash");
     create_file(outfile)
 }
 
 fn gen_fish_outfile() -> Result<File> {
-    let mut outfile = var_os("XDG_DATA_HOME").map(PathBuf::from)
+    let mut outfile = var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
         .unwrap_or_else(|| {
-                let mut dir = home_dir().expect("No home directory found");
-                for part in [".local", "share"] {
-                    dir.push(part);
-                }
-                dir
+            let mut dir = home_dir().expect("No home directory found");
+            for part in [".local", "share"] {
+                dir.push(part);
+            }
+            dir
         });
     for part in ["fish", "vendor_completions.d", "cres,fish"] {
         outfile.push(part);
@@ -76,7 +99,6 @@ fn gen_fish_outfile() -> Result<File> {
 
 fn create_file<P: AsRef<Path>>(name: P) -> Result<File> {
     create_dir_all(name.as_ref().parent().unwrap())?;
-    File::create(name.as_ref()).with_context(
-        || format!("Failed to create {:?}", name.as_ref())
-    )
+    File::create(name.as_ref())
+        .with_context(|| format!("Failed to create {:?}", name.as_ref()))
 }

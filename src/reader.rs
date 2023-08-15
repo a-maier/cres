@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufReader, BufRead},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
 };
 
@@ -9,7 +9,7 @@ use hepmc2::reader::LineParseError;
 use log::debug;
 use thiserror::Error;
 
-use crate::{traits::Rewind, file::File, util::trim_ascii_start};
+use crate::{file::File, traits::Rewind, util::trim_ascii_start};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -18,9 +18,7 @@ const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
 /// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
-pub struct FileReader (
-    Box<dyn EventFileReader>
-);
+pub struct FileReader(Box<dyn EventFileReader>);
 
 impl Rewind for FileReader {
     type Error = RewindError;
@@ -44,15 +42,13 @@ impl Iterator for FileReader {
 
 impl FileReader {
     /// Returns an event reader for the file at `path`
-    pub fn new<P: AsRef<Path>>(
-        path: P
-    ) -> Result<FileReader, CreateError> {
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<FileReader, CreateError> {
         Self::with_scaling(path, &HashMap::new())
     }
 
     pub fn with_scaling<P: AsRef<Path>>(
         path: P,
-        _scaling: &HashMap<String, f64> // only used in "stripper-xml" feature
+        _scaling: &HashMap<String, f64>, // only used in "stripper-xml" feature
     ) -> Result<FileReader, CreateError> {
         use crate::hepmc2::FileReader as HepMCReader;
         let file = File::open(&path)?;
@@ -62,8 +58,8 @@ impl FileReader {
             Err(_) => {
                 let file = File::open(&path)?;
                 let reader = HepMCReader::new(file)?;
-                return Ok(FileReader(Box::new(reader)))
-            },
+                return Ok(FileReader(Box::new(reader)));
+            }
         };
         if bytes.starts_with(&ROOT_MAGIC_BYTES) {
             let path = path.as_ref().to_owned();
@@ -74,7 +70,7 @@ impl FileReader {
             {
                 debug!("Read {path:?} as ROOT ntuple");
                 let reader = crate::ntuple::Reader::new(path)?;
-                return Ok(FileReader(Box::new(reader)))
+                return Ok(FileReader(Box::new(reader)));
             }
         } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
             let path = path.as_ref();
@@ -86,7 +82,7 @@ impl FileReader {
                 use crate::stripper_xml::FileReader as XMLReader;
                 let file = File::open(path)?;
                 let reader = XMLReader::new(file, _scaling)?;
-                return Ok(FileReader(Box::new(reader)))
+                return Ok(FileReader(Box::new(reader)));
             }
         }
         #[cfg(feature = "lhef")]
@@ -126,7 +122,7 @@ pub enum RewindError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("Source clone error: {0}")]
-    CloneError(std::io::Error)
+    CloneError(std::io::Error),
 }
 
 #[derive(Debug, Error)]
@@ -154,7 +150,10 @@ pub struct CombinedReader<R> {
 impl<R> CombinedReader<R> {
     /// Combine multiple readers into a single one
     pub fn new(readers: Vec<R>) -> Self {
-        Self{ readers, current: 0 }
+        Self {
+            readers,
+            current: 0,
+        }
     }
 }
 
@@ -186,49 +185,56 @@ impl<R: Iterator> Iterator for CombinedReader<R> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.readers[self.current..].iter()
+        self.readers[self.current..]
+            .iter()
             .map(|r| r.size_hint())
-            .reduce(|(accmin, accmax), (min, max)|  {
+            .reduce(|(accmin, accmax), (min, max)| {
                 let accmax = match (accmax, max) {
                     (Some(accmax), Some(max)) => Some(accmax + max),
-                    _ => None
+                    _ => None,
                 };
                 (accmin + min, accmax)
-            }).unwrap_or_default()
+            })
+            .unwrap_or_default()
     }
 }
 
 impl CombinedReader<FileReader> {
     /// Construct a new reader reading from the files with the given names
-    pub fn from_files<I, P>(
-        files: I
-    ) -> Result<Self, CreateError>
+    pub fn from_files<I, P>(files: I) -> Result<Self, CreateError>
     where
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
         #[cfg(feature = "stripper-xml")]
         {
-            let (files, scaling) = crate::stripper_xml::reader::extract_scaling(files)?;
+            let (files, scaling) =
+                crate::stripper_xml::reader::extract_scaling(files)?;
             Self::from_files_with_scaling(files, &scaling)
         }
 
         #[cfg(not(feature = "stripper-xml"))]
-        return Self::from_files_with_scaling(files, &HashMap::new())
+        return Self::from_files_with_scaling(files, &HashMap::new());
     }
 
     fn from_files_with_scaling<I, P>(
         files: I,
-        scaling: &HashMap<String, f64>
+        scaling: &HashMap<String, f64>,
     ) -> Result<Self, CreateError>
     where
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let readers: Result<_, _> = files.into_iter()
-            .map(|f| FileReader::with_scaling(f.as_ref(), scaling).map_err(
-                |err| CreateError::FileError(f.as_ref().to_path_buf(), Box::new(err))
-            ))
+        let readers: Result<_, _> = files
+            .into_iter()
+            .map(|f| {
+                FileReader::with_scaling(f.as_ref(), scaling).map_err(|err| {
+                    CreateError::FileError(
+                        f.as_ref().to_path_buf(),
+                        Box::new(err),
+                    )
+                })
+            })
             .collect();
         Ok(Self::new(readers?))
     }
@@ -236,8 +242,9 @@ impl CombinedReader<FileReader> {
 
 pub trait EventFileReader:
     Iterator<Item = Result<avery::Event, EventReadError>>
-    + Rewind<Error = RewindError> {
-    }
+    + Rewind<Error = RewindError>
+{
+}
 
 #[cfg(feature = "ntuple")]
 impl EventFileReader for crate::ntuple::Reader {}

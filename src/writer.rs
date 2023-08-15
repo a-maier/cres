@@ -1,16 +1,28 @@
-use std::{path::{PathBuf, Path}, cell::RefCell, rc::Rc, collections::{HashMap, hash_map::Entry}};
 #[cfg(feature = "multiweight")]
 use std::collections::HashSet;
-
+use std::{
+    cell::RefCell,
+    collections::{hash_map::Entry, HashMap},
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use strum::Display;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use crate::{traits::{Write, WriteEvent}, event::Event, progress_bar::{ProgressBar, Progress}, compression::Compression, cell_collector::CellCollector};
+use crate::{
+    cell_collector::CellCollector,
+    compression::Compression,
+    event::Event,
+    progress_bar::{Progress, ProgressBar},
+    traits::{Write, WriteEvent},
+};
 
 /// Supported output formats
-#[derive(Copy, Clone, Debug, Default, Display, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Copy, Clone, Debug, Default, Display, Eq, PartialEq, Ord, PartialOrd, Hash,
+)]
 #[strum(serialize_all = "lowercase")]
 pub enum OutputFormat {
     /// The HepMC2 format
@@ -50,20 +62,18 @@ impl FileWriter {
         &self,
         mut make_writer: F,
         r: &mut R,
-        events: &[Event]
+        events: &[Event],
     ) -> Result<(), EventWriteError<RE, std::io::Error>>
     where
         F: FnMut(&Path, Option<Compression>) -> Result<W, std::io::Error>,
         W: WriteEvent<avery::Event, Error = std::io::Error>,
         R: Iterator<Item = Result<avery::Event, RE>>,
-        RE: std::error::Error
+        RE: std::error::Error,
     {
         use EventWriteError::*;
 
-        let mut writer = make_writer(
-            &self.filename,
-            self.compression,
-        ).map_err(CreateErr)?;
+        let mut writer =
+            make_writer(&self.filename, self.compression).map_err(CreateErr)?;
 
         let dump_event_to = self
             .cell_collector
@@ -74,10 +84,9 @@ impl FileWriter {
         for cellnum in cellnums {
             if let Entry::Vacant(entry) = cell_writers.entry(cellnum) {
                 let filename = format!("cell{cellnum}.{}", self.format);
-                let cell_writer = make_writer(
-                    filename.as_ref(),
-                    self.compression,
-                ).map_err(CreateErr)?;
+                let cell_writer =
+                    make_writer(filename.as_ref(), self.compression)
+                        .map_err(CreateErr)?;
                 entry.insert(cell_writer);
             }
         }
@@ -106,7 +115,9 @@ impl FileWriter {
                 for wt in &mut read_event.weights {
                     if let Some(name) = wt.name.as_ref() {
                         if self.overwrite_weights.contains(name) {
-                            wt.weight = Some(f64::from(*resampled_weights.next().unwrap()))
+                            wt.weight = Some(f64::from(
+                                *resampled_weights.next().unwrap(),
+                            ))
                         }
                     }
                 }
@@ -143,7 +154,7 @@ where
     fn write(
         &mut self,
         r: &mut R,
-        events: &[Event]
+        events: &[Event],
     ) -> Result<(), Self::Error> {
         use OutputFormat::*;
         match self.format {
@@ -153,7 +164,9 @@ where
             #[cfg(feature = "ntuple")]
             Root => self.write_all(crate::ntuple::Writer::try_new, r, events),
             #[cfg(feature = "stripper-xml")]
-            StripperXml => self.write_all(crate::stripper_xml::Writer::try_new, r, events),
+            StripperXml => {
+                self.write_all(crate::stripper_xml::Writer::try_new, r, events)
+            }
         }
     }
 }

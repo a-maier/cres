@@ -15,22 +15,26 @@ use cres::writer::FileWriter;
 use cres::{
     cell_collector::CellCollector,
     distance::{EuclWithScaledPt, PtDistance},
+    neighbour_search::{
+        NaiveNeighbourSearch, NeighbourData, NeighbourSearch, TreeSearch,
+    },
     prelude::*,
-    neighbour_search::{NeighbourData, NeighbourSearch, NaiveNeighbourSearch, TreeSearch},
-    resampler::DefaultResamplerBuilder, FEATURES, GIT_BRANCH, GIT_REV, VERSION,
+    resampler::DefaultResamplerBuilder,
+    FEATURES, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
 use log::{debug, info};
+use noisy_float::prelude::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
-use noisy_float::prelude::*;
 
 fn main() -> Result<()> {
     let args = argfile::expand_args_from(
         std::env::args_os(),
         argfile::parse_fromfile,
         argfile::PREFIX,
-    ).with_context(|| "Failed to read argument file")?;
+    )
+    .with_context(|| "Failed to read argument file")?;
     let opt = Opt::parse_from(args).validate()?;
     match opt.search {
         Search::Naive => run_main::<NaiveNeighbourSearch>(opt),
@@ -43,8 +47,10 @@ fn main() -> Result<()> {
 fn run_main<N>(opt: Opt) -> Result<()>
 where
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+    for<'x, 'y, 'z> &'x N:
+        NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter:
+        Iterator<Item = (usize, N64)>,
 {
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
@@ -105,8 +111,8 @@ where
         resampler,
         unweighter,
         writer,
-
-    }.build();
+    }
+    .build();
     cres.run()?;
 
     Ok(())

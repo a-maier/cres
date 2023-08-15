@@ -1,5 +1,5 @@
-use std::io::{Error, ErrorKind};
 use std::fmt::Debug;
+use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
 use crate::reader::{EventReadError, RewindError};
@@ -7,16 +7,12 @@ use crate::traits::Rewind;
 
 /// Reader for a single ROOT ntuple event file
 #[derive(Debug)]
-pub struct Reader (
-    ntuple::Reader,
-);
+pub struct Reader(ntuple::Reader);
 
 impl Reader {
     /// Construct a reader for the ROOT ntuple file with the given name
     pub fn new(file: PathBuf) -> Result<Self, Error> {
-        let r = ntuple::Reader::new(&file).ok_or_else(
-            || create_error(file)
-        )?;
+        let r = ntuple::Reader::new(&file).ok_or_else(|| create_error(file))?;
         Ok(Self(r))
     }
 }
@@ -37,7 +33,7 @@ impl Iterator for Reader {
         match self.0.next() {
             Some(Err(err)) => Some(Err(err.into())),
             Some(Ok(ev)) => Some(Ok(ev.into())),
-            None => None
+            None => None,
         }
     }
 
@@ -49,6 +45,6 @@ impl Iterator for Reader {
 fn create_error(file: impl Debug) -> Error {
     Error::new(
         ErrorKind::Other,
-        format!("Failed to create ntuple reader for {file:?}")
+        format!("Failed to create ntuple reader for {file:?}"),
     )
 }

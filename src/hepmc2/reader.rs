@@ -1,8 +1,12 @@
-use std::io::{Seek, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Seek};
 
 use audec::auto_decompress;
 
-use crate::{traits::{TryClone, Rewind}, reader::{RewindError, EventReadError}, file::File};
+use crate::{
+    file::File,
+    reader::{EventReadError, RewindError},
+    traits::{Rewind, TryClone},
+};
 
 /// Reader for a single (potentially compressed) HepMC2 event file
 pub struct FileReader {
@@ -16,7 +20,9 @@ impl FileReader {
         let cloned_source = source.try_clone()?;
         Ok(FileReader {
             source,
-            reader: hepmc2::Reader::new(auto_decompress(BufReader::new(cloned_source)))
+            reader: hepmc2::Reader::new(auto_decompress(BufReader::new(
+                cloned_source,
+            ))),
         })
     }
 }
@@ -28,7 +34,8 @@ impl Rewind for FileReader {
         use RewindError::*;
         self.source.rewind()?;
         let cloned_source = self.source.try_clone().map_err(CloneError)?;
-        self.reader = hepmc2::Reader::new(auto_decompress(BufReader::new(cloned_source)));
+        self.reader =
+            hepmc2::Reader::new(auto_decompress(BufReader::new(cloned_source)));
 
         Ok(())
     }

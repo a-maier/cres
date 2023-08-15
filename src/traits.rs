@@ -2,8 +2,8 @@ use crate::cell::Cell;
 use crate::event::Event;
 
 pub use crate::distance::Distance;
-pub use crate::seeds::SelectSeeds;
 pub use crate::neighbour_search::{NeighbourData, NeighbourSearch};
+pub use crate::seeds::SelectSeeds;
 
 /// Rewind to the beginning of a stream
 pub trait Rewind {
@@ -62,7 +62,10 @@ pub trait WriteEvent<Ev> {
     fn write(&mut self, e: Ev) -> Result<(), Self::Error>;
 
     /// Wrap up (optional)
-    fn finish(self) -> Result<(), Self::Error> where Self: Sized {
+    fn finish(self) -> Result<(), Self::Error>
+    where
+        Self: Sized,
+    {
         Ok(())
     }
 }

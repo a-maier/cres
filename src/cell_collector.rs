@@ -45,18 +45,14 @@ impl CellCollector {
                 .push((count, cell.iter().map(|e| e.id()).collect()));
             self.random
                 .push((count, cell.iter().map(|e| e.id()).collect()));
-            self.largest_by_radius.insert(
-                (r, count),
-                cell.iter().map(|e| e.id()).collect(),
-            );
+            self.largest_by_radius
+                .insert((r, count), cell.iter().map(|e| e.id()).collect());
             self.largest_by_members.insert(
                 (nmembers, count),
                 cell.iter().map(|e| e.id()).collect(),
             );
-            self.largest_by_weight.insert(
-                (weight, count),
-                cell.iter().map(|e| e.id()).collect(),
-            );
+            self.largest_by_weight
+                .insert((weight, count), cell.iter().map(|e| e.id()).collect());
         } else {
             let (smallest_r, n) =
                 *self.largest_by_radius.keys().next().unwrap();
@@ -150,29 +146,36 @@ impl CellCollector {
     }
 
     pub fn combine(mut self, other: Self, rng: &mut impl Rng) -> Self {
-        info!("combining {} + {} cell observations", self.count, other.count);
+        info!(
+            "combining {} + {} cell observations",
+            self.count, other.count
+        );
         self.largest_by_members.extend(
-            other.largest_by_members.into_iter().map(
-                |((n, id), ev)| ((n, id + self.count), ev)
-            )
+            other
+                .largest_by_members
+                .into_iter()
+                .map(|((n, id), ev)| ((n, id + self.count), ev)),
         );
         truncate(&mut self.largest_by_members, NCELLS);
         self.largest_by_radius.extend(
-            other.largest_by_radius.into_iter().map(
-                |((r, id), ev)| ((r, id + self.count), ev)
-            )
+            other
+                .largest_by_radius
+                .into_iter()
+                .map(|((r, id), ev)| ((r, id + self.count), ev)),
         );
         truncate(&mut self.largest_by_radius, NCELLS);
         self.largest_by_weight.extend(
-            other.largest_by_weight.into_iter().map(
-                |((w, id), ev)| ((w, id + self.count), ev)
-            )
+            other
+                .largest_by_weight
+                .into_iter()
+                .map(|((w, id), ev)| ((w, id + self.count), ev)),
         );
         truncate(&mut self.largest_by_weight, NCELLS);
         self.random.extend(
-            other.random.into_iter().map(
-                |(id, ev)| (id + self.count, ev)
-            )
+            other
+                .random
+                .into_iter()
+                .map(|(id, ev)| (id + self.count, ev)),
         );
         while self.random.len() > NCELLS {
             let distr = Uniform::from(0..self.random.len());
@@ -186,10 +189,8 @@ impl CellCollector {
 
 fn truncate<K: Ord, V>(map: &mut BTreeMap<K, V>, n: usize) {
     let mut count = 0;
-    map.retain(
-        |_, _| {
-            count += 1;
-            count <= n
-        }
-    );
+    map.retain(|_, _| {
+        count += 1;
+        count <= n
+    });
 }

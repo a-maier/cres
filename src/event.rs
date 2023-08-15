@@ -48,7 +48,11 @@ impl EventBuilder {
     ///
     /// The particle id should follow the
     /// [PDG Monte Carlo Particle Numbering Scheme](https://pdg.lbl.gov/2021/mcdata/mc_particle_id_contents.html)
-    pub fn add_outgoing(&mut self, pid: ParticleID, p: FourVector) -> &mut Self {
+    pub fn add_outgoing(
+        &mut self,
+        pid: ParticleID,
+        p: FourVector,
+    ) -> &mut Self {
         self.outgoing_by_pid.push((pid, p));
         self
     }
@@ -91,8 +95,9 @@ fn compress_outgoing(
         }
     }
     let outgoing_by_pid = Vec::from_iter(
-        outgoing_by_pid.into_iter()
-            .map(|(id, p)| (id, p.into_boxed_slice()))
+        outgoing_by_pid
+            .into_iter()
+            .map(|(id, p)| (id, p.into_boxed_slice())),
     );
     outgoing_by_pid.into_boxed_slice()
 }

@@ -29,7 +29,8 @@ impl<'a> Cell<'a> {
     ) -> Self
     where
         for<'x, 'y> N: NeighbourSearch<PtDistance<'x, 'y, F>>,
-        for<'x, 'y>  <N as NeighbourSearch<PtDistance<'x, 'y, F>>>::Iter: Iterator<Item=(usize, N64)>,
+        for<'x, 'y> <N as NeighbourSearch<PtDistance<'x, 'y, F>>>::Iter:
+            Iterator<Item = (usize, N64)>,
     {
         let mut weight_sum = events[seed_idx].weight();
         debug_assert!(weight_sum < 0.);
@@ -37,10 +38,8 @@ impl<'a> Cell<'a> {
         let mut members = vec![seed_idx];
         let mut radius = n64(0.);
 
-        let neighbours = neighbour_search.nearest_in(
-            &seed_idx,
-            PtDistance::new(distance, events)
-        );
+        let neighbours = neighbour_search
+            .nearest_in(&seed_idx, PtDistance::new(distance, events));
 
         for (next_idx, dist) in neighbours {
             trace!(
@@ -80,11 +79,9 @@ impl<'a> Cell<'a> {
             }
         }
 
-        self.members.sort_unstable();         // sort to prevent deadlocks
+        self.members.sort_unstable(); // sort to prevent deadlocks
         let mut member_weights = Vec::from_iter(
-            self.members.iter().map(
-                |i| self.events[*i].weights.write()
-            )
+            self.members.iter().map(|i| self.events[*i].weights.write()),
         );
         let (first, rest) = member_weights.split_first_mut().unwrap();
 
@@ -104,10 +101,10 @@ impl<'a> Cell<'a> {
 
     #[cfg(not(feature = "multiweight"))]
     pub fn resample(&mut self) {
-         let avg_wt = self.weight_sum() / (self.nmembers() as f64);
-         for &idx in &self.members {
-             *self.events[idx].weights.write() = avg_wt;
-         }
+        let avg_wt = self.weight_sum() / (self.nmembers() as f64);
+        for &idx in &self.members {
+            *self.events[idx].weights.write() = avg_wt;
+        }
     }
 
     /// Number of events in cell
@@ -136,9 +133,7 @@ impl<'a> Cell<'a> {
     }
 
     /// Iterator over (distance, cell member)
-    pub fn iter(
-        &'a self,
-    ) -> impl std::iter::Iterator<Item = &'a Event> + 'a {
+    pub fn iter(&'a self) -> impl std::iter::Iterator<Item = &'a Event> + 'a {
         self.members.iter().map(move |idx| &self.events[*idx])
     }
 }

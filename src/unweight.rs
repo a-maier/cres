@@ -65,7 +65,9 @@ impl<R: Rng> Unweight for Unweighter<R> {
         // rescale to ensure that the sum of weights is preserved exactly
         let final_wt_sum: N64 = events.par_iter().map(|e| e.weight()).sum();
         let reweight = orig_wt_sum / final_wt_sum;
-        events.par_iter_mut().for_each(|e| e.rescale_weights(reweight));
+        events
+            .par_iter_mut()
+            .for_each(|e| e.rescale_weights(reweight));
         Ok(events)
     }
 }

@@ -2,18 +2,15 @@
 #![allow(clippy::unnecessary_cast)]
 use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
+use crate::cluster;
 use crate::converter::ClusteringConverter;
 use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
-use crate::cluster;
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::reader::CombinedReader;
 use crate::resampler::ResamplerBuilder;
 
 use crate::neighbour_search::{
-    NeighbourData,
-    NeighbourSearch,
-    NaiveNeighbourSearch,
-    TreeSearch
+    NaiveNeighbourSearch, NeighbourData, NeighbourSearch, TreeSearch,
 };
 use crate::writer::FileWriter;
 
@@ -148,11 +145,11 @@ fn cres_run_internal(opt: &Opt) -> Result<(), Error> {
         debug!("Using custom distance function {distance:?}");
         cres_run_with_dist(opt, distance)
     }
-
 }
 
 fn cres_run_with_dist<D>(opt: &Opt, dist: D) -> Result<(), Error>
-where D: Distance + Send + Sync
+where
+    D: Distance + Send + Sync,
 {
     match opt.neighbour_search {
         Search::Tree => cres_run_with::<D, TreeSearch>(opt, dist),
@@ -164,8 +161,9 @@ fn cres_run_with<D, N>(opt: &Opt, dist: D) -> Result<(), Error>
 where
     D: Distance + Send + Sync,
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    for<'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter:
+        Iterator<Item = (usize, N64)>,
 {
     debug!("Settings: {:#?}", opt);
 
@@ -192,9 +190,7 @@ where
     let unweighter = NO_UNWEIGHTING;
 
     // TODO: other output formats
-    let writer = FileWriter::builder()
-        .filename(outfile.into())
-        .build();
+    let writer = FileWriter::builder().filename(outfile.into()).build();
 
     // TODO: seeds, observer
     let resampler = ResamplerBuilder::default()

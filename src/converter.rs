@@ -1,7 +1,10 @@
 #[cfg(feature = "multiweight")]
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
-use crate::cluster::{JetDefinition, is_parton, is_light_lepton, cluster, PID_JET, is_photon, PID_DRESSED_LEPTON, is_hadron};
+use crate::cluster::{
+    cluster, is_hadron, is_light_lepton, is_parton, is_photon, JetDefinition,
+    PID_DRESSED_LEPTON, PID_JET,
+};
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
@@ -54,7 +57,8 @@ impl ClusteringConverter {
     }
 
     fn is_clustered_to_lepton(&self, id: ParticleID) -> bool {
-        self.lepton_def.is_some() && (is_light_lepton(id.abs()) || is_photon(id))
+        self.lepton_def.is_some()
+            && (is_light_lepton(id.abs()) || is_photon(id))
     }
 }
 
@@ -73,9 +77,10 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         #[cfg(not(feature = "multiweight"))]
         builder.weights(n64(event.weights.first().unwrap().weight.unwrap()));
 
-        let outgoing = event.particles.into_iter().filter(
-            |p| p.status == Some(Status::Outgoing)
-        );
+        let outgoing = event
+            .particles
+            .into_iter()
+            .filter(|p| p.status == Some(Status::Outgoing));
         for out in outgoing {
             let id = out.id.unwrap();
             let p = out.p.unwrap();
@@ -84,12 +89,7 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
             } else if self.is_clustered_to_lepton(id) {
                 leptons.push(p.into());
             } else if self.include_neutrinos || !is_neutrino(id) {
-                let p = [
-                    n64(p[0]),
-                    n64(p[1]),
-                    n64(p[2]),
-                    n64(p[3]),
-                ];
+                let p = [n64(p[0]), n64(p[1]), n64(p[2]), n64(p[3])];
                 builder.add_outgoing(id, p.into());
             }
         }
@@ -133,7 +133,6 @@ impl Converter {
         self.weight_names = weight_names;
         self
     }
-
 }
 
 impl TryConvert<avery::Event, Event> for Converter {
@@ -149,17 +148,13 @@ impl TryConvert<avery::Event, Event> for Converter {
         #[cfg(not(feature = "multiweight"))]
         builder.weights(n64(event.weights.first().unwrap().weight.unwrap()));
 
-        let outgoing = event.particles.into_iter().filter(
-            |p| p.status == Some(Status::Outgoing)
-        );
+        let outgoing = event
+            .particles
+            .into_iter()
+            .filter(|p| p.status == Some(Status::Outgoing));
         for out in outgoing {
             let p = out.p.unwrap();
-            let p = [
-                n64(p[0]),
-                n64(p[1]),
-                n64(p[2]),
-                n64(p[3]),
-            ];
+            let p = [n64(p[0]), n64(p[1]), n64(p[2]), n64(p[3])];
             builder.add_outgoing(out.id.unwrap(), p.into());
         }
         Ok(builder.build())
@@ -169,14 +164,13 @@ impl TryConvert<avery::Event, Event> for Converter {
 #[cfg(feature = "multiweight")]
 fn extract_weights(
     event: &avery::Event,
-    weight_names: &HashSet<String>
+    weight_names: &HashSet<String>,
 ) -> Result<Vec<N64>, ConversionError> {
     let mut weights = Vec::with_capacity(weight_names.len() + 1);
     let weight = event.weights.first().unwrap().weight.unwrap();
     weights.push(n64(weight));
-    let mut weight_seen: HashMap<_, _> = weight_names.iter()
-        .map(|n| (n, false))
-        .collect();
+    let mut weight_seen: HashMap<_, _> =
+        weight_names.iter().map(|n| (n, false)).collect();
     for wt in &event.weights {
         if let Some(name) = wt.name.as_ref() {
             if let Some(seen) = weight_seen.get_mut(name) {
@@ -185,13 +179,20 @@ fn extract_weights(
             }
         }
     }
-    let missing = weight_seen.into_iter()
-        .find_map(|(name, seen)| if seen { None } else { Some(name) });
+    let missing =
+        weight_seen
+            .into_iter()
+            .find_map(|(name, seen)| if seen { None } else { Some(name) });
     if let Some(missing) = missing {
-        let all_names = event.weights.iter()
+        let all_names = event
+            .weights
+            .iter()
             .filter_map(|wt| wt.name.clone())
             .collect();
-        Err(ConversionError::WeightNotFound(missing.to_owned(), all_names))
+        Err(ConversionError::WeightNotFound(
+            missing.to_owned(),
+            all_names,
+        ))
     } else {
         Ok(weights)
     }
@@ -201,5 +202,5 @@ fn extract_weights(
 pub enum ConversionError {
     #[cfg(feature = "multiweight")]
     #[error("Failed to find event weight \"{0}\": Event has weights {1:?}")]
-    WeightNotFound(String, Vec<String>)
+    WeightNotFound(String, Vec<String>),
 }

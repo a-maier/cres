@@ -1,10 +1,10 @@
-use std::{cmp::Ord, sync::Mutex, ops::Range};
+use std::{cmp::Ord, ops::Range, sync::Mutex};
 
 use log::debug;
 use num_traits::Zero;
 use rayon::prelude::*;
 
-use crate::progress_bar::{ProgressBar, Progress};
+use crate::progress_bar::{Progress, ProgressBar};
 
 pub fn circle_partition<DF, D, T>(
     s: &mut Vec<T>,
@@ -14,9 +14,9 @@ pub fn circle_partition<DF, D, T>(
 where
     DF: Send + Sync + Fn(&T, &T) -> D,
     D: Copy + Ord + Zero + Send + Sync,
-    T: Send + Sync
+    T: Send + Sync,
 {
-    circle_partition_with_callback(s, dist, depth, |_|{})
+    circle_partition_with_callback(s, dist, depth, |_| {})
 }
 
 pub fn circle_partition_with_progress<DF, D, T>(
@@ -27,7 +27,7 @@ pub fn circle_partition_with_progress<DF, D, T>(
 where
     DF: Send + Sync + Fn(&T, &T) -> D,
     D: Copy + Ord + Zero + Send + Sync,
-    T: Send + Sync
+    T: Send + Sync,
 {
     if depth > 0 {
         let max_progress = depth as u64 * 2_u64.pow(depth - 1);
@@ -54,14 +54,12 @@ where
     C: Copy + Send + Sync + Fn(u32),
 {
     if depth == 0 {
-        return vec![s]
+        return vec![s];
     }
     // optimisation: we replace the points to partition by pairs
     // (distance, point), where the `distance` entry is used to
     // cache results of distance computations
-    let mut pts = Vec::from_iter(
-        s.drain(..).map(|t| (D::zero(), t))
-    );
+    let mut pts = Vec::from_iter(s.drain(..).map(|t| (D::zero(), t)));
     if let Some(corner) = find_corner(&mut pts, &dist) {
         debug_assert!(!pts.is_empty());
         // instead of the slices representing partitions
@@ -83,7 +81,7 @@ where
 
 fn ranges_to_slices<P>(
     mut ranges: Vec<Range<usize>>,
-    mut rest: &mut[P]
+    mut rest: &mut [P],
 ) -> Vec<&mut [P]> {
     let mut res = Vec::with_capacity(ranges.len());
     ranges.sort_by_key(|r| r.start);
@@ -99,7 +97,7 @@ fn ranges_to_slices<P>(
 
 pub(crate) fn find_corner<D, DF, P>(
     slice: &mut [(D, P)],
-    dist: &DF
+    dist: &DF,
 ) -> Option<usize>
 where
     P: Send + Sync,
@@ -108,12 +106,9 @@ where
 {
     if let Some((first, rest)) = slice.split_first_mut() {
         debug!("Finding corner");
-        rest.par_iter_mut().for_each(
-            |(d, p)| *d = dist(&first.1, p)
-        );
-        let max = rest.par_iter().enumerate().max_by_key(
-            |(_, (d, _))| *d
-        );
+        rest.par_iter_mut()
+            .for_each(|(d, p)| *d = dist(&first.1, p));
+        let max = rest.par_iter().enumerate().max_by_key(|(_, (d, _))| *d);
         if let Some((pos, _)) = max {
             debug!("Corner at {pos}");
             Some(pos + 1)
@@ -127,14 +122,13 @@ where
 }
 
 fn partition<C, D, DF, T>(
-    s: &mut[(D, T)],
+    s: &mut [(D, T)],
     cur_range: Range<usize>,
     dist: &DF,
     depth: u32,
     res: &Mutex<Vec<Range<usize>>>,
     callback: C,
-)
-where
+) where
     T: Send + Sync,
     DF: Send + Sync,
     for<'a, 'b> DF: Fn(&'a T, &'b T) -> D,
@@ -149,9 +143,8 @@ where
     debug!("Starting partition at depth {depth}");
     s.swap(0, s.len() - 1);
     let (centre, rest) = s.split_first_mut().unwrap();
-    rest.par_iter_mut().for_each(
-        |(d, p)| *d = dist(&centre.1, p)
-    );
+    rest.par_iter_mut()
+        .for_each(|(d, p)| *d = dist(&centre.1, p));
     rest.par_sort_unstable_by_key(|(d, _)| *d);
     let median_idx = s.len() / 2;
     let (inner, outer) = s.split_at_mut(median_idx);
@@ -160,7 +153,9 @@ where
     let outer_range = mid..cur_range.end;
     callback(depth);
     debug!("Finished partition at depth {depth}");
-    [(inner, inner_range), (outer, outer_range)].into_par_iter().for_each(
-        |(region, range)| partition(region, range, dist, depth - 1, res, callback)
-    );
+    [(inner, inner_range), (outer, outer_range)]
+        .into_par_iter()
+        .for_each(|(region, range)| {
+            partition(region, range, dist, depth - 1, res, callback)
+        });
 }

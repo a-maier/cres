@@ -11,13 +11,8 @@ use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
 use crate::traits::{
-    NeighbourData,
-    NeighbourSearch,
-    ObserveCell,
-    Resample,
-    SelectSeeds
+    NeighbourData, NeighbourSearch, ObserveCell, Resample, SelectSeeds,
 };
-
 
 use log::{debug, info, trace, warn};
 use noisy_float::prelude::*;
@@ -28,8 +23,7 @@ use thiserror::Error;
 use thread_local::ThreadLocal;
 
 #[derive(Debug, Error)]
-pub enum ResamplingError{
-}
+pub enum ResamplingError {}
 
 /// Main resampling class
 pub struct Resampler<D, N, O, S> {
@@ -43,10 +37,18 @@ pub struct Resampler<D, N, O, S> {
 impl<D, N, O, S> Resampler<D, N, O, S> {
     fn print_wt_sum(&self, events: &[Event]) {
         let sum_wt: N64 = events.iter().map(|e| e.weight()).sum();
-        let sum_wtsqr: N64 = events.iter().map(|e| e.weight() * e.weight()).sum();
-        let sum_neg_wt: N64 = events.iter().map(|e| e.weight()).filter(|&w| w < 0.).sum();
-        info!("Initial sum of weights: {sum_wt:.3e} ± {:.3e}", sum_wtsqr.sqrt());
-        info!("Negative weight fraction: {:.3}", -sum_neg_wt / (sum_wt - sum_neg_wt * 2.));
+        let sum_wtsqr: N64 =
+            events.iter().map(|e| e.weight() * e.weight()).sum();
+        let sum_neg_wt: N64 =
+            events.iter().map(|e| e.weight()).filter(|&w| w < 0.).sum();
+        info!(
+            "Initial sum of weights: {sum_wt:.3e} ± {:.3e}",
+            sum_wtsqr.sqrt()
+        );
+        info!(
+            "Negative weight fraction: {:.3}",
+            -sum_neg_wt / (sum_wt - sum_neg_wt * 2.)
+        );
     }
 }
 
@@ -54,8 +56,9 @@ impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+    for<'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter:
+        Iterator<Item = (usize, N64)>,
     S: SelectSeeds<ParallelIter = T> + Send + Sync,
     T: ParallelIterator<Item = usize>,
     O: ObserveCell + Send + Sync,
@@ -93,12 +96,8 @@ where
                 return;
             }
             trace!("New cell around event {}", events[seed].id());
-            let mut cell = Cell::new(
-                &events,
-                seed,
-                &self.distance,
-                &neighbour_search
-            );
+            let mut cell =
+                Cell::new(&events, seed, &self.distance, &neighbour_search);
             cell.resample();
             self.observer.observe_cell(&cell);
             progress.inc(1);
@@ -113,7 +112,7 @@ where
 }
 
 /// Construct a `Resampler` object
-pub struct ResamplerBuilder<D, O, S, N=TreeSearch> {
+pub struct ResamplerBuilder<D, O, S, N = TreeSearch> {
     seeds: S,
     distance: D,
     neighbour_search: PhantomData<N>,
@@ -180,8 +179,9 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN>
     where
         NN: NeighbourData,
-        for <'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
-        for <'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter: Iterator<Item=(usize, N64)>,
+        for<'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
+        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter:
+            Iterator<Item = (usize, N64)>,
     {
         ResamplerBuilder {
             seeds: self.seeds,
@@ -206,7 +206,13 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     }
 }
 
-impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelector, TreeSearch>
+impl Default
+    for ResamplerBuilder<
+        EuclWithScaledPt,
+        NoObserver,
+        StrategicSelector,
+        TreeSearch,
+    >
 {
     fn default() -> Self {
         Self {
@@ -219,7 +225,7 @@ impl Default for ResamplerBuilder<EuclWithScaledPt, NoObserver, StrategicSelecto
     }
 }
 
-pub struct DefaultResampler<N=TreeSearch> {
+pub struct DefaultResampler<N = TreeSearch> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
@@ -230,8 +236,10 @@ pub struct DefaultResampler<N=TreeSearch> {
 impl<N> Resample for DefaultResampler<N>
 where
     N: NeighbourData + Clone + Send + Sync,
-    for <'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for <'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+    for<'x, 'y, 'z> &'x N:
+        NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter:
+        Iterator<Item = (usize, N64)>,
 {
     type Error = ResamplingError;
 
@@ -239,16 +247,16 @@ where
         &mut self,
         events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
-
         let observer_data = ObserverData {
-            cell_collector: self.cell_collector.clone().map(
-                |c| c.borrow().clone()
-            ),
+            cell_collector: self
+                .cell_collector
+                .clone()
+                .map(|c| c.borrow().clone()),
             ..Default::default()
         };
         let observer = Observer {
             central: observer_data,
-            threaded: Default::default()
+            threaded: Default::default(),
         };
 
         let mut resampler = ResamplerBuilder::default()
@@ -258,15 +266,10 @@ where
             .observer(observer)
             .neighbour_search::<N>()
             .build();
-        let events = crate::traits::Resample::resample(
-            &mut resampler,
-            events
-        )?;
+        let events = crate::traits::Resample::resample(&mut resampler, events)?;
 
         if let Some(c) = self.cell_collector.as_mut() {
-            c.replace(
-                resampler.observer.central.cell_collector.unwrap()
-            );
+            c.replace(resampler.observer.central.cell_collector.unwrap());
         }
         Ok(events)
     }
@@ -293,7 +296,7 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
             strategy: Strategy::default(),
             max_cell_size: None,
             cell_collector: None,
-            neighbour_search: PhantomData
+            neighbour_search: PhantomData,
         }
     }
 }
@@ -314,7 +317,10 @@ impl<N> DefaultResamplerBuilder<N> {
         self
     }
 
-    pub fn cell_collector(mut self, value: Option<Rc<RefCell<CellCollector>>>) -> Self {
+    pub fn cell_collector(
+        mut self,
+        value: Option<Rc<RefCell<CellCollector>>>,
+    ) -> Self {
         self.cell_collector = value;
         self
     }
@@ -322,8 +328,10 @@ impl<N> DefaultResamplerBuilder<N> {
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
     where
         NN: NeighbourData,
-        for <'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-        for <'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter: Iterator<Item=(usize, N64)>,
+        for<'x, 'y, 'z> &'x NN:
+            NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
+        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter:
+            Iterator<Item = (usize, N64)>,
     {
         DefaultResamplerBuilder {
             ptweight: self.ptweight,
@@ -353,7 +361,7 @@ fn median_radius(radii: &mut [N64]) -> N64 {
 #[derive(Debug, Default)]
 struct Observer {
     central: ObserverData,
-    threaded: ThreadLocal<RefCell<ObserverData>>
+    threaded: ThreadLocal<RefCell<ObserverData>>,
 }
 
 #[derive(Clone, Debug)]
@@ -383,9 +391,10 @@ impl ObserveCell for Observer {
             cell.radius(),
             cell.weight_sum()
         );
-        let mut data = self.threaded.get_or(
-            || RefCell::new(self.central.clone())
-        ).borrow_mut();
+        let mut data = self
+            .threaded
+            .get_or(|| RefCell::new(self.central.clone()))
+            .borrow_mut();
         data.cell_radii.push(cell.radius());
         if cell.weight_sum() < 0. {
             data.nneg += 1
@@ -399,7 +408,8 @@ impl ObserveCell for Observer {
 
     fn finish(&mut self) {
         let data = std::mem::take(&mut self.threaded);
-        let res = data.into_iter()
+        let res = data
+            .into_iter()
             .map(|c| c.into_inner())
             .reduce(|acc, c| acc.combine(c));
         if let Some(mut res) = res {
@@ -421,11 +431,12 @@ impl ObserverData {
     pub fn combine(mut self, mut other: Self) -> Self {
         self.cell_radii.append(&mut other.cell_radii);
         self.nneg += other.nneg;
-        self.cell_collector = match (self.cell_collector, other.cell_collector) {
+        self.cell_collector = match (self.cell_collector, other.cell_collector)
+        {
             (Some(c1), Some(c2)) => Some(c1.combine(c2, &mut self.rng)),
             (Some(c), None) => Some(c),
             (None, Some(c)) => Some(c),
-            (None, None) => None
+            (None, None) => None,
         };
         self
     }

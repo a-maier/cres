@@ -1,9 +1,14 @@
 use std::{io::BufWriter, path::Path};
 
 use log::error;
-use stripper_xml::{Eventrecord, WriteXML, SubEvent};
+use stripper_xml::{Eventrecord, SubEvent, WriteXML};
 
-use crate::{traits::WriteEvent, compression::{Compression, compress_writer}, file::File, VERSION};
+use crate::{
+    compression::{compress_writer, Compression},
+    file::File,
+    traits::WriteEvent,
+    VERSION,
+};
 
 /// Write events in STRIPPER XML format
 #[derive(Debug)]
@@ -26,7 +31,8 @@ impl<T: std::io::Write> Writer<T> {
         }
         record.nevents = record.events.len() as u64;
         record.nsubevents = record.nevents;
-        record.nreweights = record.events
+        record.nreweights = record
+            .events
             .iter()
             .flat_map(|ev| ev.subevents.iter())
             .map(|ev| ev.reweight.len() as u64)
@@ -38,22 +44,22 @@ impl<T: std::io::Write> Writer<T> {
 impl Writer<Box<dyn std::io::Write>> {
     pub fn try_new(
         filename: &Path,
-        compression: Option<Compression>
+        compression: Option<Compression>,
     ) -> Result<Self, std::io::Error> {
         let outfile = File::create(filename)?;
         let out = BufWriter::new(outfile);
         let mut out = compress_writer(out, compression)?;
         out.write_all(
             br#"<?xml version="1.0" encoding="UTF-8"?>
-"#
+"#,
         )?;
         out.write_all(
-            format!("<!-- File generated with cres {VERSION} -->\n").as_bytes()
+            format!("<!-- File generated with cres {VERSION} -->\n").as_bytes(),
         )?;
-        Ok(Self{
+        Ok(Self {
             out,
             finished: false,
-            record: Default::default()
+            record: Default::default(),
         })
     }
 }
@@ -66,11 +72,12 @@ impl<T: std::io::Write> WriteEvent<avery::Event> for Writer<T> {
             self.write_record()?;
             self.record.name = std::mem::take(&mut e.info);
         }
-        let scale = e.attr.get("wtscale")
+        let scale = e
+            .attr
+            .get("wtscale")
             .and_then(|s| s.parse().ok())
             .unwrap_or(1.0);
-        let alpha_s_power = e.attr.get("as")
-            .and_then(|s| s.parse().ok());
+        let alpha_s_power = e.attr.get("as").and_then(|s| s.parse().ok());
         if let Some(alpha_s_power) = alpha_s_power {
             self.record.alpha_s_power = alpha_s_power;
         }
