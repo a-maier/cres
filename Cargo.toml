@@ -42,7 +42,7 @@ parking_lot = "0.12"
 particle_id = "0.4"
 pathfinding = "4.2"
 permutohedron = "0.2"
-quick-xml = { version = "0.30", features = ["serde"] }
+quick-xml = { version = "0.30", features = ["serde"], optional = true }
 rand = "0.8"
 rand_xoshiro = "0.6"
 rayon = "1.5"
@@ -75,7 +75,7 @@ path = "src/bin/shell_completion.rs"
 [features]
 default = ["lhef", "multiweight", "hardware-lock-elision"]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple", "avery/ntuple"]
-stripper-xml = ["dep:stripper-xml", "avery/stripper-xml", "serde", "memchr"]
+stripper-xml = ["dep:stripper-xml", "avery/stripper-xml", "serde", "memchr", "quick-xml"]
 capi = ["multiweight"]
 multiweight = []
 hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
