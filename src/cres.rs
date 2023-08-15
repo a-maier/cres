@@ -113,18 +113,18 @@ impl<R, C, S, U, W> From<CresBuilder<R, C, S, U, W>> for Cres<R, C, S, U, W> {
 
 #[derive(Debug, Error)]
 pub enum CresError<E1, E2, E3, E4, E5, E6> {
-    #[error("Failed to read event: {0}")]
-    ReadErr(E1),
-    #[error("Failed to rewind reader: {0}")]
-    RewindErr(E2),
-    #[error("Failed to convert event: {0}")]
-    ConversionErr(E3),
-    #[error("Resampling error: {0}")]
-    ResamplingErr(E4),
-    #[error("Unweighting error: {0}")]
-    UnweightErr(E5),
-    #[error("Failed to write events: {0}")]
-    WriteErr(E6),
+    #[error("Failed to read event")]
+    ReadErr(#[source] E1),
+    #[error("Failed to rewind reader")]
+    RewindErr(#[source] E2),
+    #[error("Failed to convert event")]
+    ConversionErr(#[source] E3),
+    #[error("Resampling error")]
+    ResamplingErr(#[source] E4),
+    #[error("Unweighting error")]
+    UnweightErr(#[source] E5),
+    #[error("Failed to write events")]
+    WriteErr(#[source] E6),
     #[error("Encountered event with non-zero id {0}")]
     IdErr(usize),
 }
