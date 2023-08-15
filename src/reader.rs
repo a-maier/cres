@@ -106,7 +106,7 @@ impl FileReader {
 
 #[derive(Debug, Error)]
 pub enum CreateError {
-    #[error("IO error: {0}")]
+    #[error("IO error")]
     IoError(#[from] std::io::Error),
     #[error("Failed to read from {0}")]
     FileError(PathBuf, #[source] Box<CreateError>),
@@ -117,8 +117,8 @@ pub enum CreateError {
     XMLUnsupported(PathBuf),
 
     #[cfg(feature = "stripper-xml")]
-    #[error("XML Error in file `{0}`: {1}")]
-    XMLError(PathBuf, crate::stripper_xml::reader::XMLError),
+    #[error("XML Error in file `{0}`")]
+    XMLError(PathBuf, #[source] crate::stripper_xml::reader::XMLError),
 }
 
 #[derive(Debug, Error)]
@@ -131,16 +131,16 @@ pub enum RewindError {
 
 #[derive(Debug, Error)]
 pub enum EventReadError {
-    #[error("Error reading HepMC record: {0}")]
+    #[error("Error reading HepMC record")]
     HepMCError(#[from] LineParseError),
     #[cfg(feature = "ntuple")]
-    #[error("Error reading ntuple event: {0}")]
+    #[error("Error reading ntuple event")]
     NTupleError(#[from] ::ntuple::reader::ReadError),
     #[cfg(feature = "stripper-xml")]
-    #[error("Error reading STRIPPER XML event: {0}")]
+    #[error("Error reading STRIPPER XML event")]
     StripperXMLError(#[from] crate::stripper_xml::reader::ReadError),
     #[cfg(feature = "lhef")]
-    #[error("Error reading LHEF event: {0}")]
+    #[error("Error reading LHEF event")]
     LHEFError(#[from] ::lhef::reader::ReadError),
 }
 
