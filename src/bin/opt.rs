@@ -173,7 +173,7 @@ pub(crate) enum Search {
 
 #[derive(Debug, Copy, Clone, Parser)]
 pub(crate) struct UnweightOpt {
-    /// Weight below which events are unweighted.
+    /// Weight below which events are unweighted. '0' means no unweighting.
     #[clap(short = 'w', long, default_value = "0.")]
     pub(crate) minweight: f64,
 
@@ -223,7 +223,7 @@ pub(crate) struct Opt {
     #[clap(flatten)]
     pub(crate) lepton_def: LeptonDefinition,
 
-    /// Whether to include neutrinos in the distance measure
+    /// Include neutrinos in the distance measure
     #[clap(long, default_value_t)]
     pub(crate) include_neutrinos: bool,
 
