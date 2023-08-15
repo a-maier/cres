@@ -182,14 +182,28 @@ impl<T: BufRead> Iterator for Reader<T> {
                 Event::Start(tag) => match tag.name().as_ref() {
                     b"e" => { },
                     b"se" => {
-                        use quick_xml::de::Deserializer;
-                        use serde::de::Deserialize;
                         // restore tag delimiters
                         self.buf.insert(0, b'<');
                         self.buf.push(b'>');
-                        let rest = reader.into_inner();
-                        let rest = self.buf.chain(rest);
-                        let mut de = Deserializer::from_reader(rest);
+
+                        // TODO: this is a bad hack, but the following
+                        // code alone consumes too many bytes
+                        // ```
+                        // let mut de = Deserializer::from_reader(rest);
+                        // SubEvent::deserialize(&mut de)
+                        // ```
+                        let mut reader = reader.into_inner();
+                        let read = read_into_until(
+                            &mut reader,
+                            &mut self.buf,
+                            b"</se>",
+                        );
+                        if let Err(err) = read {
+                            return Some(Err(err.into()));
+                        }
+                        use quick_xml::de::Deserializer;
+                        use serde::de::Deserialize;
+                        let mut de = Deserializer::from_reader(self.buf.as_slice());
                         let mut ev = match SubEvent::deserialize(&mut de) {
                             Ok(ev) => ev,
                             Err(err) => return Some(Err(err.into())),
@@ -230,18 +244,41 @@ impl<T: BufRead> Iterator for Reader<T> {
     }
 }
 
+fn read_into_until<T: BufRead>(
+    mut reader: T,
+    buf: &mut Vec<u8>,
+    until: &[u8],
+) -> std::io::Result<()> {
+    loop {
+        let read = reader.fill_buf()?;
+        if let Some(mut pos) = memchr::memmem::find(read, until) {
+            pos += until.len();
+            assert!(pos < read.len());
+            buf.extend_from_slice(&read[..pos]);
+            reader.consume(pos);
+            debug_assert!(buf.ends_with(until));
+            return Ok(());
+        }
+        buf.extend_from_slice(&read);
+        let len = read.len();
+        reader.consume(len);
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum ReadError{
-    #[error("Parsing error: {0}")]
+    #[error("Parsing error")]
     ParseError(#[from] quick_xml::Error),
     #[error("Unexpected XML tag: {0}")]
     BadTag(String),
     #[error("Unexpected XML entry: {0}")]
     BadEntry(String),
-    #[error("Error reading event: {0}")]
+    #[error("Error deserialising event")]
     BadEvent(#[from] DeError),
-    #[error("Utf8 error: {0}")]
+    #[error("Utf8 error")]
     Utf8(#[from] Utf8Error),
+    #[error("I/O error")]
+    Io(#[from] std::io::Error),
 }
 
 pub fn extract_scaling<I, P>(

@@ -34,6 +34,7 @@ lhef = { version = "0.6", optional = true }
 log = "0.4"
 logbar = "0.1"
 lz4 = "1.23"
+memchr = { version = "2.5", optional = true }
 noisy_float = "0.2"
 ntuple = { version = "0.7", optional = true }
 num-traits = "0.2"
@@ -74,7 +75,7 @@ path = "src/bin/shell_completion.rs"
 [features]
 default = ["lhef", "multiweight", "hardware-lock-elision"]
 ntuple = ["dep:cc", "dep:bindgen", "dep:ntuple", "avery/ntuple"]
-stripper-xml = ["dep:stripper-xml", "avery/stripper-xml", "serde"]
+stripper-xml = ["dep:stripper-xml", "avery/stripper-xml", "serde", "memchr"]
 capi = ["multiweight"]
 multiweight = []
 hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
