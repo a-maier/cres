@@ -59,7 +59,9 @@ the `--outformat` option and defaults to hepmc2.
 We recommend to set the jet algorithm `JETALGO`, jet radius `JETR`,
 and minimum jet transverse momentum `JETPT` to the same values that
 were used to generate the input events. The supported jet algorithms
-are anti-kt, kt, and Cambridge-Aachen.
+are anti-kt, kt, and Cambridge-Aachen. When including QED corrections,
+for instance through a shower, one should also set
+`--leptonalgorithm`, `--leptonradius`, and `--leptonpt`.
 
 Setting a maximum cell radius `R` is optional, but highly
 recommended. Lower values lead to much faster resampling and smaller
