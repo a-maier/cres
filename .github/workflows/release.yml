@@ -33,16 +33,10 @@ jobs:
           - i686-unknown-linux-musl
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          target: ${{ matrix.target }}
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --target ${{ matrix.target }} --release --features capi,stripper-xml
+          targets: ${{ matrix.target }}
+      - run: cargo build --target ${{ matrix.target }} --release --features capi,stripper-xml
       - run: ci/make_tarball.sh ${{ matrix.target }}
       - uses: svenstaro/upload-release-action@v2
         with:
@@ -57,16 +51,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          target: x86_64-apple-darwin
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --target x86_64-apple-darwin --release --features capi,stripper-xml
+          targets: x86_64-apple-darwin
+      - run: cargo build --target x86_64-apple-darwin --release --features capi,stripper-xml
       - run: ci/make_tarball.sh x86_64-apple-darwin
       - uses: svenstaro/upload-release-action@v2
         with:
@@ -86,16 +74,10 @@ jobs:
           - i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          target: ${{ matrix.target }}
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --target ${{ matrix.target }} --release --features stripper-xml
+          targets: ${{ matrix.target }}
+      - run: cargo build --target ${{ matrix.target }} --release --features stripper-xml
       - run: 7z a cres.zip .\target\${{ matrix.target }}\release\cres.exe
       - uses: svenstaro/upload-release-action@v2
         with:
