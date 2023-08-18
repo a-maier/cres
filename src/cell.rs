@@ -17,9 +17,6 @@ pub struct Cell<'a> {
 }
 
 /// Construct a new cell
-///
-/// The `events` items have the form (N64, Event), where
-/// the first tuple element is used to store distances
 impl<'a> Cell<'a> {
     pub fn new<'b: 'a, 'c, F: Distance + Sync + Send, N>(
         events: &'b [Event],
@@ -132,7 +129,7 @@ impl<'a> Cell<'a> {
         self.weight_sum
     }
 
-    /// Iterator over (distance, cell member)
+    /// Iterator over cell members
     pub fn iter(&'a self) -> impl std::iter::Iterator<Item = &'a Event> + 'a {
         self.members.iter().map(move |idx| &self.events[*idx])
     }
