@@ -7,7 +7,15 @@ use cbindgen::Language;
 use vergen::EmitBuilder;
 
 fn main() -> Result<()> {
-    EmitBuilder::builder().git_branch().git_sha(true).emit()?;
+    // optionally emit git branch and hash
+    let _ = EmitBuilder::builder()
+        .git_branch()
+        .git_sha(true)
+        // don't emit on error
+        // we ignore the "fail" part
+        .fail_on_error()
+        .quiet()
+        .emit();
 
     if cfg!(target_family = "unix") {
         write_c_header()
