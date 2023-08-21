@@ -161,15 +161,6 @@ manually. To disable them, add the `--no-default-features` flag.
   version of `libclang` and a [ROOT](https://root.cern.ch/)
   installation with `root-config` in the executable path.
 
-  Linking may fail due to a
-  [cargo bug](https://github.com/rust-lang/cargo/issues/12326). In that
-  case, determine the necessary flags by running `root-config --libs`
-  and manually add them, e.g.
-
-  ```
-     RUSTFLAGS='-C link-arg=-lCore' cargo install cres --features ntuple
-  ```
-
 - `stripper-xml`: Experimental support for the XML format used by
   [STRIPPER](https://arxiv.org/abs/1005.0274).
 
