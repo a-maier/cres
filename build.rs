@@ -73,6 +73,7 @@ fn write_c_header() {
         .write_to_file(out);
 }
 
+#[cfg(feature = "ntuple")]
 fn get_root_flags(flags: &str) -> Result<Vec<String>> {
     use anyhow::{bail, Context};
     use std::{process::Command, str::from_utf8};
