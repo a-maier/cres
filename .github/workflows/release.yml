@@ -36,6 +36,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - run: sudo apt install musl-tools
       - run: cargo build --target ${{ matrix.target }} --release --features capi,stripper-xml
       - run: ci/make_tarball.sh ${{ matrix.target }}
       - uses: svenstaro/upload-release-action@v2
