@@ -25,9 +25,9 @@ system, run
 Precompiled executables are available on
 [hepforge](https://cres.hepforge.org/).
 
-To install the development version, clone this repository and run
+To install the development version, run
 
-    cargo install --path path/to/local/cres/repository
+    cargo install --git https://github.com/a-maier/cres
 
 Check the [Features section](#Features) for more options.
 
