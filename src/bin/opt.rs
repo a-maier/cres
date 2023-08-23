@@ -165,13 +165,14 @@ impl std::convert::From<LeptonDefinition> for cres::cluster::JetDefinition {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub(crate) enum Search {
+    #[default]
     Tree,
     Naive,
 }
 
-#[derive(Debug, Copy, Clone, Parser)]
+#[derive(Debug, Default, Copy, Clone, Parser)]
 pub(crate) struct UnweightOpt {
     /// Weight below which events are unweighted. '0' means no unweighting.
     #[clap(short = 'w', long, default_value = "0.")]

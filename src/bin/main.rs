@@ -36,15 +36,19 @@ fn main() -> Result<()> {
     )
     .with_context(|| "Failed to read argument file")?;
     let opt = Opt::parse_from(args).validate()?;
+    cres(opt)
+}
+
+fn cres(opt: Opt) -> Result<()> {
     match opt.search {
-        Search::Naive => run_main::<NaiveNeighbourSearch>(opt),
-        Search::Tree => run_main::<TreeSearch>(opt),
+        Search::Naive => cres_with_search::<NaiveNeighbourSearch>(opt),
+        Search::Tree => cres_with_search::<TreeSearch>(opt),
     }?;
     info!("done");
     Ok(())
 }
 
-fn run_main<N>(opt: Opt) -> Result<()>
+fn cres_with_search<N>(opt: Opt) -> Result<()>
 where
     N: NeighbourData + Clone + Send + Sync,
     for<'x, 'y, 'z> &'x N:
@@ -116,4 +120,47 @@ where
     cres.run()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn test_cres() {
+        use std::path::PathBuf;
+
+        use cres::cluster::JetAlgorithm;
+
+        use crate::opt::{JetDefinition, LeptonDefinition};
+
+        let opt = Opt {
+            outfile: PathBuf::from("/dev/null"),
+            jet_def: JetDefinition {
+                jetalgorithm: JetAlgorithm::AntiKt,
+                jetradius: 0.4,
+                jetpt: 30.,
+            },
+            lepton_def: LeptonDefinition {
+                leptonalgorithm: Some(JetAlgorithm::AntiKt),
+                leptonradius: Some(0.1),
+                leptonpt: Some(30.),
+            },
+            max_cell_size: Some(100.),
+            infiles: vec![PathBuf::from("test_data/showered.hepmc.zst")],
+            include_neutrinos: Default::default(),
+            unweight: Default::default(),
+            ptweight: Default::default(),
+            dumpcells: Default::default(),
+            compression: Default::default(),
+            outformat: Default::default(),
+            loglevel: "info".to_owned(),
+            search: Default::default(),
+            strategy: Default::default(),
+            threads: Default::default(),
+            weights: Default::default(),
+        };
+        cres(opt).unwrap();
+    }
 }
