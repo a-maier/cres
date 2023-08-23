@@ -168,6 +168,7 @@ where
         let event_progress = if expected_nevents > 0 {
             ProgressBar::new(expected_nevents as u64, "events read")
         } else {
+            info!("Reading events");
             ProgressBar::default()
         };
         let events: Result<Vec<_>, _> = (&mut self.reader)
