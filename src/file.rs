@@ -24,24 +24,31 @@ impl TryClone for File {
 }
 
 impl File {
+    /// See [std::fs::File::open]
     pub fn open<P: AsRef<Path>>(path: P) -> Result<File> {
         std::fs::File::open(path).map(Self)
     }
+    /// See [std::fs::File::create]
     pub fn create<P: AsRef<Path>>(path: P) -> Result<File> {
         std::fs::File::create(path).map(Self)
     }
+    /// See [std::fs::File::sync_all]
     pub fn sync_all(&self) -> Result<()> {
         self.0.sync_all()
     }
+    /// See [std::fs::File::sync_data]
     pub fn sync_data(&self) -> Result<()> {
         self.0.sync_data()
     }
+    /// See [std::fs::File::set_len]
     pub fn set_len(&self, size: u64) -> Result<()> {
         self.0.set_len(size)
     }
+    /// See [std::fs::File::metadata]
     pub fn metadata(&self) -> Result<Metadata> {
         self.0.metadata()
     }
+    /// See [std::fs::File::set_permissions]
     pub fn set_permissions(&self, perm: Permissions) -> Result<()> {
         self.0.set_permissions(perm)
     }

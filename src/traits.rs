@@ -7,8 +7,10 @@ pub use crate::seeds::SelectSeeds;
 
 /// Rewind to the beginning of a stream
 pub trait Rewind {
+    /// Error during rewinding
     type Error;
 
+    /// Rewind to the beginning of a stream
     fn rewind(&mut self) -> Result<(), Self::Error>;
 }
 
@@ -17,22 +19,28 @@ pub trait Rewind {
 /// In contrast to [std::convert::TryFrom] the converter can maintain
 /// internal state.
 pub trait TryConvert<From, To> {
+    /// Conversion error
     type Error;
 
+    /// Convert between two types
     fn try_convert(&mut self, f: From) -> Result<To, Self::Error>;
 }
 
 /// Resample events
 pub trait Resample {
+    /// Resampling error
     type Error;
 
+    /// Resample events
     fn resample(&mut self, e: Vec<Event>) -> Result<Vec<Event>, Self::Error>;
 }
 
 /// Unweight events
 pub trait Unweight {
+    /// Unweighting error
     type Error;
 
+/// Unweight events
     fn unweight(&mut self, e: Vec<Event>) -> Result<Vec<Event>, Self::Error>;
 }
 
@@ -48,14 +56,17 @@ pub trait Unweight {
 /// makes it possible to reconstruct information that is not kept
 /// internally.
 pub trait Write<Reader> {
+    /// Write error
     type Error;
 
+    /// Write events to some output
     fn write(&mut self, r: &mut Reader, e: &[Event])
         -> Result<(), Self::Error>;
 }
 
 /// Write a single event
 pub trait WriteEvent<Ev> {
+    /// Write error
     type Error;
 
     /// Write an event
@@ -74,8 +85,10 @@ pub trait WriteEvent<Ev> {
 ///
 /// This trait is similar to [std::clone::Clone], but is allowed to fail.
 pub trait TryClone {
+    /// Clone error
     type Error;
 
+    /// Try to clone this object
     fn try_clone(&self) -> Result<Self, Self::Error>
     where
         Self: Sized;

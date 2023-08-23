@@ -6,6 +6,18 @@ use rayon::prelude::*;
 
 use crate::progress_bar::{Progress, ProgressBar};
 
+/// Recursively partition `s` according to the first `depth` layers of
+/// a vantage-point tree with distance measure `dist`
+///
+/// The first vantage point tree is the point with the largest
+/// distance to `s[0]`.  Then, the first layer is constructed by
+/// partitioning `s` into an "inside" slice `s[0..mid]` and an
+/// "outside" slice `s[mid..]`, such that all points in the "inside"
+/// slice are closer to the first vantage point than any point in the
+/// "outside" slice.  This partitioning is then repeated recursively
+/// for both the "inside" and the "outside" slice, until the given
+/// number of layer have been reached. The vantage points are chosen
+/// as the nearest points to the parent vantage point.
 pub fn circle_partition<DF, D, T>(
     s: &mut Vec<T>,
     dist: DF,
@@ -19,6 +31,9 @@ where
     circle_partition_with_callback(s, dist, depth, |_| {})
 }
 
+/// Recursively partition `s` showing a progress bar
+///
+/// See [circle_partition] for details.
 pub fn circle_partition_with_progress<DF, D, T>(
     s: &mut Vec<T>,
     dist: DF,
@@ -41,6 +56,10 @@ where
     }
 }
 
+/// Recursively partition `s` calling `callback(layer)` after
+/// completing a layer
+///
+/// See [circle_partition] for details.
 pub fn circle_partition_with_callback<C, DF, D, T>(
     s: &mut Vec<T>,
     dist: DF,

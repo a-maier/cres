@@ -121,6 +121,7 @@ pub struct Converter {
 }
 
 impl Converter {
+    /// Constructor
     pub fn new() -> Self {
         Self::default()
     }
@@ -198,8 +199,10 @@ fn extract_weights(
     }
 }
 
+/// Error converting to internal event format
 #[derive(Debug, Error)]
 pub enum ConversionError {
+    /// A named event weight was not found
     #[cfg(feature = "multiweight")]
     #[error("Failed to find event weight \"{0}\": Event has weights {1:?}")]
     WeightNotFound(String, Vec<String>),

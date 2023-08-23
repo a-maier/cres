@@ -23,6 +23,7 @@
 //! - [distance] for user-defined distance functions
 //! - [seeds] and [resampler] for the resampling
 //!
+#![warn(missing_docs)]
 
 /// Partition events by iterative bisection
 pub mod bisect;
@@ -31,6 +32,7 @@ pub mod bisect;
 pub mod c_api;
 /// Definition of event cells
 pub mod cell;
+/// Callbacks used upon cell construction and when writing out events
 pub mod cell_collector;
 /// Jet clustering helpers
 pub mod cluster;
@@ -82,18 +84,25 @@ mod vptree;
 
 use lazy_static::lazy_static;
 
+/// cres version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 lazy_static! {
+    /// Major version number
     pub static ref VERSION_MAJOR: u32 =
         env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap();
+    /// Minor version number
     pub static ref VERSION_MINOR: u32 =
         env!("CARGO_PKG_VERSION_MINOR").parse().unwrap();
+    /// Patch version number
     pub static ref VERSION_PATCH: u32 =
         env!("CARGO_PKG_VERSION_PATCH").parse().unwrap();
 }
+/// Hash of the compiled git commit
 pub const GIT_REV: Option<&str> = option_env!("VERGEN_GIT_SHA");
+/// git branch during compilation
 pub const GIT_BRANCH: Option<&str> = option_env!("VERGEN_GIT_BRANCH");
 
+/// Features enabled during compilation
 pub const FEATURES: [&str; NFEATURES] = [
     #[cfg(feature = "lhef")]
     "lhef",

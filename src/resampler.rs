@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
-use crate::distance::{Distance, EuclWithScaledPt, PtDistance};
+use crate::distance::{Distance, EuclWithScaledPt, DistWrapper};
 use crate::event::Event;
 use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
@@ -22,6 +22,7 @@ use rayon::prelude::*;
 use thiserror::Error;
 use thread_local::ThreadLocal;
 
+/// Error during resampling
 #[derive(Debug, Error)]
 pub enum ResamplingError {}
 
@@ -56,8 +57,8 @@ impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
     N: NeighbourData + Clone + Send + Sync,
-    for<'x, 'y, 'z> &'x N: NeighbourSearch<PtDistance<'y, 'z, D>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter:
+    for<'x, 'y, 'z> &'x N: NeighbourSearch<DistWrapper<'y, 'z, D>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, D>>>::Iter:
         Iterator<Item = (usize, N64)>,
     S: SelectSeeds<ParallelIter = T> + Send + Sync,
     T: ParallelIterator<Item = usize>,
@@ -83,7 +84,7 @@ where
         info!("Initialising nearest-neighbour search");
         let neighbour_search = N::new_with_dist(
             events.len(),
-            PtDistance::new(&self.distance, &events),
+            DistWrapper::new(&self.distance, &events),
             max_cell_size,
         );
 
@@ -179,8 +180,8 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN>
     where
         NN: NeighbourData,
-        for<'x, 'y, 'z> &'x NN: NeighbourSearch<PtDistance<'y, 'z, D>>,
-        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, D>>>::Iter:
+        for<'x, 'y, 'z> &'x NN: NeighbourSearch<DistWrapper<'y, 'z, D>>,
+        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<DistWrapper<'y, 'z, D>>>::Iter:
             Iterator<Item = (usize, N64)>,
     {
         ResamplerBuilder {
@@ -225,6 +226,7 @@ impl Default
     }
 }
 
+/// Default implementation of cell resampling
 pub struct DefaultResampler<N = TreeSearch> {
     ptweight: f64,
     strategy: Strategy,
@@ -237,8 +239,8 @@ impl<N> Resample for DefaultResampler<N>
 where
     N: NeighbourData + Clone + Send + Sync,
     for<'x, 'y, 'z> &'x N:
-        NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter:
+        NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>>::Iter:
         Iterator<Item = (usize, N64)>,
 {
     type Error = ResamplingError;
@@ -276,11 +278,13 @@ where
 }
 
 impl<N> DefaultResampler<N> {
+    /// Get the callback upon cell construction
     pub fn cell_collector(&self) -> Option<Rc<RefCell<CellCollector>>> {
         self.cell_collector.as_ref().cloned()
     }
 }
 
+/// Build a [DefaultResampler]
 pub struct DefaultResamplerBuilder<N> {
     ptweight: f64,
     strategy: Strategy,
@@ -302,21 +306,25 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
 }
 
 impl<N> DefaultResamplerBuilder<N> {
+    /// Set the τ factor in the distance measure
     pub fn ptweight(mut self, value: f64) -> Self {
         self.ptweight = value;
         self
     }
 
+    /// Set the strategy for selecting cell seeds
     pub fn strategy(mut self, value: Strategy) -> Self {
         self.strategy = value;
         self
     }
 
+    /// Set the maximum cell size
     pub fn max_cell_size(mut self, value: Option<f64>) -> Self {
         self.max_cell_size = value;
         self
     }
 
+    /// Set a callback after cell construction
     pub fn cell_collector(
         mut self,
         value: Option<Rc<RefCell<CellCollector>>>,
@@ -325,12 +333,13 @@ impl<N> DefaultResamplerBuilder<N> {
         self
     }
 
+    /// Set the nearest neighbour search algorithm
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
     where
         NN: NeighbourData,
         for<'x, 'y, 'z> &'x NN:
-            NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter:
+            NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>,
+        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>>::Iter:
             Iterator<Item = (usize, N64)>,
     {
         DefaultResamplerBuilder {
@@ -342,6 +351,7 @@ impl<N> DefaultResamplerBuilder<N> {
         }
     }
 
+    /// Build a [DefaultResampler]
     pub fn build(self) -> DefaultResampler<N> {
         DefaultResampler {
             ptweight: self.ptweight,
@@ -442,6 +452,7 @@ impl ObserverData {
     }
 }
 
+/// Dummy callback for cell resampling (doing nothing)
 #[derive(Copy, Clone, Default, Debug)]
 pub struct NoObserver {}
 impl ObserveCell for NoObserver {
@@ -451,6 +462,7 @@ impl ObserveCell for NoObserver {
 /// Default cell observer doing nothing
 pub const NO_OBSERVER: NoObserver = NoObserver {};
 
+/// Logarithm in base 2, rounded down
 pub const fn log2(n: u32) -> u32 {
     u32::BITS - n.leading_zeros() - 1
 }

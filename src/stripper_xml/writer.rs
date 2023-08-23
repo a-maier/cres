@@ -42,6 +42,7 @@ impl<T: std::io::Write> Writer<T> {
 }
 
 impl Writer<Box<dyn std::io::Write>> {
+    /// Try to construct a writer to the file with the given path
     pub fn try_new(
         filename: &Path,
         compression: Option<Compression>,

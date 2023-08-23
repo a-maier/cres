@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 //! C API
 //!
 //! See the generated header `cres.h` for documentation.

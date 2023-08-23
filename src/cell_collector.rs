@@ -11,6 +11,7 @@ use rand::{
 
 const NCELLS: usize = 10;
 
+/// Collect a number of cells of interest
 #[derive(Default, Clone, Debug)]
 pub struct CellCollector {
     first: Vec<(usize, Vec<usize>)>,
@@ -24,6 +25,7 @@ pub struct CellCollector {
 }
 
 impl CellCollector {
+    /// Constructor
     pub fn new() -> Self {
         Self {
             first: Vec::with_capacity(NCELLS),
@@ -35,6 +37,17 @@ impl CellCollector {
         }
     }
 
+    /// Maybe collect a cell
+    ///
+    /// Some of the cell characteristics are saved if any of the
+    /// following criteria is fulfilled:
+    ///
+    /// 1. The cell radius is among the largest ones encountered so far
+    /// 2. The number of cell members is among the largest ones
+    ///    encountered so far
+    /// 3. The cell weight is among the largest ones encountered so far
+    /// 4. The cell is lucky: There is a 1/`N' chance to be saved,
+    ///    where `N` is the number of events considered so far
     pub fn collect<R: Rng>(&mut self, cell: &Cell, mut rng: R) {
         let count = self.count;
         let r = cell.radius();
@@ -87,6 +100,7 @@ impl CellCollector {
         self.count += 1;
     }
 
+    /// Write information on collected events to log at `info` level
     pub fn dump_info(&self) {
         info!("Cells by creation order:");
         for (id, events) in &self.first {
@@ -115,6 +129,10 @@ impl CellCollector {
         }
     }
 
+    /// Return the saved cells
+    ///
+    /// The keys in the returned HashMap are the cell numbers,
+    /// the corresponding values the event ids.
     pub fn event_cells(&self) -> HashMap<usize, Vec<usize>> {
         let mut result: HashMap<usize, Vec<_>> = HashMap::new();
         let all_cells = self
@@ -145,6 +163,7 @@ impl CellCollector {
         result
     }
 
+    /// Combine two cell collectors into a single one
     pub fn combine(mut self, other: Self, rng: &mut impl Rng) -> Self {
         info!(
             "combining {} + {} cell observations",

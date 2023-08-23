@@ -14,6 +14,7 @@ pub struct FileReader {
 }
 
 impl FileReader {
+    /// Try to construct a new reader from the given file
     pub fn new(source: File) -> Result<Self, std::io::Error> {
         let cloned_source = source.try_clone()?;
         let input = auto_decompress(BufReader::new(cloned_source));

@@ -89,6 +89,7 @@ impl NeighbourData for NaiveNeighbourSearch {
     }
 }
 
+/// Iterator over nearest neighbours using a naive search algorithm
 #[derive(PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct NaiveNeighbourIter {
     dist: Vec<(usize, N64)>,

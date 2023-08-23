@@ -9,6 +9,7 @@ use crate::traits::WriteEvent;
 pub struct Writer(ntuple::Writer);
 
 impl Writer {
+    /// Try to create a writer to the file with the given path
     pub fn try_new(
         filename: &Path,
         _: Option<Compression>,

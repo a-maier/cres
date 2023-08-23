@@ -171,12 +171,16 @@ where
     }
 }
 
+/// Error writing events
 #[derive(Debug, Error)]
 pub enum EventWriteError<RE, WE> {
+    /// Error creating a writer
     #[error("Failed to create writer: {0}")]
     CreateErr(std::io::Error),
+    /// Error re-reading an event
     #[error("Failed to read event: {0}")]
     ReadErr(RE),
+    /// Error writing an event
     #[error("Failed to write event: {0}")]
     WriteErr(WE),
 }

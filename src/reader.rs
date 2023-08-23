@@ -46,6 +46,8 @@ impl FileReader {
         Self::with_scaling(path, &HashMap::new())
     }
 
+    /// Returns an event reader for the file at `path`,
+    /// with channel-dependent scaling factors for STRIPPER XML events
     pub fn with_scaling<P: AsRef<Path>>(
         path: P,
         _scaling: &HashMap<String, f64>, // only used in "stripper-xml" feature
@@ -100,42 +102,56 @@ impl FileReader {
     }
 }
 
+/// Error creating an event reader
 #[derive(Debug, Error)]
 pub enum CreateError {
-    #[error("IO error")]
+    /// I/O error
+    #[error("I/O error")]
     IoError(#[from] std::io::Error),
+    /// Error reading from file
     #[error("Failed to read from {0}")]
     FileError(PathBuf, #[source] Box<CreateError>),
 
+    /// Attempt to read from unsupported format
     #[error("Cannot read ROOT ntuple event file `{0}`. Reinstall cres with `cargo install cres --features = ntuple`")]
     RootUnsupported(PathBuf),
+    /// Attempt to read from unsupported format
     #[error("Cannot read XML event file `{0}`. Reinstall cres with `cargo install cres --features = stripper-xml`")]
     XMLUnsupported(PathBuf),
 
     #[cfg(feature = "stripper-xml")]
+    /// XML error in STRIPPER XML file
     #[error("XML Error in file `{0}`")]
     XMLError(PathBuf, #[source] crate::stripper_xml::reader::XMLError),
 }
 
+/// Error rewinding an event reader
 #[derive(Debug, Error)]
 pub enum RewindError {
-    #[error("IO error: {0}")]
+    /// I/O error
+    #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
+    /// Error cloning the underlying source
     #[error("Source clone error: {0}")]
     CloneError(std::io::Error),
 }
 
+/// Error reading an event
 #[derive(Debug, Error)]
 pub enum EventReadError {
+    /// Error reading a HepMC event
     #[error("Error reading HepMC record")]
     HepMCError(#[from] LineParseError),
     #[cfg(feature = "ntuple")]
+    /// Error reading a ROOT ntuple event
     #[error("Error reading ntuple event")]
     NTupleError(#[from] ::ntuple::reader::ReadError),
     #[cfg(feature = "stripper-xml")]
+    /// Error reading a STRIPPER XML event
     #[error("Error reading STRIPPER XML event")]
     StripperXMLError(#[from] crate::stripper_xml::reader::ReadError),
     #[cfg(feature = "lhef")]
+    /// Error reading a LHEF event
     #[error("Error reading LHEF event")]
     LHEFError(#[from] ::lhef::reader::ReadError),
 }
@@ -240,6 +256,7 @@ impl CombinedReader<FileReader> {
     }
 }
 
+/// Reader from an event file
 pub trait EventFileReader:
     Iterator<Item = Result<avery::Event, EventReadError>>
     + Rewind<Error = RewindError>

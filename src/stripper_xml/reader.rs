@@ -28,6 +28,11 @@ pub struct FileReader {
 }
 
 impl FileReader {
+    /// Constructor
+    ///
+    /// Construct a reader for the given (potentially compressed)
+    /// STRIPPER XML file with the given information for
+    /// channel-specific scale factors
     pub fn new(
         source: File,
         scaling: &HashMap<String, f64>,
@@ -93,7 +98,7 @@ fn create_error(file: impl Debug, err: impl Display) -> Error {
     )
 }
 
-pub struct Reader<T> {
+struct Reader<T> {
     name: String,
     source: quick_xml::Reader<T>,
     scale: f64,
@@ -155,15 +160,15 @@ impl<T: BufRead> Reader<T> {
         }
     }
 
-    pub fn scale(&self) -> f64 {
+    fn scale(&self) -> f64 {
         self.scale
     }
 
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn alpha_s_power(&self) -> u64 {
+    fn alpha_s_power(&self) -> u64 {
         self.alpha_s_power
     }
 }
@@ -279,23 +284,30 @@ fn read_into_until<T: BufRead>(
     }
 }
 
+/// Error reading a STRIPPER XML event
 #[derive(Debug, Error)]
 pub enum ReadError {
+    /// XML parsing error
     #[error("Parsing error")]
     ParseError(#[from] quick_xml::Error),
+    /// Unexpected XML tag
     #[error("Unexpected XML tag: {0}")]
     BadTag(String),
+    /// Unexpected XML entry
     #[error("Unexpected XML entry: {0}")]
     BadEntry(String),
+    /// Deserilialisation error
     #[error("Error deserialising event")]
     BadEvent(#[from] DeError),
+    /// UTF8 error
     #[error("Utf8 error")]
     Utf8(#[from] Utf8Error),
+    /// I/O error
     #[error("I/O error")]
     Io(#[from] std::io::Error),
 }
 
-pub fn extract_scaling<I, P>(
+pub(crate) fn extract_scaling<I, P>(
     paths: I,
 ) -> Result<(Vec<PathBuf>, HashMap<String, f64>), CreateError>
 where
@@ -342,7 +354,7 @@ where
     Ok((event_files, rescale))
 }
 
-pub fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, XMLError> {
+pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, XMLError> {
     use quick_xml::events::Event;
     use XMLError::*;
 
@@ -439,7 +451,7 @@ fn parse_u64(num: &[u8]) -> Result<u64, XMLError> {
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum XMLTag {
+pub(crate) enum XMLTag {
     Normalization {
         name: String,
         scale: f64,
@@ -452,20 +464,28 @@ pub enum XMLTag {
     },
 }
 
+/// STRIPPER XML Error
 #[derive(Debug, Error)]
 pub enum XMLError {
+    /// Error opening a file
     #[error("Failed to open file: {0}")]
     FileOpen(#[from] std::io::Error),
+    /// Missing XML tag
     #[error("File does not start with an XML tag")]
     NoTag,
+    /// Unsupported XML tag
     #[error("File starts with an unsupported XML tag `{0}`")]
     BadTag(String),
+    /// Missing attribute in event record
     #[error("XML tag `Eventrecord` does not have a `{0}` attribute")]
     NoEventrecordAttr(&'static str),
+    /// Deserialisation error for [stripper_xml::Normalization]
     #[error("Failed to deserialise `Normalization`: {0}")]
     NormalizationDeser(#[from] quick_xml::DeError),
-    #[error("Utf8 error: {0}")]
+    /// UTF8 error
+    #[error("UTF8 error: {0}")]
     Utf8(#[from] Utf8Error),
+    /// Error parsing an integer
     #[error("Failed to parse integer: {0}")]
     ParseInt(#[from] ParseIntError),
 }

@@ -6,13 +6,13 @@ use flate2::write::GzEncoder;
 /// Compression format
 #[derive(Debug, Copy, Clone)]
 pub enum Compression {
-    // The bzip2 format
+    /// The bzip2 format
     Bzip2,
-    // The gzip format with compression level as associated value
+    /// The gzip format with compression level as associated value
     Gzip(u8),
-    // The lz4 format with compression level as associated value
+    /// The lz4 format with compression level as associated value
     Lz4(u8),
-    // The zstd format with compression level as associated value
+    /// The zstd format with compression level as associated value
     Zstd(u8),
 }
 

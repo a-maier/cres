@@ -8,6 +8,7 @@ use noisy_float::prelude::*;
 use parking_lot::RwLock;
 use particle_id::ParticleID;
 
+/// Particle momenta
 pub type MomentumSet = Box<[FourVector]>;
 
 #[cfg(feature = "multiweight")]
@@ -106,10 +107,12 @@ fn compress_outgoing(
 #[derive(Debug, Default, Derivative)]
 #[derivative(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Event {
+    /// Event id
     pub id: usize,
     #[derivative(PartialEq = "ignore")]
     #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
+    /// Event weights
     pub weights: RwLock<Weights>,
 
     outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
@@ -118,6 +121,7 @@ pub struct Event {
 const EMPTY_SLICE: &[FourVector] = &[];
 
 impl Event {
+    /// Construct an empty event
     pub fn new() -> Self {
         Self::default()
     }

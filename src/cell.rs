@@ -1,4 +1,4 @@
-use crate::distance::{Distance, PtDistance};
+use crate::distance::{Distance, DistWrapper};
 use crate::event::Event;
 use crate::traits::NeighbourSearch;
 
@@ -16,8 +16,10 @@ pub struct Cell<'a> {
     weight_sum: N64,
 }
 
-/// Construct a new cell
 impl<'a> Cell<'a> {
+    /// Construct a new cell from the given `events` with
+    /// `events[seed_idx]` as seed, distance measure `distance` and
+    /// neighbour search implementation `neighbour_search`
     pub fn new<'b: 'a, 'c, F: Distance + Sync + Send, N>(
         events: &'b [Event],
         seed_idx: usize,
@@ -25,8 +27,8 @@ impl<'a> Cell<'a> {
         neighbour_search: N,
     ) -> Self
     where
-        for<'x, 'y> N: NeighbourSearch<PtDistance<'x, 'y, F>>,
-        for<'x, 'y> <N as NeighbourSearch<PtDistance<'x, 'y, F>>>::Iter:
+        for<'x, 'y> N: NeighbourSearch<DistWrapper<'x, 'y, F>>,
+        for<'x, 'y> <N as NeighbourSearch<DistWrapper<'x, 'y, F>>>::Iter:
             Iterator<Item = (usize, N64)>,
     {
         let mut weight_sum = events[seed_idx].weight();
@@ -36,7 +38,7 @@ impl<'a> Cell<'a> {
         let mut radius = n64(0.);
 
         let neighbours = neighbour_search
-            .nearest_in(&seed_idx, PtDistance::new(distance, events));
+            .nearest_in(&seed_idx, DistWrapper::new(distance, events));
 
         for (next_idx, dist) in neighbours {
             trace!(

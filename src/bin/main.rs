@@ -14,7 +14,7 @@ use cres::reader::CombinedReader;
 use cres::writer::FileWriter;
 use cres::{
     cell_collector::CellCollector,
-    distance::{EuclWithScaledPt, PtDistance},
+    distance::{EuclWithScaledPt, DistWrapper},
     neighbour_search::{
         NaiveNeighbourSearch, NeighbourData, NeighbourSearch, TreeSearch,
     },
@@ -52,8 +52,8 @@ fn cres_with_search<N>(opt: Opt) -> Result<()>
 where
     N: NeighbourData + Clone + Send + Sync,
     for<'x, 'y, 'z> &'x N:
-        NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<PtDistance<'y, 'z, EuclWithScaledPt>>>::Iter:
+        NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>,
+    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>>::Iter:
         Iterator<Item = (usize, N64)>,
 {
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);

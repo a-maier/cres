@@ -12,6 +12,7 @@ use permutohedron::LexicalPermutation;
 
 /// A metric (distance function) in the space of all events
 pub trait Distance<E = Event> {
+    /// Compute the distance between two events
     fn distance(&self, ev1: &E, ev2: &E) -> N64;
 }
 
@@ -146,11 +147,11 @@ impl EuclWithScaledPt {
     }
 }
 
-pub fn pt_norm(p: &FourVector, pt_weight: N64) -> N64 {
+fn pt_norm(p: &FourVector, pt_weight: N64) -> N64 {
     pt_norm_sq(p, pt_weight).sqrt()
 }
 
-pub fn pt_norm_sq(p: &FourVector, pt_weight: N64) -> N64 {
+fn pt_norm_sq(p: &FourVector, pt_weight: N64) -> N64 {
     let pt = pt_weight * p.pt();
     p.spatial_norm_sq() + pt * pt
 }
@@ -164,18 +165,20 @@ fn pt_dist_sq(p: &FourVector, q: &FourVector, pt_weight: N64) -> N64 {
     (*p - *q).spatial_norm_sq() + dpt * dpt
 }
 
-pub struct PtDistance<'a, 'b, D: Distance> {
+/// Wrapper around distances storing also the events
+pub struct DistWrapper<'a, 'b, D: Distance> {
     ev_dist: &'a D,
     events: &'b [Event],
 }
 
-impl<'a, 'b, D: Distance> PtDistance<'a, 'b, D> {
+impl<'a, 'b, D: Distance> DistWrapper<'a, 'b, D> {
+    /// Construct a distance wrapper
     pub fn new(ev_dist: &'a D, events: &'b [Event]) -> Self {
         Self { ev_dist, events }
     }
 }
 
-impl<'a, 'b, D: Distance> Distance<usize> for PtDistance<'a, 'b, D> {
+impl<'a, 'b, D: Distance> Distance<usize> for DistWrapper<'a, 'b, D> {
     fn distance(&self, e1: &usize, e2: &usize) -> N64 {
         self.ev_dist.distance(&self.events[*e1], &self.events[*e2])
     }

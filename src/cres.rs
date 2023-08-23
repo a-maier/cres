@@ -111,20 +111,28 @@ impl<R, C, S, U, W> From<CresBuilder<R, C, S, U, W>> for Cres<R, C, S, U, W> {
     }
 }
 
+/// A cell resampling error
 #[derive(Debug, Error)]
 pub enum CresError<E1, E2, E3, E4, E5, E6> {
+    /// Error reading an event
     #[error("Failed to read event")]
     ReadErr(#[source] E1),
+    /// Error rewinding the event reader
     #[error("Failed to rewind reader")]
     RewindErr(#[source] E2),
+    /// Error converting an event to the internal format
     #[error("Failed to convert event")]
     ConversionErr(#[source] E3),
+    /// Error encountered during resampling
     #[error("Resampling error")]
     ResamplingErr(#[source] E4),
+    /// Error encountered during unweighting
     #[error("Unweighting error")]
     UnweightErr(#[source] E5),
+    /// Error writing resampled events
     #[error("Failed to write events")]
     WriteErr(#[source] E6),
+    /// Encountered event with invalid id
     #[error("Encountered event with non-zero id {0}")]
     IdErr(usize),
 }

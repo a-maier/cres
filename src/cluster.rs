@@ -10,6 +10,7 @@ use particle_id::{
 };
 use thiserror::Error;
 
+/// Placeholder for an unknown jet algorithm
 #[derive(Debug, Clone, Error)]
 pub struct UnknownJetAlgorithm(String);
 
@@ -46,6 +47,7 @@ pub enum JetAlgorithm {
     Kt,
 }
 
+/// Definition of a jet
 #[derive(Debug, Copy, Clone)]
 pub struct JetDefinition {
     /// Jet algorithm
@@ -75,6 +77,7 @@ pub(crate) fn is_photon(id: ParticleID) -> bool {
 pub(crate) const PID_JET: ParticleID = ParticleID::new(81);
 pub(crate) const PID_DRESSED_LEPTON: ParticleID = ParticleID::new(82);
 
+/// Cluster the given `partons` into jets
 pub fn cluster(
     partons: Vec<PseudoJet>,
     jet_def: &JetDefinition,
