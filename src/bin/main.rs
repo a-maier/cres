@@ -100,6 +100,9 @@ where
     if opt.lepton_def.leptonalgorithm.is_some() {
         converter = converter.with_lepton_def(opt.lepton_def.into())
     }
+    if opt.photon_def.photonradius.is_some() {
+        converter = converter.with_photon_def(opt.photon_def.into())
+    }
     let writer = FileWriter::builder()
         .filename(opt.outfile.clone())
         .format(opt.outformat.into())
@@ -133,7 +136,7 @@ mod tests {
 
         use cres::cluster::JetAlgorithm;
 
-        use crate::opt::{JetDefinition, LeptonDefinition};
+        use crate::opt::{JetDefinition, LeptonDefinition, PhotonDefinition};
 
         let opt = Opt {
             outfile: PathBuf::from("/dev/null"),
@@ -146,6 +149,11 @@ mod tests {
                 leptonalgorithm: Some(JetAlgorithm::AntiKt),
                 leptonradius: Some(0.1),
                 leptonpt: Some(30.),
+            },
+            photon_def: PhotonDefinition {
+                photonefrac: Some(0.09),
+                photonradius: Some(0.2),
+                photonpt: Some(20.),
             },
             max_cell_size: Some(100.),
             infiles: vec![PathBuf::from("test_data/showered.hepmc.zst")],

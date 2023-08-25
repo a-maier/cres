@@ -2,12 +2,14 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::cluster::{
-    cluster, is_hadron, is_light_lepton, is_parton, is_photon, JetDefinition,
-    PID_DRESSED_LEPTON, PID_JET,
+    cluster, is_hadron, is_light_lepton, is_parton, is_photon,
+    JetDefinition, PhotonDefinition,
+    PID_ISOLATED_PHOTON, PID_DRESSED_LEPTON, PID_JET,
 };
 use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
+use jetty::PseudoJet;
 use avery::event::Status;
 use noisy_float::prelude::*;
 use particle_id::ParticleID;
@@ -18,6 +20,7 @@ use thiserror::Error;
 pub struct ClusteringConverter {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
+    photon_def: Option<PhotonDefinition>,
     include_neutrinos: bool,
     #[cfg(feature = "multiweight")]
     weight_names: HashSet<String>,
@@ -29,6 +32,7 @@ impl ClusteringConverter {
         Self {
             jet_def,
             lepton_def: None,
+            photon_def: None,
             include_neutrinos: false,
             #[cfg(feature = "multiweight")]
             weight_names: HashSet::new(),
@@ -38,6 +42,12 @@ impl ClusteringConverter {
     /// Enable lepton clustering
     pub fn with_lepton_def(mut self, lepton_def: JetDefinition) -> Self {
         self.lepton_def = Some(lepton_def);
+        self
+    }
+
+    /// Enable photon isolation
+    pub fn with_photon_def(mut self, photon_def: PhotonDefinition) -> Self {
+        self.photon_def = Some(photon_def);
         self
     }
 
@@ -60,6 +70,33 @@ impl ClusteringConverter {
         self.lepton_def.is_some()
             && (is_light_lepton(id.abs()) || is_photon(id))
     }
+
+    fn is_isolated(
+        &self,
+        particle: &avery::event::Particle, 
+        event: &Vec::<avery::event::Particle>,
+    ) -> bool {
+        if let Some(photon_def) = self.photon_def.as_ref() {
+            let p = PseudoJet::from(particle.p.unwrap());
+            // Check photon is sufficiently hard (above min_pt)
+            if p.pt2().sqrt() < photon_def.min_pt {
+                return false;
+            }
+            // Check photon is sufficiently isolated
+            let mut cone_mom = PseudoJet::new();
+            for e in event.into_iter() {
+                let ep = PseudoJet::from(e.p.unwrap());
+                if ep.delta_r(&p) < photon_def.radius {
+                    cone_mom += ep;
+                }
+            }
+            cone_mom -= p; // remove momentum of the original photon particle from cone
+            // Photon pt > e_fraction * cone_mom_et
+            return p.pt2().sqrt() > n64(photon_def.min_e_fraction) *
+            (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
+        }
+        return false;
+    }
 }
 
 impl TryConvert<avery::Event, Event> for ClusteringConverter {
@@ -69,6 +106,8 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         &mut self,
         event: avery::Event,
     ) -> Result<Event, Self::Error> {
+        let mut photons = Vec::new();
+        let mut other = Vec::new();
         let mut partons = Vec::new();
         let mut leptons = Vec::new();
         let mut builder = EventBuilder::new();
@@ -77,11 +116,28 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         #[cfg(not(feature = "multiweight"))]
         builder.weights(n64(event.weights.first().unwrap().weight.unwrap()));
 
-        let outgoing = event
+        let outgoing : Vec<_> = event
             .particles
             .into_iter()
-            .filter(|p| p.status == Some(Status::Outgoing));
-        for out in outgoing {
+            .filter(|p| p.status == Some(Status::Outgoing)).collect();
+
+        // Get list of isolated photons vs other particles
+        for out in &outgoing {
+            let id = out.id.unwrap();
+            if is_photon(id) && self.is_isolated(&out, &outgoing) {
+                photons.push(out);
+            } else {
+                other.push(out);
+            }
+        }
+        for photon in photons {
+            let p = photon.p.unwrap();
+            let p = [n64(p[0]), n64(p[1]), n64(p[2]), n64(p[3])];
+            builder.add_outgoing(PID_ISOLATED_PHOTON, p.into());
+        }
+
+        // Get list of jets
+        for out in other {
             let id = out.id.unwrap();
             let p = out.p.unwrap();
             if is_parton(id) || is_hadron(id.abs()) {
@@ -98,6 +154,8 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
             let p = [jet.e(), jet.px(), jet.py(), jet.pz()];
             builder.add_outgoing(PID_JET, p.into());
         }
+
+        // Get list of dressed leptons
         if let Some(lepton_def) = self.lepton_def.as_ref() {
             let leptons = cluster(leptons, lepton_def);
             for lepton in leptons {
@@ -207,3 +265,4 @@ pub enum ConversionError {
     #[error("Failed to find event weight \"{0}\": Event has weights {1:?}")]
     WeightNotFound(String, Vec<String>),
 }
+

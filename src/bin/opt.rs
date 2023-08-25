@@ -165,6 +165,29 @@ impl std::convert::From<LeptonDefinition> for cres::cluster::JetDefinition {
     }
 }
 
+#[derive(Debug, Copy, Clone, Parser)]
+pub(crate) struct PhotonDefinition {
+    /// Minimum fraction of photon transverse energy in GeV.
+    #[clap(long)]
+    pub photonefrac: Option<f64>,
+    /// Photon radius parameter.
+    #[clap(long)]
+    pub photonradius: Option<f64>,
+    /// Minimum photon transverse momentum in GeV.
+    #[clap(long)]
+    pub photonpt: Option<f64>,
+}
+
+impl std::convert::From<PhotonDefinition> for cres::cluster::PhotonDefinition {
+    fn from(j: PhotonDefinition) -> Self {
+        Self {
+            min_e_fraction: j.photonefrac.unwrap(),
+            radius: j.photonradius.unwrap(),
+            min_pt: j.photonpt.unwrap(),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub(crate) enum Search {
     #[default]
@@ -223,6 +246,9 @@ pub(crate) struct Opt {
 
     #[clap(flatten)]
     pub(crate) lepton_def: LeptonDefinition,
+
+    #[clap(flatten)]
+    pub(crate) photon_def: PhotonDefinition,
 
     /// Include neutrinos in the distance measure
     #[clap(long, default_value_t)]
@@ -314,6 +340,8 @@ variable."
 pub(crate) enum ValidationError {
     #[error("Either all or none of --leptonalgorithm, --leptonradius, --leptonpt have to be set")]
     BadLeptonOpt,
+    #[error("Either all or none of --photonefrac, --photonradius, --photonpt have to be set")]
+    BadPhotonOpt,
 }
 
 impl Opt {
@@ -323,10 +351,21 @@ impl Opt {
             leptonpt,
             leptonradius,
         } = &self.lepton_def;
+        let &PhotonDefinition {
+            photonefrac,
+            photonradius,
+            photonpt,
+        } = &self.photon_def;
         match (leptonalgorithm, leptonpt, leptonradius) {
-            (Some(_), Some(_), Some(_)) => Ok(self),
-            (None, None, None) => Ok(self),
+            (Some(_), Some(_), Some(_)) => Ok(()),
+            (None, None, None) => Ok(()),
             _ => Err(ValidationError::BadLeptonOpt),
-        }
+        }?;
+        match (photonefrac, photonradius, photonpt) {
+            (Some(_), Some(_), Some(_)) => Ok(()),
+            (None, None, None) => Ok(()),
+            _ => Err(ValidationError::BadPhotonOpt),
+        }?;
+        Ok(self)
     }
 }

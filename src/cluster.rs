@@ -58,6 +58,17 @@ pub struct JetDefinition {
     pub min_pt: f64,
 }
 
+/// Definition of an isolated object
+#[derive(Debug, Copy, Clone)]
+pub struct PhotonDefinition {
+    /// Minimum energy fraction
+    pub min_e_fraction: f64,
+    /// Radius parameter
+    pub radius: f64,
+    /// Minimum transverse momentum
+    pub min_pt: f64,
+}
+
 pub(crate) fn is_parton(id: ParticleID) -> bool {
     id.id().abs() <= bottom.id() || id == gluon
 }
@@ -76,6 +87,7 @@ pub(crate) fn is_photon(id: ParticleID) -> bool {
 
 pub(crate) const PID_JET: ParticleID = ParticleID::new(81);
 pub(crate) const PID_DRESSED_LEPTON: ParticleID = ParticleID::new(82);
+pub(crate) const PID_ISOLATED_PHOTON: ParticleID = ParticleID::new(83);
 
 /// Cluster the given `partons` into jets
 pub fn cluster(
