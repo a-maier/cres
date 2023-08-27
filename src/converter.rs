@@ -74,7 +74,7 @@ impl ClusteringConverter {
     fn is_isolated(
         &self,
         particle: &avery::event::Particle, 
-        event: &Vec::<avery::event::Particle>,
+        event: &[avery::event::Particle],
     ) -> bool {
         if let Some(photon_def) = self.photon_def.as_ref() {
             let p = PseudoJet::from(particle.p.unwrap());
@@ -84,7 +84,7 @@ impl ClusteringConverter {
             }
             // Check photon is sufficiently isolated
             let mut cone_mom = PseudoJet::new();
-            for e in event.into_iter() {
+            for e in event.iter() {
                 let ep = PseudoJet::from(e.p.unwrap());
                 if ep.delta_r(&p) < photon_def.radius {
                     cone_mom += ep;
@@ -95,7 +95,7 @@ impl ClusteringConverter {
             return p.pt2().sqrt() > n64(photon_def.min_e_fraction) *
             (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
         }
-        return false;
+        false
     }
 }
 
@@ -124,7 +124,7 @@ impl TryConvert<avery::Event, Event> for ClusteringConverter {
         // Get list of isolated photons vs other particles
         for out in &outgoing {
             let id = out.id.unwrap();
-            if is_photon(id) && self.is_isolated(&out, &outgoing) {
+            if is_photon(id) && self.is_isolated(out, &outgoing) {
                 photons.push(out);
             } else {
                 other.push(out);
