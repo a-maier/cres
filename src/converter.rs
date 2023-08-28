@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::cluster::{
     cluster, is_hadron, is_light_lepton, is_parton, is_photon,
-    JetDefinition, PhotonDefinition,
+    is_muon, JetDefinition, PhotonDefinition,
     PID_ISOLATED_PHOTON, PID_DRESSED_LEPTON, PID_JET,
 };
 use crate::event::{Event, EventBuilder};
@@ -87,9 +87,13 @@ impl ClusteringConverter {
         // Check photon is sufficiently isolated
         let mut cone_mom = PseudoJet::new();
         for e in event {
-            let ep = PseudoJet::from(e.p.unwrap());
-            if ep.delta_r(&p) < photon_def.radius {
-                cone_mom += ep;
+            let e_id = e.id.unwrap();
+            // ignore neutrinos/muons in isolation cone
+            if !is_neutrino(e_id) || !is_muon(e_id.abs()) {
+                let ep = PseudoJet::from(e.p.unwrap());
+                if ep.delta_r(&p) < photon_def.radius {
+                    cone_mom += ep;
+                }
             }
         }
         cone_mom -= p; // remove momentum of the original photon particle from cone

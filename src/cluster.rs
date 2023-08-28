@@ -85,6 +85,10 @@ pub(crate) fn is_photon(id: ParticleID) -> bool {
     id == photon
 }
 
+pub(crate) fn is_muon(id: ParticleID) -> bool {
+    id == muon
+}
+
 pub(crate) const PID_JET: ParticleID = ParticleID::new(81);
 pub(crate) const PID_DRESSED_LEPTON: ParticleID = ParticleID::new(82);
 pub(crate) const PID_ISOLATED_PHOTON: ParticleID = ParticleID::new(83);
