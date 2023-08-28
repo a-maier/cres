@@ -76,26 +76,28 @@ impl ClusteringConverter {
         particle: &avery::event::Particle, 
         event: &[avery::event::Particle],
     ) -> bool {
-        if let Some(photon_def) = self.photon_def.as_ref() {
-            let p = PseudoJet::from(particle.p.unwrap());
-            // Check photon is sufficiently hard (above min_pt)
-            if p.pt2().sqrt() < photon_def.min_pt {
-                return false;
-            }
-            // Check photon is sufficiently isolated
-            let mut cone_mom = PseudoJet::new();
-            for e in event.iter() {
-                let ep = PseudoJet::from(e.p.unwrap());
-                if ep.delta_r(&p) < photon_def.radius {
-                    cone_mom += ep;
-                }
-            }
-            cone_mom -= p; // remove momentum of the original photon particle from cone
-            // Photon pt > e_fraction * cone_mom_et
-            return p.pt2().sqrt() > n64(photon_def.min_e_fraction) *
-            (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
+        let Some(photon_def) = self.photon_def.as_ref() else {
+            return false;
+        };
+        let p = PseudoJet::from(particle.p.unwrap());
+        // Check photon is sufficiently hard (above min_pt)
+        if p.pt2().sqrt() < photon_def.min_pt {
+            return false;
         }
-        false
+        // Check photon is sufficiently isolated
+        let mut cone_mom = PseudoJet::new();
+        for e in event {
+            let ep = PseudoJet::from(e.p.unwrap());
+            if ep.delta_r(&p) < photon_def.radius {
+                cone_mom += ep;
+            }
+        }
+        cone_mom -= p; // remove momentum of the original photon particle from cone
+        // check photon is sufficiently hard compared to surrounding cone
+        let photon_pt =  p.pt2().sqrt();
+        let e_fraction = n64(photon_def.min_e_fraction);
+        let cone_et = (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
+        return photon_pt > e_fraction * cone_et;
     }
 }
 
