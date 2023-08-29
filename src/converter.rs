@@ -89,7 +89,7 @@ impl ClusteringConverter {
         for e in event {
             let e_id = e.id.unwrap();
             // ignore neutrinos/muons in isolation cone
-            if !is_neutrino(e_id) || !is_muon(e_id.abs()) {
+            if !is_neutrino(e_id) && !is_muon(e_id.abs()) {
                 let ep = PseudoJet::from(e.p.unwrap());
                 if ep.delta_r(&p) < photon_def.radius {
                     cone_mom += ep;
