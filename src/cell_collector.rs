@@ -46,8 +46,8 @@ impl CellCollector {
     /// 2. The number of cell members is among the largest ones
     ///    encountered so far
     /// 3. The cell weight is among the largest ones encountered so far
-    /// 4. The cell is lucky: There is a 1/`N' chance to be saved,
-    ///    where `N` is the number of events considered so far
+    /// 4. The cell is lucky: There is a 1/N chance to be saved,
+    ///    where N is the number of events considered so far
     pub fn collect<R: Rng>(&mut self, cell: &Cell, mut rng: R) {
         let count = self.count;
         let r = cell.radius();
