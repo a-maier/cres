@@ -43,10 +43,8 @@ fn write_c_header() {
 
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let mut config = cbindgen::Config {
-        cpp_compat: true,
-        ..Default::default()
-    };
+    let mut config = cbindgen::Config::default();
+    config.cpp_compat = true;
     config.function.must_use =
         Some("__attribute__((warn_unused_result))".to_string());
     cbindgen::Builder::new()

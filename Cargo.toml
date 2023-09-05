@@ -15,7 +15,7 @@ autobins = false
 anyhow = "1.0"
 argfile = "0.1"
 audec = { version = "0.1", features = ["bzip2", "lz4"] }
-avery = "0.4"
+avery = "0.5"
 bzip2 = "0.4"
 clap = { version = "4.3", features = ["derive"] }
 clap_complete = "4.0"
@@ -36,7 +36,7 @@ logbar = "0.1"
 lz4 = "1.23"
 memchr = { version = "2.5", optional = true }
 noisy_float = "0.2"
-ntuple = { version = "0.7", optional = true }
+ntuple = { version = "0.8", optional = true }
 num-traits = "0.2"
 parking_lot = "0.12"
 particle_id = "0.4"
@@ -83,7 +83,7 @@ hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
 [build-dependencies]
 anyhow = "1.0"
 bindgen = { version = "0.66", optional = true }
-cbindgen = "0.24"
+cbindgen = "0.25"
 cc = { version = "1.0", optional = true }
-ntuple = { version = "0.7", optional = true }
+ntuple = { version = "0.8", optional = true }
 vergen = { version = "8", features = ["git", "gitcl"] }
