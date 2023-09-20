@@ -425,7 +425,7 @@ impl ObserveCell for Observer {
         if let Some(mut res) = res {
             info!("Created {} cells", res.cell_radii.len());
             if res.nneg > 0 {
-                warn!("{} cells had negative weight!", res.nneg);
+                info!("{} cells had negative weight!", res.nneg);
             }
             info!(
                 "Median radius: {:.3}",
