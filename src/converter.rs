@@ -73,7 +73,7 @@ impl ClusteringConverter {
 
     fn is_isolated(
         &self,
-        particle: &avery::event::Particle, 
+        particle: &avery::event::Particle,
         event: &[avery::event::Particle],
     ) -> bool {
         let Some(photon_def) = self.photon_def.as_ref() else {
@@ -271,4 +271,3 @@ pub enum ConversionError {
     #[error("Failed to find event weight \"{0}\": Event has weights {1:?}")]
     WeightNotFound(String, Vec<String>),
 }
-
