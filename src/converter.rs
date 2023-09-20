@@ -80,8 +80,9 @@ impl ClusteringConverter {
             return false;
         };
         let p = PseudoJet::from(particle.p.unwrap());
+        let photon_pt =  p.pt();
         // Check photon is sufficiently hard (above min_pt)
-        if p.pt2().sqrt() < photon_def.min_pt {
+        if photon_pt < photon_def.min_pt {
             return false;
         }
         // Check photon is sufficiently isolated
@@ -98,7 +99,6 @@ impl ClusteringConverter {
         }
         cone_mom -= p; // remove momentum of the original photon particle from cone
         // check photon is sufficiently hard compared to surrounding cone
-        let photon_pt =  p.pt2().sqrt();
         let e_fraction = n64(photon_def.min_e_fraction);
         let cone_et = (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
         return photon_pt > e_fraction * cone_et;
