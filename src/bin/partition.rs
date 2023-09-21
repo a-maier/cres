@@ -1,8 +1,8 @@
-mod opt;
+mod opt_common;
 
 use std::{io::Write, path::PathBuf};
 
-use crate::opt::{parse_compr, FileFormat};
+use crate::opt_common::{parse_compr, FileFormat, JetDefinition};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -20,7 +20,6 @@ use cres::{
 use env_logger::Env;
 use log::{debug, error, info, trace};
 use noisy_float::prelude::*;
-use opt::JetDefinition;
 
 // TODO: code duplication with opt::Opt
 #[derive(Debug, Parser)]

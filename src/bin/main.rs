@@ -1,11 +1,14 @@
-mod opt;
+mod opt_common;
+mod opt_cres;
+mod opt_cres_validate;
 
 use std::cell::RefCell;
 #[cfg(feature = "multiweight")]
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use crate::opt::{Opt, Search};
+use crate::opt_cres::{Opt, Search};
+use crate::opt_cres_validate::validate;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -35,7 +38,7 @@ fn main() -> Result<()> {
         argfile::PREFIX,
     )
     .with_context(|| "Failed to read argument file")?;
-    let opt = Opt::parse_from(args).validate()?;
+    let opt = validate(Opt::parse_from(args))?;
     cres(opt)
 }
 
@@ -136,7 +139,7 @@ mod tests {
 
         use cres::cluster::JetAlgorithm;
 
-        use crate::opt::{JetDefinition, LeptonDefinition, PhotonDefinition};
+        use crate::opt_common::{JetDefinition, LeptonDefinition, PhotonDefinition};
 
         let opt = Opt {
             outfile: PathBuf::from("/dev/null"),

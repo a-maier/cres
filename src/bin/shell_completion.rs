@@ -1,5 +1,7 @@
-mod opt;
-use crate::opt::Opt;
+mod opt_common;
+mod opt_cres;
+
+use crate::opt_cres::Opt;
 
 use std::{
     env::var_os,
