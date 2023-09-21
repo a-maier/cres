@@ -14,7 +14,7 @@ use crate::traits::{
     NeighbourData, NeighbourSearch, ObserveCell, Resample, SelectSeeds,
 };
 
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use noisy_float::prelude::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
