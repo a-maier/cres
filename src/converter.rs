@@ -101,7 +101,7 @@ impl ClusteringConverter {
         // check photon is sufficiently hard compared to surrounding cone
         let e_fraction = n64(photon_def.min_e_fraction);
         let cone_et = (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
-        return photon_pt > e_fraction * cone_et;
+        photon_pt > e_fraction * cone_et
     }
 }
 

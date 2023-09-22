@@ -50,7 +50,7 @@ impl<P, DF> VPTree<P, DF> {
 impl<P: Copy + PartialEq + Eq, DF: Distance<P>> VPTree<P, DF> {
     /// Construct a vantage-point tree without parallelisation
     pub fn seq_new(nodes: Vec<P>, dist: DF) -> Self {
-        Self::from_iter_with_dist(nodes.into_iter(), dist)
+        Self::from_iter_with_dist(nodes, dist)
     }
 }
 
