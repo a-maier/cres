@@ -1,3 +1,5 @@
+use std::convert::From;
+
 use clap::{Parser, ValueEnum};
 use cres::cluster::JetAlgorithm;
 use cres::compression::Compression;
@@ -98,7 +100,7 @@ pub(crate) struct JetDefinition {
     pub jetpt: f64,
 }
 
-impl std::convert::From<JetDefinition> for cres::cluster::JetDefinition {
+impl From<JetDefinition> for cres::cluster::JetDefinition {
     fn from(j: JetDefinition) -> Self {
         Self {
             algorithm: j.jetalgorithm,
@@ -124,7 +126,7 @@ pub(crate) struct LeptonDefinition {
     pub leptonpt: Option<f64>,
 }
 
-impl std::convert::From<LeptonDefinition> for cres::cluster::JetDefinition {
+impl From<LeptonDefinition> for cres::cluster::JetDefinition {
     fn from(l: LeptonDefinition) -> Self {
         Self {
             algorithm: l.leptonalgorithm.unwrap(),
@@ -147,7 +149,7 @@ pub(crate) struct PhotonDefinition {
     pub photonpt: Option<f64>,
 }
 
-impl std::convert::From<PhotonDefinition> for cres::cluster::PhotonDefinition {
+impl From<PhotonDefinition> for cres::cluster::PhotonDefinition {
     fn from(j: PhotonDefinition) -> Self {
         Self {
             min_e_fraction: j.photonefrac.unwrap(),
