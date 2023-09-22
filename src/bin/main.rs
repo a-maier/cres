@@ -5,6 +5,7 @@ mod opt_cres_validate;
 use std::cell::RefCell;
 #[cfg(feature = "multiweight")]
 use std::collections::HashSet;
+use std::error::Error;
 use std::rc::Rc;
 
 use crate::opt_cres::{Opt, Search};
@@ -14,20 +15,18 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cres::converter::ClusteringConverter;
 use cres::reader::CombinedReader;
+use cres::resampler::DefaultResampler;
+use cres::traits::Resample;
 use cres::writer::FileWriter;
 use cres::{
     cell_collector::CellCollector,
-    distance::{EuclWithScaledPt, DistWrapper},
-    neighbour_search::{
-        NaiveNeighbourSearch, NeighbourData, NeighbourSearch, TreeSearch,
-    },
+    neighbour_search::{NaiveNeighbourSearch, TreeSearch},
     prelude::*,
     resampler::DefaultResamplerBuilder,
     FEATURES, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
 use log::{debug, info};
-use noisy_float::prelude::*;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
@@ -53,11 +52,8 @@ fn cres(opt: Opt) -> Result<()> {
 
 fn cres_with_search<N>(opt: Opt) -> Result<()>
 where
-    N: NeighbourData + Clone + Send + Sync,
-    for<'x, 'y, 'z> &'x N:
-        NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>>::Iter:
-        Iterator<Item = (usize, N64)>,
+    DefaultResampler<N>: Resample,
+    <DefaultResampler<N> as Resample>::Error: Error + Send + Sync + 'static,
 {
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);

@@ -4,8 +4,24 @@ use crate::vptree::{NearestNeighbourIter, VPTree};
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 
+/// Algorithm for nearest-neighbour search
+pub trait NeighbourSearchAlgo {
+    /// Data structure to hold information for nearest-neighbour searches
+    type Output<D>;
+
+    /// Initialise nearest neighbour search
+    ///
+    /// The arguments are the number of points and a function
+    /// returning the distance given the indices of two points
+    fn new_with_dist<D: Distance<usize> + Send + Sync>(
+        npoints: usize,
+        d: D,
+        max_dist: N64
+    ) -> Self::Output<D>;
+}
+
 /// Nearest neighbour search for indexed points
-pub trait NeighbourSearch<D: Distance<usize> + Send + Sync> {
+pub trait NeighbourSearch {
     /// Iterator over nearest neighbours
     ///
     /// This has to implement `Iterator<Item = (usize, N64)>`, where
@@ -16,74 +32,75 @@ pub trait NeighbourSearch<D: Distance<usize> + Send + Sync> {
     type Iter;
 
     /// Return nearest neighbours in order for the point with the given index
-    fn nearest_in(self, point: &usize, d: D) -> Self::Iter;
-}
-
-/// Data structure to hold information for nearest-neighbour searches
-pub trait NeighbourData {
-    /// Initialise nearest neighbour search
-    ///
-    /// The arguments are the number of points and a function
-    /// returning the distance given the indices of two points
-    fn new_with_dist<D>(npoints: usize, d: D, max_dist: N64) -> Self
-    where
-        D: Distance<usize> + Send + Sync;
+    fn nearest(self, point: &usize) -> Self::Iter;
 }
 
 /// Nearest-neighbour search using a vantage point tree
-pub type TreeSearch = VPTree<usize>;
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct TreeSearch { }
 
-impl<'a, D> NeighbourSearch<D> for &'a TreeSearch
+impl<'a, D> NeighbourSearch for &'a VPTree<usize, D>
 where
-    D: Distance<usize> + Send + Sync,
+    D: Distance<usize>,
 {
     type Iter = NearestNeighbourIter<'a, usize, D>;
 
-    fn nearest_in(self, point: &usize, d: D) -> Self::Iter {
-        self.nearest_in(point, d)
+    fn nearest(self, point: &usize) -> Self::Iter {
+        self.nearest_in(point)
     }
 }
 
-impl NeighbourData for TreeSearch {
-    fn new_with_dist<D>(npoints: usize, d: D, max_dist: N64) -> Self
-    where
-        D: Distance<usize> + Send + Sync,
+impl NeighbourSearchAlgo for TreeSearch
+{
+    type Output<D> = VPTree<usize, D>;
+
+    fn new_with_dist<D: Distance<usize> + Send + Sync>(
+        npoints: usize, d: D, max_dist: N64
+    ) -> VPTree<usize, D>
     {
         let range = (0..npoints).into_par_iter();
-        Self::from_par_iter_with_dist(range, d).with_max_dist(max_dist)
+        VPTree::from_par_iter_with_dist(range, d).with_max_dist(max_dist)
     }
 }
 
 /// Naive nearest neighbour search
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct NaiveNeighbourSearch { }
+
+/// Data required for naive nearest neighbour search
 #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
-pub struct NaiveNeighbourSearch {
-    dist: Vec<(usize, N64)>,
+pub struct NaiveSearchData<D> {
+    dist: D,
+    cached_dist: Vec<(usize, N64)>,
     max_dist: N64,
 }
 
-impl<D> NeighbourSearch<D> for &NaiveNeighbourSearch
-where
-    D: Distance<usize> + Send + Sync,
+impl<D: Distance<usize> + Send + Sync> NeighbourSearch for &NaiveSearchData<D>
 {
     type Iter = NaiveNeighbourIter;
 
-    fn nearest_in(self, point: &usize, d: D) -> Self::Iter {
+    fn nearest(self, point: &usize) -> Self::Iter {
         let max_dist = self.max_dist;
-        let mut dist = self.dist.clone();
+        let mut dist = self.cached_dist.clone();
         dist.par_iter_mut().for_each(|(id, dist)| {
-            *dist = d.distance(id, point);
+            *dist = self.dist.distance(id, point);
         });
         NaiveNeighbourIter::new(dist, *point, max_dist)
     }
 }
 
-impl NeighbourData for NaiveNeighbourSearch {
-    fn new_with_dist<D>(npoints: usize, _d: D, max_dist: N64) -> Self
-    where
-        D: Distance<usize>,
+impl NeighbourSearchAlgo for NaiveNeighbourSearch {
+    type Output<D> = NaiveSearchData<D>;
+
+    fn new_with_dist<D: Distance<usize> + Send + Sync>(
+        npoints: usize,
+        dist: D,
+        max_dist: N64
+    ) -> Self::Output<D>
     {
-        Self {
-            dist: Vec::from_iter((0..npoints).map(|id| (id, n64(0.)))),
+        NaiveSearchData {
+            dist,
+            cached_dist: Vec::from_iter((0..npoints).map(|id| (id, n64(0.)))),
             max_dist,
         }
     }

@@ -11,7 +11,7 @@ use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
 use crate::traits::{
-    NeighbourData, NeighbourSearch, ObserveCell, Resample, SelectSeeds,
+    NeighbourSearchAlgo, NeighbourSearch, ObserveCell, Resample, SelectSeeds,
 };
 
 use log::{debug, info, trace};
@@ -56,10 +56,9 @@ impl<D, N, O, S> Resampler<D, N, O, S> {
 impl<D, N, O, S, T> Resample for Resampler<D, N, O, S>
 where
     D: Distance + Send + Sync,
-    N: NeighbourData + Clone + Send + Sync,
-    for<'x, 'y, 'z> &'x N: NeighbourSearch<DistWrapper<'y, 'z, D>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, D>>>::Iter:
-        Iterator<Item = (usize, N64)>,
+    N: NeighbourSearchAlgo,
+    for<'x, 'y, 'z> &'x <N as NeighbourSearchAlgo>::Output<DistWrapper<'y, 'z, D>>: NeighbourSearch + Send + Sync,
+    for<'x, 'y, 'z> <&'x <N as NeighbourSearchAlgo>::Output<DistWrapper<'y, 'z, D>> as NeighbourSearch>::Iter: Iterator<Item = (usize, N64)>,
     S: SelectSeeds<ParallelIter = T> + Send + Sync,
     T: ParallelIterator<Item = usize>,
     O: ObserveCell + Send + Sync,
@@ -75,39 +74,41 @@ where
         &mut self,
         events: Vec<Event>,
     ) -> Result<Vec<Event>, Self::Error> {
-        self.print_wt_sum(&events);
+        {
+            self.print_wt_sum(&events);
 
-        let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
+            let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
 
-        let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
+            let max_cell_size = n64(self.max_cell_size.unwrap_or(f64::MAX));
 
-        info!("Initialising nearest-neighbour search");
-        let neighbour_search = N::new_with_dist(
-            events.len(),
-            DistWrapper::new(&self.distance, &events),
-            max_cell_size,
-        );
+            info!("Initialising nearest-neighbour search");
+            let neighbour_search = N::new_with_dist(
+                events.len(),
+                DistWrapper::new(&self.distance, &events),
+                max_cell_size,
+            );
 
-        info!("Resampling {nneg_weight} cells");
-        let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
-        let seeds = self.seeds.select_seeds(&events);
-        seeds.for_each(|seed| {
-            assert!(seed < events.len());
-            if events[seed].weight() > 0. {
-                return;
-            }
-            trace!("New cell around event {}", events[seed].id());
-            let mut cell =
-                Cell::new(&events, seed, &self.distance, &neighbour_search);
-            cell.resample();
-            self.observer.observe_cell(&cell);
-            progress.inc(1);
-        });
-        progress.finish();
-        debug!("Combining cell observations");
-        self.observer.finish();
+            info!("Resampling {nneg_weight} cells");
+            let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
+            let seeds = self.seeds.select_seeds(&events);
+            seeds.for_each(|seed| {
+                assert!(seed < events.len());
+                if events[seed].weight() > 0. {
+                    return;
+                }
+                trace!("New cell around event {}", events[seed].id());
+                let mut cell =
+                    Cell::new(&events, seed, &neighbour_search);
+                cell.resample();
+                self.observer.observe_cell(&cell);
+                progress.inc(1);
+            });
+            progress.finish();
+            debug!("Combining cell observations");
+            self.observer.finish();
 
-        debug!("Resampling done");
+            debug!("Resampling done");
+        }
         Ok(events)
     }
 }
@@ -177,13 +178,7 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
     }
 
     /// Algorithm for nearest-neighbour search
-    pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN>
-    where
-        NN: NeighbourData,
-        for<'x, 'y, 'z> &'x NN: NeighbourSearch<DistWrapper<'y, 'z, D>>,
-        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<DistWrapper<'y, 'z, D>>>::Iter:
-            Iterator<Item = (usize, N64)>,
-    {
+    pub fn neighbour_search<NN>(self) -> ResamplerBuilder<D, O, S, NN> {
         ResamplerBuilder {
             seeds: self.seeds,
             distance: self.distance,
@@ -227,7 +222,7 @@ impl Default
 }
 
 /// Default implementation of cell resampling
-pub struct DefaultResampler<N = TreeSearch> {
+pub struct DefaultResampler<N> {
     ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
@@ -235,13 +230,12 @@ pub struct DefaultResampler<N = TreeSearch> {
     neighbour_search: PhantomData<N>,
 }
 
+type ResampleHelper<N> = Resampler<EuclWithScaledPt, N, Observer, StrategicSelector>;
+
 impl<N> Resample for DefaultResampler<N>
 where
-    N: NeighbourData + Clone + Send + Sync,
-    for<'x, 'y, 'z> &'x N:
-        NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>>::Iter:
-        Iterator<Item = (usize, N64)>,
+    ResampleHelper<N>: Resample,
+    ResamplingError: From<<ResampleHelper<N> as Resample>::Error>,
 {
     type Error = ResamplingError;
 
@@ -335,12 +329,6 @@ impl<N> DefaultResamplerBuilder<N> {
 
     /// Set the nearest neighbour search algorithm
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
-    where
-        NN: NeighbourData,
-        for<'x, 'y, 'z> &'x NN:
-            NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>,
-        for<'x, 'y, 'z> <&'x NN as NeighbourSearch<DistWrapper<'y, 'z, EuclWithScaledPt>>>::Iter:
-            Iterator<Item = (usize, N64)>,
     {
         DefaultResamplerBuilder {
             ptweight: self.ptweight,

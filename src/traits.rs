@@ -2,7 +2,7 @@ use crate::cell::Cell;
 use crate::event::Event;
 
 pub use crate::distance::Distance;
-pub use crate::neighbour_search::{NeighbourData, NeighbourSearch};
+pub use crate::neighbour_search::{NeighbourSearchAlgo, NeighbourSearch};
 pub use crate::seeds::SelectSeeds;
 
 /// Rewind to the beginning of a stream

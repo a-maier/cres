@@ -4,13 +4,15 @@ use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::cluster;
 use crate::converter::ClusteringConverter;
-use crate::distance::{Distance, EuclWithScaledPt, DistWrapper};
+use crate::distance::{Distance, EuclWithScaledPt};
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::reader::CombinedReader;
-use crate::resampler::ResamplerBuilder;
+use crate::resampler::{NoObserver, ResamplerBuilder};
+use crate::seeds::StrategicSelector;
+use crate::traits::Resample;
 
 use crate::neighbour_search::{
-    NaiveNeighbourSearch, NeighbourData, NeighbourSearch, TreeSearch,
+    NaiveNeighbourSearch, TreeSearch,
 };
 use crate::writer::FileWriter;
 
@@ -157,13 +159,13 @@ where
     }
 }
 
+type Resampler<D, N> = crate::resampler::Resampler<D, N, NoObserver, StrategicSelector>;
+
 fn cres_run_with<D, N>(opt: &Opt, dist: D) -> Result<(), Error>
 where
     D: Distance + Send + Sync,
-    N: NeighbourData + Clone + Send + Sync,
-    for<'x, 'y, 'z> &'x N: NeighbourSearch<DistWrapper<'y, 'z, D>>,
-    for<'x, 'y, 'z> <&'x N as NeighbourSearch<DistWrapper<'y, 'z, D>>>::Iter:
-        Iterator<Item = (usize, N64)>,
+    Resampler<D, N>: Resample,
+    <Resampler<D, N> as Resample>::Error: std::error::Error + Send + Sync + 'static,
 {
     debug!("Settings: {:#?}", opt);
 

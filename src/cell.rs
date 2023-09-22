@@ -1,4 +1,3 @@
-use crate::distance::{Distance, DistWrapper};
 use crate::event::Event;
 use crate::traits::NeighbourSearch;
 
@@ -20,16 +19,14 @@ impl<'a> Cell<'a> {
     /// Construct a new cell from the given `events` with
     /// `events[seed_idx]` as seed, distance measure `distance` and
     /// neighbour search implementation `neighbour_search`
-    pub fn new<'b: 'a, 'c, F: Distance + Sync + Send, N>(
+    pub fn new<'b: 'a, 'c, N>(
         events: &'b [Event],
         seed_idx: usize,
-        distance: &F,
         neighbour_search: N,
     ) -> Self
     where
-        for<'x, 'y> N: NeighbourSearch<DistWrapper<'x, 'y, F>>,
-        for<'x, 'y> <N as NeighbourSearch<DistWrapper<'x, 'y, F>>>::Iter:
-            Iterator<Item = (usize, N64)>,
+        N: NeighbourSearch,
+        <N as NeighbourSearch>::Iter: Iterator<Item = (usize, N64)>,
     {
         let mut weight_sum = events[seed_idx].weight();
         debug_assert!(weight_sum < 0.);
@@ -37,8 +34,7 @@ impl<'a> Cell<'a> {
         let mut members = vec![seed_idx];
         let mut radius = n64(0.);
 
-        let neighbours = neighbour_search
-            .nearest_in(&seed_idx, DistWrapper::new(distance, events));
+        let neighbours = neighbour_search.nearest(&seed_idx);
 
         for (next_idx, dist) in neighbours {
             trace!(

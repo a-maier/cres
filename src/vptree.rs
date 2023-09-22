@@ -11,16 +11,18 @@ use rayon::prelude::*;
 use crate::traits::Distance;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct VPTree<P> {
+pub struct VPTree<P, DF> {
     nodes: Vec<Node<P>>,
+    dist: DF,
     max_dist: N64,
 }
 
-impl<P> Default for VPTree<P> {
+impl<P, DF: Default> Default for VPTree<P, DF> {
     fn default() -> Self {
         Self {
             nodes: Default::default(),
             max_dist: n64(f64::MAX),
+            dist: Default::default(),
         }
     }
 }
@@ -37,41 +39,46 @@ struct Children {
     outside_offset: usize,
 }
 
-impl<P: Copy + PartialEq + Eq> VPTree<P> {
-    pub fn new<DF>(nodes: Vec<P>, dist: DF) -> Self
-    where
-        DF: Distance<P> + Send + Sync,
-        P: Send + Sync,
-    {
-        Self::par_new(nodes, dist)
-    }
-
-    pub fn seq_new<DF>(nodes: Vec<P>, dist: DF) -> Self
-    where
-        DF: Distance<P>,
-    {
-        Self::from_iter_with_dist(nodes.into_iter(), dist)
-    }
-
-    pub fn par_new<DF>(nodes: Vec<P>, dist: DF) -> Self
-    where
-        DF: Distance<P> + Send + Sync,
-        P: Send + Sync,
-    {
-        Self::from_par_iter_with_dist(nodes.into_par_iter(), dist)
-    }
-
+impl<P, DF> VPTree<P, DF> {
+    /// Set a maximum distance for nearest-neighbour searches
     pub fn with_max_dist(mut self, max_dist: N64) -> Self {
         self.max_dist = max_dist;
         self
     }
 }
 
-impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
-    pub fn from_iter_with_dist<DF, I>(iter: I, dist: DF) -> Self
+impl<P: Copy + PartialEq + Eq, DF: Distance<P>> VPTree<P, DF> {
+    /// Construct a vantage-point tree without parallelisation
+    pub fn seq_new(nodes: Vec<P>, dist: DF) -> Self {
+        Self::from_iter_with_dist(nodes.into_iter(), dist)
+    }
+}
+
+impl<P, DF> VPTree<P, DF>
+where
+    P: Copy + PartialEq + Eq + Send + Sync,
+    DF: Distance<P> + Send + Sync
+{
+    /// Construct a vantage-point tree from the given nodes and distance
+    pub fn new(nodes: Vec<P>, dist: DF) -> Self {
+        Self::par_new(nodes, dist)
+    }
+
+    /// Construct a vantage-point tree with parallelisation
+    pub fn par_new(nodes: Vec<P>, dist: DF) -> Self {
+        Self::from_par_iter_with_dist(nodes.into_par_iter(), dist)
+    }
+}
+
+impl<'x, P, DF> VPTree<P, DF>
+where
+    P: Copy + PartialEq + 'x,
+    DF: Distance<P>
+{
+    /// Construct a vantage-point tree from the given nodes and distance
+    pub fn from_iter_with_dist<I>(iter: I, dist: DF) -> Self
     where
         I: IntoIterator<Item = P>,
-        DF: Distance<P>,
     {
         let mut nodes = Vec::from_iter(iter.into_iter().map(|vantage_pt| {
             // reserve first element for storing distances
@@ -96,15 +103,81 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         let nodes = nodes.into_iter().map(|(_d, n)| n).collect();
         Self {
             nodes,
+            dist,
             max_dist: n64(f64::MAX),
         }
     }
 
-    pub fn from_par_iter_with_dist<DF, I>(iter: I, dist: DF) -> Self
+    fn find_corner_pt<'a, I>(iter: I, dist: &DF) -> Option<usize>
+    where
+        'x: 'a,
+        I: IntoIterator<Item = &'a P>,
+        DF: Distance<P>,
+    {
+        let mut iter = iter.into_iter();
+        if let Some(first) = iter.next() {
+            let max = iter
+                .enumerate()
+                .max_by_key(|(_, a)| dist.distance(first, a));
+            if let Some((pos, _)) = max {
+                Some(pos + 1)
+            } else {
+                Some(0)
+            }
+        } else {
+            None
+        }
+    }
+
+    // Recursively build the vantage point tree
+    //
+    // 1. Choose the point with the largest distance to the parent as
+    //    the next vantage point. The initial distances are chosen
+    //    with respect to an arbitrary point, so the first vantage
+    //    point is in some corner of space.
+    //
+    // 2. Calculate the distances of all other points to the vantage
+    //    point.
+    //
+    // 3. Define the "inside" set as the points within less than the
+    //    median distance to the vantage point, excepting the vantage
+    //    point itself. The points with larger distance form the
+    //    "outside" set. Build vantage point trees for each of the two
+    //    sets.
+    //
+    fn build_tree(pts: &mut [(N64, Node<P>)], dist: &DF) {
+        if pts.len() < 2 {
+            return;
+        }
+        // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
+        // the last point is the one furthest away from the parent,
+        // so it is the best candidate for the next vantage point
+        pts.swap(0, pts.len() - 1);
+        let (vp, pts) = pts.split_first_mut().unwrap();
+        for (d, pt) in pts.iter_mut() {
+            *d = dist.distance(&vp.1.vantage_pt, &pt.vantage_pt)
+        }
+        pts.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let median_idx = pts.len() / 2;
+        let (inside, outside) = pts.split_at_mut(median_idx);
+        vp.1.children = Some(Children {
+            radius: outside.first().unwrap().0,
+            outside_offset: median_idx,
+        });
+        Self::build_tree(inside, dist);
+        Self::build_tree(outside, dist);
+    }
+}
+
+impl<'x, P, DF> VPTree<P, DF>
+where
+    P: Copy + PartialEq + 'x + Send + Sync,
+    DF: Distance<P> + Send + Sync,
+{
+    /// Construct a vantage-point tree from the given nodes and distance
+    pub fn from_par_iter_with_dist<I>(iter: I, dist: DF) -> Self
     where
         I: ParallelIterator<Item = P>,
-        DF: Distance<P> + Send + Sync,
-        P: Send + Sync,
     {
         let mut nodes: Vec<_> = iter
             .map(|vantage_pt| {
@@ -138,37 +211,15 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         let nodes = nodes.into_par_iter().map(|(_d, n)| n).collect();
         Self {
             nodes,
+            dist,
             max_dist: n64(f64::MAX),
         }
     }
 
-    fn find_corner_pt<'a, I, DF>(iter: I, dist: &DF) -> Option<usize>
-    where
-        'x: 'a,
-        I: IntoIterator<Item = &'a P>,
-        DF: Distance<P>,
-    {
-        let mut iter = iter.into_iter();
-        if let Some(first) = iter.next() {
-            let max = iter
-                .enumerate()
-                .max_by_key(|(_, a)| dist.distance(first, a));
-            if let Some((pos, _)) = max {
-                Some(pos + 1)
-            } else {
-                Some(0)
-            }
-        } else {
-            None
-        }
-    }
-
-    fn par_find_corner_pt<'a, I, DF>(first: &P, iter: I, dist: &DF) -> usize
+    fn par_find_corner_pt<'a, I>(first: &P, iter: I, dist: &DF) -> usize
     where
         'x: 'a,
         I: ParallelIterator<Item = (usize, &'a P)>,
-        DF: Distance<P> + Send + Sync,
-        P: Send + Sync,
     {
         let max = iter.max_by_key(|(_, a)| dist.distance(first, a));
         if let Some((pos, _)) = max {
@@ -178,53 +229,7 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
         }
     }
 
-    // Recursively build the vantage point tree
-    //
-    // 1. Choose the point with the largest distance to the parent as
-    //    the next vantage point. The initial distances are chosen
-    //    with respect to an arbitrary point, so the first vantage
-    //    point is in some corner of space.
-    //
-    // 2. Calculate the distances of all other points to the vantage
-    //    point.
-    //
-    // 3. Define the "inside" set as the points within less than the
-    //    median distance to the vantage point, excepting the vantage
-    //    point itself. The points with larger distance form the
-    //    "outside" set. Build vantage point trees for each of the two
-    //    sets.
-    //
-    fn build_tree<DF>(pts: &mut [(N64, Node<P>)], dist: &DF)
-    where
-        DF: Distance<P>,
-    {
-        if pts.len() < 2 {
-            return;
-        }
-        // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
-        // the last point is the one furthest away from the parent,
-        // so it is the best candidate for the next vantage point
-        pts.swap(0, pts.len() - 1);
-        let (vp, pts) = pts.split_first_mut().unwrap();
-        for (d, pt) in pts.iter_mut() {
-            *d = dist.distance(&vp.1.vantage_pt, &pt.vantage_pt)
-        }
-        pts.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-        let median_idx = pts.len() / 2;
-        let (inside, outside) = pts.split_at_mut(median_idx);
-        vp.1.children = Some(Children {
-            radius: outside.first().unwrap().0,
-            outside_offset: median_idx,
-        });
-        Self::build_tree(inside, dist);
-        Self::build_tree(outside, dist);
-    }
-
-    fn par_build_tree<DF>(pts: &mut [(N64, Node<P>)], dist: &DF)
-    where
-        DF: Distance<P> + Send + Sync,
-        P: Send + Sync,
-    {
+    fn par_build_tree(pts: &mut [(N64, Node<P>)], dist: &DF) {
         const PAR_MIN_SIZE: usize = 1_000;
         if pts.len() < PAR_MIN_SIZE {
             return Self::build_tree(pts, dist);
@@ -248,11 +253,11 @@ impl<'x, P: Copy + PartialEq + 'x> VPTree<P> {
     }
 }
 
-impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
-    pub fn nearest_in<DF>(
+impl<'x, P: Copy + Hash + Eq + 'x, DF: Distance<P>> VPTree<P, DF> {
+    /// Find the nearest neighbours for `pt`
+    pub fn nearest_in(
         &self,
         pt: &P,
-        dist: DF,
     ) -> NearestNeighbourIter<'_, P, DF>
     where
         DF: Distance<P>,
@@ -260,17 +265,14 @@ impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
         NearestNeighbourIter {
             tree: self,
             pt: *pt,
-            dist,
             exclude: HashSet::new(),
             distance_cache: HashMap::new(),
         }
     }
 
-    fn nearest_in_impl<DF>(
+    fn nearest_in_impl(
         &self,
         pt: &P,
-        dist: DF,
-        max_dist: N64,
         exclude: &HashSet<P>,
         cached_dist: &mut HashMap<P, N64>,
     ) -> Option<(P, N64)>
@@ -278,12 +280,10 @@ impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
         DF: Distance<P>,
     {
         debug!("Starting nearest neighbour search");
-        let idx = Self::nearest_in_subtree(
+        let idx = self.nearest_in_subtree(
             self.nodes.as_slice(),
             *pt,
-            &dist,
             0,
-            max_dist,
             exclude,
             cached_dist,
         );
@@ -299,18 +299,18 @@ impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
         }
     }
 
-    fn nearest_in_subtree<DF>(
+    fn nearest_in_subtree(
+        &self,
         subtree: &[Node<P>],
         pt: P,
-        dist: &DF,
         idx: usize,
-        max_dist: N64,
         exclude: &HashSet<P>,
         cached_dist: &mut HashMap<P, N64>,
     ) -> Option<(usize, N64)>
     where
         DF: Distance<P>,
     {
+        let dist = &self.dist;
         trace!("node at position {idx}");
         if let Some((node, tree)) = subtree.split_first() {
             let d = *cached_dist
@@ -335,18 +335,16 @@ impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
                 trace!(
                     "Looking for nearest neighbour in more promising region"
                 );
-                let nearest_pref = Self::nearest_in_subtree(
+                let nearest_pref = self.nearest_in_subtree(
                     subtrees.0,
                     pt,
-                    dist,
                     idx + offsets.0,
-                    max_dist,
                     exclude,
                     cached_dist,
                 );
                 nearest = Self::nearer(nearest, nearest_pref);
                 let possibly_in_less_promising =
-                    (d - children.radius).abs() <= max_dist;
+                    (d - children.radius).abs() <= self.max_dist;
                 if !possibly_in_less_promising {
                     return nearest;
                 }
@@ -358,12 +356,10 @@ impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
                 trace!(
                     "Looking for nearest neighbour in less promising region"
                 );
-                let nearest_other = Self::nearest_in_subtree(
+                let nearest_other = self.nearest_in_subtree(
                     subtrees.1,
                     pt,
-                    dist,
                     idx + offsets.1,
-                    max_dist,
                     exclude,
                     cached_dist,
                 );
@@ -393,8 +389,7 @@ impl<'x, P: Copy + Hash + Eq + 'x> VPTree<P> {
 
 pub struct NearestNeighbourIter<'a, P: Hash + Eq, DF> {
     pt: P,
-    dist: DF,
-    tree: &'a VPTree<P>,
+    tree: &'a VPTree<P, DF>,
     exclude: HashSet<P>,
     distance_cache: HashMap<P, N64>,
 }
@@ -409,8 +404,6 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let res = self.tree.nearest_in_impl(
             &self.pt,
-            &self.dist,
-            self.tree.max_dist,
             &self.exclude,
             &mut self.distance_cache,
         );
