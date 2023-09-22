@@ -9,6 +9,7 @@ use particle_id::{
     sm_elementary_particles::{bottom, electron, gluon, muon, photon},
     ParticleID,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -17,6 +18,7 @@ use crate::{
 };
 
 /// Default clustering of particles into infrared safe objects
+#[derive(Deserialize, Serialize)]
 #[derive(Clone, Debug)]
 pub struct DefaultClustering {
     jet_def: JetDefinition,
@@ -200,6 +202,7 @@ impl FromStr for JetAlgorithm {
 }
 
 /// Jet clustering algorithms
+#[derive(Deserialize, Serialize)]
 #[derive(Debug, Copy, Clone)]
 pub enum JetAlgorithm {
     /// The [anti-kt](https://arxiv.org/abs/0802.1189) algorithm
@@ -211,6 +214,7 @@ pub enum JetAlgorithm {
 }
 
 /// Definition of a jet
+#[derive(Deserialize, Serialize)]
 #[derive(Debug, Copy, Clone)]
 pub struct JetDefinition {
     /// Jet algorithm
@@ -222,6 +226,7 @@ pub struct JetDefinition {
 }
 
 /// Definition of an isolated object
+#[derive(Deserialize, Serialize)]
 #[derive(Debug, Copy, Clone)]
 pub struct PhotonDefinition {
     /// Minimum energy fraction

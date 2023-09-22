@@ -9,6 +9,7 @@ use itertools::Itertools;
 use noisy_float::prelude::*;
 use pathfinding::prelude::{kuhn_munkres_min, Weights};
 use permutohedron::LexicalPermutation;
+use serde::{Deserialize, Serialize};
 
 /// A metric (distance function) in the space of all events
 pub trait Distance<E = Event> {
@@ -26,6 +27,7 @@ where
 }
 
 /// The distance function defined in [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
+#[derive(Deserialize, Serialize)]
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct EuclWithScaledPt {
     pt_weight: N64,
@@ -166,6 +168,7 @@ fn pt_dist_sq(p: &FourVector, q: &FourVector, pt_weight: N64) -> N64 {
 }
 
 /// Wrapper around distances storing also the events
+#[derive(Debug)]
 pub struct DistWrapper<'a, 'b, D: Distance> {
     ev_dist: &'a D,
     events: &'b [Event],

@@ -1,10 +1,12 @@
 use jetty::PseudoJet;
 use noisy_float::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// A basic four-vector
 ///
 /// The zero component is the energy/time component. The remainder are
 /// the spatial components
+#[derive(Deserialize, Serialize)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Default)]
 pub struct FourVector {
     pt: N64,

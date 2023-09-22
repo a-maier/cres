@@ -6,6 +6,7 @@ use std::{
 
 use audec::auto_decompress;
 use log::debug;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
@@ -516,6 +517,7 @@ pub enum EventRecord {
 }
 
 /// Converter from event records to internal event format
+#[derive(Deserialize, Serialize)]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Converter {
     #[cfg(feature = "multiweight")]

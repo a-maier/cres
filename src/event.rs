@@ -8,6 +8,7 @@ use derivative::Derivative;
 use noisy_float::prelude::*;
 use parking_lot::RwLock;
 use particle_id::ParticleID;
+use serde::{Deserialize, Serialize};
 
 /// Particle momenta
 pub type MomentumSet = Box<[FourVector]>;
@@ -115,6 +116,7 @@ fn compress_outgoing(
 }
 
 /// A Monte Carlo scattering event
+#[derive(Deserialize, Serialize)]
 #[derive(Debug, Default, Derivative)]
 #[derivative(PartialEq, Eq, Ord)]
 pub struct Event {
@@ -189,10 +191,12 @@ impl Event {
 
 /// Event weights
 #[cfg(feature = "multiweight")]
+#[derive(Deserialize, Serialize)]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Weights(Box<[N64]>);
 /// Event weights
 #[cfg(not(feature = "multiweight"))]
+#[derive(Deserialize, Serialize)]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Weights(N64);
 
