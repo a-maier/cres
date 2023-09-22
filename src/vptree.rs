@@ -82,6 +82,14 @@ where
     where
         I: IntoIterator<Item = P>,
     {
+        Self::from_iter_with_dist_and_depth(iter, dist, usize::MAX)
+    }
+
+    /// Construct the first `depth` layers of a vantage-point tree
+    pub fn from_iter_with_dist_and_depth<I>(iter: I, dist: DF, depth: usize) -> Self
+    where
+        I: IntoIterator<Item = P>,
+    {
         let mut nodes = Vec::from_iter(iter.into_iter().map(|vantage_pt| {
             // reserve first element for storing distances
             (
@@ -101,7 +109,7 @@ where
             let last_idx = nodes.len() - 1;
             nodes.swap(pos, last_idx)
         }
-        Self::build_tree(nodes.as_mut_slice(), &dist);
+        Self::build_tree(nodes.as_mut_slice(), &dist, depth);
         let nodes = nodes.into_iter().map(|(_d, n)| n).collect();
         Self {
             nodes,
@@ -147,8 +155,8 @@ where
     //    "outside" set. Build vantage point trees for each of the two
     //    sets.
     //
-    fn build_tree(pts: &mut [(N64, Node<P>)], dist: &DF) {
-        if pts.len() < 2 {
+    fn build_tree(pts: &mut [(N64, Node<P>)], dist: &DF, depth: usize) {
+        if pts.len() < 2 || depth == 0 {
             return;
         }
         // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
@@ -166,8 +174,8 @@ where
             radius: outside.first().unwrap().0,
             outside_offset: median_idx,
         });
-        Self::build_tree(inside, dist);
-        Self::build_tree(outside, dist);
+        Self::build_tree(inside, dist, depth - 1);
+        Self::build_tree(outside, dist, depth - 1);
     }
 }
 
@@ -178,6 +186,14 @@ where
 {
     /// Construct a vantage-point tree from the given nodes and distance
     pub fn from_par_iter_with_dist<I>(iter: I, dist: DF) -> Self
+    where
+        I: ParallelIterator<Item = P>,
+    {
+        Self::from_par_iter_with_dist_and_depth(iter, dist, usize::MAX)
+    }
+
+    /// Construct the first `depth` layers of a vantage-point tree
+    pub fn from_par_iter_with_dist_and_depth<I>(iter: I, dist: DF, depth: usize) -> Self
     where
         I: ParallelIterator<Item = P>,
     {
@@ -209,7 +225,7 @@ where
             let last_idx = nodes.len() - 1;
             nodes.swap(pos, last_idx)
         }
-        Self::par_build_tree(nodes.as_mut_slice(), &dist);
+        Self::par_build_tree(nodes.as_mut_slice(), &dist, depth);
         let nodes = nodes.into_par_iter().map(|(_d, n)| n).collect();
         Self {
             nodes,
@@ -231,10 +247,13 @@ where
         }
     }
 
-    fn par_build_tree(pts: &mut [(N64, Node<P>)], dist: &DF) {
+    fn par_build_tree(pts: &mut [(N64, Node<P>)], dist: &DF, depth: usize) {
         const PAR_MIN_SIZE: usize = 1_000;
+        if depth == 0 {
+            return;
+        }
         if pts.len() < PAR_MIN_SIZE {
-            return Self::build_tree(pts, dist);
+            return Self::build_tree(pts, dist, depth);
         }
         // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
         pts.swap(0, pts.len() - 1);
@@ -251,7 +270,7 @@ where
         });
         [inside, outside]
             .into_par_iter()
-            .for_each(|region| Self::par_build_tree(region, dist));
+            .for_each(|region| Self::par_build_tree(region, dist, depth - 1));
     }
 }
 
