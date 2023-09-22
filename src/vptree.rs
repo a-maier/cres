@@ -1,5 +1,5 @@
 use std::cmp::{PartialEq, PartialOrd};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::default::Default;
 use std::hash::Hash;
 use std::iter::{FromIterator, Iterator};
@@ -8,6 +8,7 @@ use log::{debug, trace};
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 
+use crate::partition::{VPTreePartition, VPBisection};
 use crate::traits::Distance;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
@@ -412,5 +413,34 @@ where
             self.exclude.insert(pt);
         }
         res
+    }
+}
+
+impl<P: Default, DF: Distance<P>> From<VPTree<P, DF>> for VPTreePartition<P, DF> {
+    fn from(source: VPTree<P, DF>) -> Self {
+        let VPTree { mut nodes, dist, max_dist: _ } = source;
+        let mut vp = Vec::new();
+        if nodes.is_empty() {
+            // Safety: an empty partitioning is always safe
+            return unsafe {
+                Self::from_vp(vp, dist)
+            };
+        }
+        let mut node_queue = VecDeque::from([0]);
+        while let Some(node_idx) = node_queue.pop_front() {
+            let node = std::mem::take(&mut nodes[node_idx]);
+            if let Some(children) = node.children {
+                let pt = node.vantage_pt;
+                let r = children.radius;
+                vp.push(VPBisection { pt, r });
+                let inside_idx = node_idx + 1;
+                node_queue.push_back(inside_idx);
+                node_queue.push_back(inside_idx + children.outside_offset);
+            }
+        }
+        // Safety: by construction of the vantage-point tree
+        unsafe {
+            Self::from_vp(vp, dist)
+        }
     }
 }

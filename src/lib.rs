@@ -52,6 +52,8 @@ pub mod neighbour_search;
 /// ntuple interface
 #[cfg(feature = "ntuple")]
 pub mod ntuple;
+/// Phase-space partitions
+pub mod partition;
 /// Most important exports
 pub mod prelude;
 /// Progress bar
