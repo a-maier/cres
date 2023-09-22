@@ -11,6 +11,7 @@ use rayon::prelude::*;
 use crate::partition::{VPTreePartition, VPBisection};
 use crate::traits::Distance;
 
+/// A vantage-point tree
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct VPTree<P, DF> {
     nodes: Vec<Node<P>>,
@@ -388,6 +389,7 @@ impl<'x, P: Copy + Hash + Eq + 'x, DF: Distance<P>> VPTree<P, DF> {
     }
 }
 
+/// Iterator over nearest neighbours
 pub struct NearestNeighbourIter<'a, P: Hash + Eq, DF> {
     pt: P,
     tree: &'a VPTree<P, DF>,

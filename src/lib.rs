@@ -71,10 +71,11 @@ pub mod stripper_xml;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
+/// Vantage-point tree
+pub mod vptree;
 
 mod parsing;
 mod util;
-mod vptree;
 
 use lazy_static::lazy_static;
 
