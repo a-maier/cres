@@ -14,16 +14,13 @@ pub trait Rewind {
     fn rewind(&mut self) -> Result<(), Self::Error>;
 }
 
-/// Convert between two types
-///
-/// In contrast to [std::convert::TryFrom] the converter can maintain
-/// internal state.
-pub trait TryConvert<From, To> {
-    /// Conversion error
+/// Express event in terms of IRC safe objects
+pub trait Cluster {
+    /// Error
     type Error;
 
-    /// Convert between two types
-    fn try_convert(&mut self, f: From) -> Result<To, Self::Error>;
+    /// Express event in terms of IRC safe objects
+    fn cluster(&mut self, ev: Event) -> Result<Event, Self::Error>;
 }
 
 /// Resample events

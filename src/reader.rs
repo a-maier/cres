@@ -5,11 +5,10 @@ use std::{
 };
 
 use audec::auto_decompress;
-use hepmc2::reader::LineParseError;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, traits::Rewind, util::trim_ascii_start};
+use crate::{file::File, traits::Rewind, util::trim_ascii_start, event::Event};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -29,7 +28,7 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<avery::Event, EventReadError>;
+    type Item = Result<Event, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -139,9 +138,9 @@ pub enum RewindError {
 /// Error reading an event
 #[derive(Debug, Error)]
 pub enum EventReadError {
-    /// Error reading a HepMC event
-    #[error("Error reading HepMC record")]
-    HepMCError(#[from] LineParseError),
+    // /// Error reading an event
+    // #[error("Error reading HepMC record")]
+    // HepMCError(#[from] ),
     #[cfg(feature = "ntuple")]
     /// Error reading a ROOT ntuple event
     #[error("Error reading ntuple event")]
@@ -258,7 +257,7 @@ impl CombinedReader<FileReader> {
 
 /// Reader from an event file
 pub trait EventFileReader:
-    Iterator<Item = Result<avery::Event, EventReadError>>
+    Iterator<Item = Result<Event, EventReadError>>
     + Rewind<Error = RewindError>
 {
 }

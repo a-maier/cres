@@ -10,7 +10,6 @@ use crate::event::{Event, EventBuilder};
 use crate::traits::TryConvert;
 
 use jetty::PseudoJet;
-use avery::event::Status;
 use noisy_float::prelude::*;
 use particle_id::ParticleID;
 use thiserror::Error;

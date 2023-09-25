@@ -13,7 +13,6 @@ use crate::opt_cres_validate::validate;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use cres::converter::ClusteringConverter;
 use cres::reader::CombinedReader;
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
@@ -113,7 +112,7 @@ where
 
     let mut cres = CresBuilder {
         reader,
-        converter,
+        clustering: converter,
         resampler,
         unweighter,
         writer,

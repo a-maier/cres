@@ -61,7 +61,7 @@ pub struct CresBuilder<R, C, S, U, W> {
     /// Read in events
     pub reader: R,
     /// Convert events into the internal format
-    pub converter: C,
+    pub clustering: C,
     /// Resample events
     pub resampler: S,
     /// Unweight events
@@ -75,7 +75,7 @@ impl<R, C, S, U, W> CresBuilder<R, C, S, U, W> {
     pub fn build(self) -> Cres<R, C, S, U, W> {
         Cres {
             reader: self.reader,
-            converter: self.converter,
+            clustering: self.clustering,
             resampler: self.resampler,
             unweighter: self.unweighter,
             writer: self.writer,
@@ -87,7 +87,7 @@ impl<R, C, S, U, W> From<Cres<R, C, S, U, W>> for CresBuilder<R, C, S, U, W> {
     fn from(b: Cres<R, C, S, U, W>) -> Self {
         CresBuilder {
             reader: b.reader,
-            converter: b.converter,
+            clustering: b.clustering,
             resampler: b.resampler,
             unweighter: b.unweighter,
             writer: b.writer,
@@ -99,7 +99,7 @@ impl<R, C, S, U, W> From<Cres<R, C, S, U, W>> for CresBuilder<R, C, S, U, W> {
 #[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Cres<R, C, S, U, W> {
     reader: R,
-    converter: C,
+    clustering: C,
     resampler: S,
     unweighter: U,
     writer: W,
@@ -120,9 +120,9 @@ pub enum CresError<E1, E2, E3, E4, E5, E6> {
     /// Error rewinding the event reader
     #[error("Failed to rewind reader")]
     RewindErr(#[source] E2),
-    /// Error converting an event to the internal format
-    #[error("Failed to convert event")]
-    ConversionErr(#[source] E3),
+    /// Error clustering event
+    #[error("Failed to cluster event")]
+    ClusterErr(#[source] E3),
     /// Error encountered during resampling
     #[error("Resampling error")]
     ResamplingErr(#[source] E4),
@@ -137,10 +137,10 @@ pub enum CresError<E1, E2, E3, E4, E5, E6> {
     IdErr(usize),
 }
 
-impl<R, C, S, U, W, E, Ev> Cres<R, C, S, U, W>
+impl<R, C, S, U, W, E> Cres<R, C, S, U, W>
 where
-    R: Iterator<Item = Result<Ev, E>> + Rewind,
-    C: TryConvert<Ev, Event>,
+    R: Iterator<Item = Result<Event, E>> + Rewind,
+    C: Cluster,
     S: Resample,
     U: Unweight,
     W: Write<R>,
@@ -171,7 +171,7 @@ where
 
         self.reader.rewind().map_err(RewindErr)?;
 
-        let converter = &mut self.converter;
+        let clustering = &mut self.clustering;
         let expected_nevents = self.reader.size_hint().0;
         let event_progress = if expected_nevents > 0 {
             ProgressBar::new(expected_nevents as u64, "events read")
@@ -181,7 +181,7 @@ where
         };
         let events: Result<Vec<_>, _> = (&mut self.reader)
             .map(|ev| match ev {
-                Ok(ev) => converter.try_convert(ev).map_err(ConversionErr),
+                Ok(ev) => clustering.cluster(ev).map_err(ClusterErr),
                 Err(err) => Err(ReadErr(err)),
             })
             .inspect(|_| event_progress.inc(1))
@@ -221,8 +221,9 @@ where
             -sum_neg_wt / (sum_wt - sum_neg_wt * 2.)
         );
 
-        self.reader.rewind().map_err(RewindErr)?;
-        let reader = &mut self.reader;
-        self.writer.write(reader, &events).map_err(WriteErr)
+        // self.reader.rewind().map_err(RewindErr)?;
+        // let reader = &mut self.reader;
+        // self.writer.write(reader, &events).map_err(WriteErr)
+        Ok(())
     }
 }

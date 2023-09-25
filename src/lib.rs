@@ -38,8 +38,6 @@ pub mod cell_collector;
 pub mod cluster;
 /// Output compression
 pub mod compression;
-/// Conversion between input events and internal format
-pub mod converter;
 pub mod cres;
 /// Distance functions
 pub mod distance;

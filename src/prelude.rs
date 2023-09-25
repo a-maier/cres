@@ -1,5 +1,4 @@
 pub use crate::{
-    converter::{ClusteringConverter, Converter},
     cres::{Cres, CresBuilder},
     reader::{CombinedReader, FileReader},
     resampler::ResamplerBuilder,
