@@ -195,11 +195,11 @@ fn extract_weights(record: &str) -> Result<(f64, Vec<f64>, &str), HepMCError> {
     let (rest, _) = count(any_entry, nrandom_states as usize)(rest)?;
     let (rest, nweights) = u32_entry(rest)?;
     let res = if cfg!(feature = "multiweight") {
-        let (rest, weight) = double_entry(rest)?;
-        (weight, vec![], rest)
-    } else {
         let (rest, weights) = count(double_entry, nweights as usize)(rest)?;
         (weights[0], weights, rest)
+    } else {
+        let (rest, weight) = double_entry(rest)?;
+        (weight, vec![], rest)
     };
     Ok(res)
 }
