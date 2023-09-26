@@ -1,6 +1,7 @@
 use std::io::{BufRead, BufReader, Seek};
 
 use audec::auto_decompress;
+use log::trace;
 use noisy_float::prelude::*;
 use nom::{multi::count, character::complete::{char, i32, space1, u32}, sequence::{preceded, delimited}, number::complete::double, IResult, bytes::complete::{take_until, take_while1}};
 use particle_id::ParticleID;
@@ -22,20 +23,26 @@ impl FileReader {
     /// Construct a reader for the given (potentially compressed) HepMC2 event file
     pub fn new(source: File) -> Result<Self, std::io::Error> {
         let cloned_source = source.try_clone()?;
-        let mut buf = auto_decompress(BufReader::new(cloned_source));
-        // read until start of first event
-        let mut dump = Vec::new();
-        while !dump.ends_with(b"\nE") {
-            dump.clear();
-            if buf.read_until(b'E', &mut dump)? == 0 {
-                break;
-            }
-        }
+        let mut buf = init_buf(cloned_source)?;
         Ok(FileReader {
             source,
             buf,
         })
     }
+}
+
+fn init_buf(source: File) -> Result<Box<dyn BufRead>, std::io::Error> {
+    let mut buf = auto_decompress(BufReader::new(source));
+
+    // read until start of first event
+    let mut dump = Vec::new();
+    while !dump.ends_with(b"\nE") {
+        dump.clear();
+        if buf.read_until(b'E', &mut dump)? == 0 {
+            break;
+        }
+    }
+    Ok(buf)
 }
 
 impl Rewind for FileReader {
@@ -45,7 +52,7 @@ impl Rewind for FileReader {
         use RewindError::*;
         self.source.rewind()?;
         let cloned_source = self.source.try_clone().map_err(CloneError)?;
-        self.buf = auto_decompress(BufReader::new(cloned_source));
+        self.buf = init_buf(cloned_source)?;
 
         Ok(())
     }
@@ -56,7 +63,9 @@ impl Iterator for FileReader {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut record = vec![b'E'];
+        assert!(record.starts_with(b"E"));
         while !record.ends_with(b"\nE") {
+            assert!(record.starts_with(b"E"));
             match self.buf.read_until(b'E', &mut record) {
                 Ok(0) => return None,
                 Ok(_) => {},
@@ -64,7 +73,10 @@ impl Iterator for FileReader {
             }
         }
         record.truncate(record.len() - 2);
-        Some(Ok(EventRecord::HepMC(String::from_utf8(record).unwrap())))
+        let record = String::from_utf8(record).unwrap();
+        assert!(record.starts_with("E"));
+        trace!("Read HepMC record:\n{record}");
+        Some(Ok(EventRecord::HepMC(record)))
     }
 }
 
@@ -155,14 +167,14 @@ fn parse_units_line(record: &str) -> Result<(EnergyUnit, &str), HepMCError> {
 fn parse_particle_line<'a>(record: &'a str, event: &mut EventBuilder) -> Result<&'a str, HepMCError> {
     const HEPMC_OUTGOING: i32 = 1;
 
-    debug_assert!(record.starts_with('E'));
+    debug_assert!(record.starts_with('P'));
     let (rest, _barcode) = any_entry(&record[1..])?;
     let (rest, id) = i32_entry(rest)?;
     let (rest, px) = double_entry(rest)?;
     let (rest, py) = double_entry(rest)?;
     let (rest, pz) = double_entry(rest)?;
     let (rest, e) = double_entry(rest)?;
-    let (rest, m) = any_entry(rest)?;
+    let (rest, _m) = any_entry(rest)?;
     let (rest, status) = i32_entry(rest)?;
     if status != HEPMC_OUTGOING {
         return Ok(rest);
