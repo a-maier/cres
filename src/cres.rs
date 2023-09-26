@@ -53,15 +53,18 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::progress_bar::ProgressBar;
+use crate::reader::EventRecord;
 use crate::traits::*;
 
 /// Build a new [Cres] object
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct CresBuilder<R, C, S, U, W> {
+pub struct CresBuilder<R, C, Cl, S, U, W> {
     /// Read in events
     pub reader: R,
     /// Convert events into the internal format
-    pub clustering: C,
+    pub converter: C,
+    /// Cluster outgoing particles into IRC safe objects
+    pub clustering: Cl,
     /// Resample events
     pub resampler: S,
     /// Unweight events
@@ -70,11 +73,12 @@ pub struct CresBuilder<R, C, S, U, W> {
     pub writer: W,
 }
 
-impl<R, C, S, U, W> CresBuilder<R, C, S, U, W> {
+impl<R, C, Cl, S, U, W> CresBuilder<R, C, Cl, S, U, W> {
     /// Construct a [Cres] object
-    pub fn build(self) -> Cres<R, C, S, U, W> {
+    pub fn build(self) -> Cres<R, C, Cl, S, U, W> {
         Cres {
             reader: self.reader,
+            converter: self.converter,
             clustering: self.clustering,
             resampler: self.resampler,
             unweighter: self.unweighter,
@@ -83,10 +87,11 @@ impl<R, C, S, U, W> CresBuilder<R, C, S, U, W> {
     }
 }
 
-impl<R, C, S, U, W> From<Cres<R, C, S, U, W>> for CresBuilder<R, C, S, U, W> {
-    fn from(b: Cres<R, C, S, U, W>) -> Self {
+impl<R, C, Cl, S, U, W> From<Cres<R, C, Cl, S, U, W>> for CresBuilder<R, C, Cl, S, U, W> {
+    fn from(b: Cres<R, C, Cl, S, U, W>) -> Self {
         CresBuilder {
             reader: b.reader,
+            converter: b.converter,
             clustering: b.clustering,
             resampler: b.resampler,
             unweighter: b.unweighter,
@@ -97,53 +102,58 @@ impl<R, C, S, U, W> From<Cres<R, C, S, U, W>> for CresBuilder<R, C, S, U, W> {
 
 /// Main cell resampler
 #[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
-pub struct Cres<R, C, S, U, W> {
+pub struct Cres<R, C, Cl, S, U, W> {
     reader: R,
-    clustering: C,
+    converter: C,
+    clustering: Cl,
     resampler: S,
     unweighter: U,
     writer: W,
 }
 
-impl<R, C, S, U, W> From<CresBuilder<R, C, S, U, W>> for Cres<R, C, S, U, W> {
-    fn from(b: CresBuilder<R, C, S, U, W>) -> Self {
+impl<R, C, Cl, S, U, W> From<CresBuilder<R, C, Cl, S, U, W>> for Cres<R, C, Cl, S, U, W> {
+    fn from(b: CresBuilder<R, C, Cl, S, U, W>) -> Self {
         b.build()
     }
 }
 
 /// A cell resampling error
 #[derive(Debug, Error)]
-pub enum CresError<E1, E2, E3, E4, E5, E6> {
+pub enum CresError<E1, E2, E3, E4, E5, E6, E7> {
     /// Error reading an event
     #[error("Failed to read event")]
     ReadErr(#[source] E1),
     /// Error rewinding the event reader
     #[error("Failed to rewind reader")]
     RewindErr(#[source] E2),
+    /// Error converting event record
+    #[error("Failed to convert event record")]
+    ConversionErr(#[source] E3),
     /// Error clustering event
     #[error("Failed to cluster event")]
-    ClusterErr(#[source] E3),
+    ClusterErr(#[source] E4),
     /// Error encountered during resampling
     #[error("Resampling error")]
-    ResamplingErr(#[source] E4),
+    ResamplingErr(#[source] E5),
     /// Error encountered during unweighting
     #[error("Unweighting error")]
-    UnweightErr(#[source] E5),
+    UnweightErr(#[source] E6),
     /// Error writing resampled events
     #[error("Failed to write events")]
-    WriteErr(#[source] E6),
+    WriteErr(#[source] E7),
     /// Encountered event with invalid id
     #[error("Encountered event with non-zero id {0}")]
     IdErr(usize),
 }
 
-impl<R, C, S, U, W, E> Cres<R, C, S, U, W>
+impl<R, C, Cl, S, U, W, E> Cres<R, C, Cl, S, U, W>
 where
-    R: Iterator<Item = Result<Event, E>> + Rewind,
-    C: Cluster,
+    R: Iterator<Item = Result<EventRecord, E>> + Rewind,
+    C: TryConvert<EventRecord, Event>,
+    Cl: Clustering,
     S: Resample,
     U: Unweight,
-    W: Write<R>,
+    // W: Write<R>,
 {
     /// Run the cell resampler
     ///
@@ -162,9 +172,11 @@ where
             E,
             <R as Rewind>::Error,
             C::Error,
+            Cl::Error,
             S::Error,
             U::Error,
-            W::Error,
+            std::convert::Infallible
+            // W::Error,
         >,
     > {
         use CresError::*;
@@ -181,7 +193,10 @@ where
         };
         let events: Result<Vec<_>, _> = (&mut self.reader)
             .map(|ev| match ev {
-                Ok(ev) => clustering.cluster(ev).map_err(ClusterErr),
+                Ok(ev) => {
+                    let ev = self.converter.try_convert(ev).map_err(ConversionErr)?;
+                    clustering.cluster(ev).map_err(ClusterErr)
+                },
                 Err(err) => Err(ReadErr(err)),
             })
             .inspect(|_| event_progress.inc(1))

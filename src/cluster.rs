@@ -4,11 +4,161 @@ use std::{
 };
 
 use jetty::{anti_kt_f, cambridge_aachen_f, kt_f, Cluster, PseudoJet};
+use noisy_float::prelude::*;
 use particle_id::{
     sm_elementary_particles::{bottom, electron, gluon, muon, photon},
     ParticleID,
 };
 use thiserror::Error;
+
+use crate::{
+    event::{Event, EventBuilder},
+    four_vector::FourVector, traits::Clustering,
+};
+
+/// Default clustering of particles into infrared safe objects
+#[derive(Clone, Debug)]
+pub struct DefaultClustering {
+    jet_def: JetDefinition,
+    lepton_def: Option<JetDefinition>,
+    photon_def: Option<PhotonDefinition>,
+    include_neutrinos: bool,
+}
+
+impl DefaultClustering {
+    /// Construct a new converter using the given jet clustering
+    pub fn new(jet_def: JetDefinition) -> Self {
+        Self {
+            jet_def,
+            lepton_def: None,
+            photon_def: None,
+            include_neutrinos: false,
+        }
+    }
+
+    /// Enable lepton clustering
+    pub fn with_lepton_def(mut self, lepton_def: JetDefinition) -> Self {
+        self.lepton_def = Some(lepton_def);
+        self
+    }
+
+    /// Enable photon isolation
+    pub fn with_photon_def(mut self, photon_def: PhotonDefinition) -> Self {
+        self.photon_def = Some(photon_def);
+        self
+    }
+
+    /// Whether to include neutrinos in final event record
+    pub fn include_neutrinos(mut self, include: bool) -> Self {
+        self.include_neutrinos = include;
+        self
+    }
+
+    fn is_clustered_to_lepton(&self, id: ParticleID) -> bool {
+        self.lepton_def.is_some()
+            && (is_light_lepton(id.abs()) || is_photon(id))
+    }
+
+    fn is_isolated(
+        &self,
+        p: &FourVector,
+        event: &[(ParticleID, Box<[FourVector]>)],
+    ) -> bool {
+        let Some(photon_def) = self.photon_def.as_ref() else {
+            return false;
+        };
+        let photon_pt = p.pt();
+        // Check photon is sufficiently hard (above min_pt)
+        if photon_pt < photon_def.min_pt {
+            return false;
+        }
+        // Check photon is sufficiently isolated
+        let p = PseudoJet::from(p);
+        let mut cone_mom = PseudoJet::new();
+        for (e_id, particles) in event {
+            // ignore neutrinos/muons in isolation cone
+            if !e_id.abs().is_neutrino() && !is_muon(e_id.abs()) {
+                for &ep in particles.iter() {
+                    let ep = PseudoJet::from(ep);
+                    if ep.delta_r(&p) < photon_def.radius {
+                        cone_mom += ep;
+                    }
+                }
+            }
+        }
+        // remove momentum of the original photon particle from cone
+        cone_mom -= p;
+        // check photon is sufficiently hard compared to surrounding cone
+        let e_fraction = n64(photon_def.min_e_fraction);
+        let cone_et = (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
+        photon_pt > e_fraction * cone_et
+    }
+}
+
+impl Clustering for DefaultClustering {
+    type Error= std::convert::Infallible;
+
+    fn cluster(&self, mut orig_ev: Event) -> Result<Event, Self::Error> {
+        let id = orig_ev.id;
+        let weights = std::mem::take(&mut orig_ev.weights);
+        let mut outgoing = orig_ev.outgoing().to_owned();
+        let mut ev = EventBuilder::new();
+
+        let mut clustered_to_leptons = Vec::new();
+        let mut clustered_to_jets = Vec::new();
+
+        // treat photons
+        // TODO: debug_assert!(outgoing.is_sorted())
+        if let Ok(photon_pos) = outgoing.binary_search_by(|p| p.0.cmp(&photon)) {
+            for p in outgoing[photon_pos].1.iter() {
+                if self.is_isolated(p, outgoing.as_slice()) {
+                    ev.add_outgoing(PID_ISOLATED_PHOTON, *p);
+                } else if self.lepton_def.is_some() {
+                    clustered_to_leptons.push(p.into())
+                } else {
+                    ev.add_outgoing(photon, *p);
+                }
+            }
+            outgoing.swap_remove(photon_pos);
+        }
+
+        // treat all other particles
+        for (id, out) in outgoing {
+            if is_parton(id) || is_hadron(id.abs()) {
+                for p in out.into_iter() {
+                    clustered_to_jets.push(p.into());
+                }
+            } else if self.is_clustered_to_lepton(id) {
+                for p in out.into_iter() {
+                    clustered_to_leptons.push(p.into());
+                }
+            } else if self.include_neutrinos || !id.abs().is_neutrino() {
+                for p in out.into_iter() {
+                    ev.add_outgoing(id, *p);
+                }
+            }
+        }
+
+        // add jets
+        for jet in cluster(clustered_to_jets, &self.jet_def) {
+            ev.add_outgoing(PID_JET, jet.into());
+        }
+
+        // add dressed leptons
+        if let Some(lepton_def) = self.lepton_def.as_ref() {
+            for lepton in cluster(clustered_to_leptons, lepton_def) {
+                ev.add_outgoing(PID_DRESSED_LEPTON, lepton.into());
+            }
+        }
+
+        let mut ev = ev.build();
+        ev.weights = weights;
+        ev.id = id;
+        Ok(ev)
+    }
+}
+
+
 
 /// Placeholder for an unknown jet algorithm
 #[derive(Debug, Clone, Error)]
@@ -74,7 +224,7 @@ pub(crate) fn is_parton(id: ParticleID) -> bool {
 }
 
 pub(crate) fn is_hadron(id: ParticleID) -> bool {
-    particle_id::hadrons::HADRONS.contains(&id)
+    particle_id::hadrons::HADRONS.contains(&id.abs())
 }
 
 pub(crate) fn is_light_lepton(id: ParticleID) -> bool {

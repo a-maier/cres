@@ -13,7 +13,8 @@ use crate::opt_cres_validate::validate;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use cres::reader::CombinedReader;
+use cres::cluster::DefaultClustering;
+use cres::reader::{CombinedReader, Converter};
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
 use cres::writer::FileWriter;
@@ -87,32 +88,30 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
-    #[cfg(feature = "multiweight")]
-    let weights: HashSet<_> = opt.weights.into_iter().collect();
-    let mut converter = ClusteringConverter::new(opt.jet_def.into())
+    let mut clustering = DefaultClustering::new(opt.jet_def.into())
         .include_neutrinos(opt.include_neutrinos);
-    #[cfg(feature = "multiweight")]
-    {
-        converter = converter.include_weights(weights.clone());
-    }
     if opt.lepton_def.leptonalgorithm.is_some() {
-        converter = converter.with_lepton_def(opt.lepton_def.into())
+        clustering = clustering.with_lepton_def(opt.lepton_def.into())
     }
     if opt.photon_def.photonradius.is_some() {
-        converter = converter.with_photon_def(opt.photon_def.into())
+        clustering = clustering.with_photon_def(opt.photon_def.into())
     }
+    #[cfg(feature = "multiweight")]
+    let converter = Converter::with_weights(opt.weights);
+    #[cfg(not(feature = "multiweight"))]
+    let converter = Converter::new();
+
     let writer = FileWriter::builder()
         .filename(opt.outfile.clone())
         .format(opt.outformat.into())
         .compression(opt.compression)
         .cell_collector(cell_collector);
-    #[cfg(feature = "multiweight")]
-    let writer = writer.overwrite_weights(weights);
     let writer = writer.build();
 
     let mut cres = CresBuilder {
         reader,
-        clustering: converter,
+        converter,
+        clustering,
         resampler,
         unweighter,
         writer,

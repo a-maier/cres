@@ -15,12 +15,12 @@ pub trait Rewind {
 }
 
 /// Express event in terms of IRC safe objects
-pub trait Cluster {
+pub trait Clustering {
     /// Error
     type Error;
 
     /// Express event in terms of IRC safe objects
-    fn cluster(&mut self, ev: Event) -> Result<Event, Self::Error>;
+    fn cluster(&self, ev: Event) -> Result<Event, Self::Error>;
 }
 
 /// Convert between two types

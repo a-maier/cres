@@ -1,3 +1,4 @@
+use jetty::PseudoJet;
 use noisy_float::prelude::*;
 
 /// A basic four-vector
@@ -101,5 +102,23 @@ impl std::ops::Sub for FourVector {
     fn sub(mut self, rhs: FourVector) -> Self::Output {
         self -= rhs;
         self
+    }
+}
+
+impl From<PseudoJet> for FourVector {
+    fn from(p: PseudoJet) -> Self {
+        [p.e(), p.px(), p.py(), p.pz()].into()
+    }
+}
+
+impl From<FourVector> for PseudoJet {
+    fn from(p: FourVector) -> Self {
+        (&p).into()
+    }
+}
+
+impl From<&FourVector> for PseudoJet {
+    fn from(p: &FourVector) -> Self {
+        [p[0], p[1], p[2], p[3]].into()
     }
 }
