@@ -67,7 +67,11 @@ impl Iterator for FileReader {
         while !record.ends_with(b"\nE") {
             assert!(record.starts_with(b"E"));
             match self.buf.read_until(b'E', &mut record) {
-                Ok(0) => return None,
+                Ok(0) => if record.len() > 1 {
+                    break;
+                } else {
+                    return None;
+                },
                 Ok(_) => {},
                 Err(err) => return Some(Err(HepMCError::from(err).into())),
             }
