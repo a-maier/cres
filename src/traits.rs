@@ -23,6 +23,18 @@ pub trait Cluster {
     fn cluster(&mut self, ev: Event) -> Result<Event, Self::Error>;
 }
 
+/// Convert between two types
+///
+/// In contrast to [std::convert::TryFrom] the converter can maintain
+/// internal state.
+pub trait TryConvert<From, To> {
+    /// Conversion error
+     type Error;
+
+    /// Convert between two types
+    fn try_convert(&self, f: From) -> Result<To, Self::Error>;
+}
+
 /// Resample events
 pub trait Resample {
     /// Resampling error

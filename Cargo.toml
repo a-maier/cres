@@ -33,6 +33,7 @@ logbar = "0.1"
 lz4 = "1.23"
 memchr = { version = "2.5", optional = true }
 noisy_float = "0.2"
+nom = "7.1"
 num-traits = "0.2"
 parking_lot = "0.12"
 particle_id = "0.4"

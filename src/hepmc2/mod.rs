@@ -3,6 +3,5 @@ pub mod reader;
 // /// Writer to HepMC 2 format
 // pub mod writer;
 
-/// Read events from one or more inputs in HepMC 2 format
-pub use reader::FileReader;
+pub use reader::{FileReader, HepMCError};
 // pub use writer::Writer;

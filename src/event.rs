@@ -58,10 +58,24 @@ impl EventBuilder {
         self
     }
 
-    /// Set the event weights
-    pub fn weights(&mut self, weights: BuilderWeights) -> &mut Self {
-        self.weights = weights;
+    /// Add an event weight
+    ///
+    /// Overwrite the existing weight if the multiweight feature is disabled
+    pub fn add_weight(&mut self, weight: N64) -> &mut Self {
+        #[cfg(feature = "multiweight")]
+        self.weights.push(weight);
+        #[cfg(not(feature = "multiweight"))]
+        {
+            self.weights = weight;
+        }
         self
+    }
+
+    /// Rescale all energies and momenta
+    pub fn rescale_energies(&mut self, scale: N64) {
+        for (_, p) in &mut self.outgoing_by_pid {
+            *p = [scale * p[0], scale * p[1], scale * p[2], scale * p[3]].into();
+        }
     }
 
     /// Construct an event

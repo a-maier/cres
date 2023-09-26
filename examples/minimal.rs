@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut cres = CresBuilder {
         reader,
-        converter,
+        clustering: converter,
         resampler,
         unweighter: NO_UNWEIGHTING, // disable unweighting
         writer,

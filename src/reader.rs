@@ -8,7 +8,7 @@ use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, traits::Rewind, util::trim_ascii_start, event::Event};
+use crate::{file::File, hepmc2::reader::HepMCParser, traits::{Rewind, TryConvert}, util::trim_ascii_start, event::Event};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -28,7 +28,7 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<Event, EventReadError>;
+    type Item = Result<EventRecord, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -138,9 +138,9 @@ pub enum RewindError {
 /// Error reading an event
 #[derive(Debug, Error)]
 pub enum EventReadError {
-    // /// Error reading an event
-    // #[error("Error reading HepMC record")]
-    // HepMCError(#[from] ),
+    /// Error reading an event
+    #[error("Error reading HepMC record")]
+    HepMCError(#[from] crate::hepmc2::HepMCError),
     #[cfg(feature = "ntuple")]
     /// Error reading a ROOT ntuple event
     #[error("Error reading ntuple event")]
@@ -257,7 +257,7 @@ impl CombinedReader<FileReader> {
 
 /// Reader from an event file
 pub trait EventFileReader:
-    Iterator<Item = Result<Event, EventReadError>>
+    Iterator<Item = Result<EventRecord, EventReadError>>
     + Rewind<Error = RewindError>
 {
 }
@@ -269,3 +269,52 @@ impl EventFileReader for crate::ntuple::Reader {}
 impl EventFileReader for crate::lhef::FileReader {}
 
 impl EventFileReader for crate::hepmc2::FileReader {}
+
+/// A bare-bones event record
+///
+/// The intent is to do the minimal amount of non-parallelisable work
+/// to extract the necessary information that can later be used to
+/// construct [Event] objects in parallel.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum EventRecord {
+    /// Bare HepMC event record
+    HepMC(String),
+}
+
+/// Converter from event records to internal event format
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct Converter {
+    #[cfg(feature = "multiweight")]
+    weight_names: Vec<String>,
+}
+
+impl Converter {
+    /// Construct new converter
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[cfg(feature = "multiweight")]
+    /// Construct converter including the given weights in the record
+    pub fn with_weights(weight_names: Vec<String>) -> Self {
+        Self {weight_names}
+    }
+
+    /// Access names of weights that should be converted
+    #[cfg(feature = "multiweight")]
+    pub fn weight_names(&self) -> &[String] {
+        self.weight_names.as_ref()
+    }
+}
+
+impl TryConvert<EventRecord, Event> for Converter {
+    type Error = EventReadError;
+
+    fn try_convert(&self, record: EventRecord) -> Result<Event, Self::Error> {
+        let event = match record {
+            EventRecord::HepMC(record) => self.parse_hepmc(&record)?,
+        };
+        Ok(event)
+    }
+}
