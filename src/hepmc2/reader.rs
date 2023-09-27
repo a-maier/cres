@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Seek};
+use std::io::{BufRead, BufReader, Seek, BufWriter, Write};
 
 use audec::auto_decompress;
 use log::trace;
@@ -9,8 +9,8 @@ use thiserror::Error;
 
 use crate::{
     file::File,
-    storage::{StorageError, RewindError, EventRecord, Converter},
-    traits::{Rewind, TryClone}, event::{Event, EventBuilder},
+    storage::{StorageError, EventRecord, Converter},
+    traits::{Rewind, TryClone}, event::{Event, EventBuilder, Weights},
 };
 
 /// Reader for a single (potentially compressed) HepMC2 event file
@@ -46,10 +46,10 @@ fn init_buf(source: File) -> Result<Box<dyn BufRead>, std::io::Error> {
 }
 
 impl Rewind for FileReader {
-    type Error = RewindError;
+    type Error = StorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        use RewindError::*;
+        use StorageError::*;
         self.source.rewind()?;
         let cloned_source = self.source.try_clone().map_err(CloneError)?;
         self.buf = init_buf(cloned_source)?;
@@ -107,10 +107,26 @@ pub enum HepMCError {
     WeightNotFound(String, String),
 }
 
+/// Parser for HepMC event records
 pub trait HepMCParser {
+    /// Error parsing HepMC event record
     type Error;
 
+    /// Parse HepMC event record
     fn parse_hepmc(&self, record: &str) -> Result<Event, Self::Error>;
+}
+
+/// Update weights in HepMC event record
+pub trait UpdateHepMCWeights {
+    /// Error updating weights in HepMC event record
+    type Error;
+
+    /// Update weights in HepMC event record
+    fn update_hepmc_weights(
+        record: &mut String,
+        weight_names: &[String],
+        weights: &Weights,
+    ) -> Result<(), Self::Error>;
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -160,6 +176,93 @@ impl HepMCParser for Converter {
     }
 }
 
+impl UpdateHepMCWeights for EventRecord {
+    type Error = HepMCError;
+
+    fn update_hepmc_weights(
+        record: &mut String,
+        _weight_names: &[String],
+        weights: &Weights,
+    ) -> Result<(), Self::Error> {
+        assert!(record.starts_with('E'));
+        let (weight_entries, _non_weight) = non_weight_entries(record)?;
+        let (rest, _nweights) = u32_entry(weight_entries)?;
+
+        let weights_start = record.len() - rest.len();
+        update_central_weight(record, weights_start, weights)?;
+
+        #[cfg(feature = "multiweight")]
+        update_named_weights(
+            record,
+            weights_start,
+            _nweights as usize,
+            _weight_names,
+            weights,
+        )?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "multiweight")]
+fn update_named_weights(
+    record: &mut String,
+    weights_start: usize,
+    nweights: usize,
+    weight_names: &[String],     // TODO: maybe a set is better
+    weights: &Weights
+) -> Result<(), HepMCError> {
+    assert_eq!(weights.len(), weight_names.len() + 1);
+
+    if weight_names.is_empty() {
+        return Ok(());
+    }
+    let start = record.find("\nN").unwrap();
+    let (names, nnames) = u32_entry(&record[(start + 1)..])?;
+    let mut weight_pos = Vec::with_capacity(weight_names.len());
+    let mut rest = names;
+    for nentry in 0..(nnames as usize) {
+        let name;
+        (rest, name) = string_entry(rest)?;
+        if weight_names.iter().any(|n| n == name) {
+            weight_pos.push(nentry);
+        }
+    }
+
+    let mut weight_entries = Vec::from_iter(
+        record[weights_start..]
+            .split_ascii_whitespace()
+            .take(nweights)
+            .map(|w| w.to_string())
+    );
+    for (idx, weight) in weight_pos.iter().zip(weights.iter().skip(1)) {
+        weight_entries[*idx] = weight.to_string();
+    }
+
+    // there are no entries in the E line after the weights, so this is safe
+    let line_end = record[weights_start..].find('\n').unwrap();
+    let end = weights_start + line_end;
+    record.replace_range(weights_start..end, &weight_entries.join(" "));
+    Ok(())
+}
+
+fn update_central_weight(
+    record: &mut String,
+    entry_pos: usize,
+    weights: &Weights,
+) -> Result<(), HepMCError> {
+    #[cfg(feature = "multiweight")]
+    let weight = weights[0];
+    #[cfg(not(feature = "multiweight"))]
+    let weight = weights;
+    let (_, weight_entry) = any_entry(&record[entry_pos..])?;
+    // +1 to ensure we skip one space
+    let start = entry_pos + 1;
+    let end = entry_pos + weight_entry.len();
+    record.replace_range(start..end, &weight.to_string());
+    Ok(())
+}
+
+
 fn parse_units_line(record: &str) -> Result<(EnergyUnit, &str), HepMCError> {
     debug_assert!(record.starts_with('U'));
     let (rest, energy) = any_entry(&record[1..])?;
@@ -195,11 +298,7 @@ fn extract_weights(record: &str) -> Result<(f64, Vec<f64>, &str), HepMCError> {
     if !record.starts_with('E') {
         return Err(HepMCError::BadRecordStart(record.to_owned()));
     }
-    // ignore first 10 entries
-    let (rest, _) = count(any_entry, 10)(&record[1..])?;
-    let (rest, nrandom_states) = u32_entry(rest)?;
-    // ignore random states
-    let (rest, _) = count(any_entry, nrandom_states as usize)(rest)?;
+    let (rest, _) = non_weight_entries(record)?;
     let (rest, nweights) = u32_entry(rest)?;
     let res = if cfg!(feature = "multiweight") {
         let (rest, weights) = count(double_entry, nweights as usize)(rest)?;
@@ -255,6 +354,17 @@ impl From<nom::Err<nom::error::Error<&str>>> for HepMCError {
     fn from(source: nom::Err<nom::error::Error<&str>>) -> Self {
         Self::ParseError(source.to_string())
     }
+}
+
+fn non_weight_entries(line: &str) -> IResult<&str, &str> {
+    debug_assert!(line.starts_with('E'));
+    // ignore first 10 entries
+    let (rest, _) = count(any_entry, 10)(&line[1..])?;
+    let (rest, nrandom_states) = u32_entry(rest)?;
+    // ignore random states
+    let (rest, _) = count(any_entry, nrandom_states as usize)(rest)?;
+    let (parsed, rest) = line.split_at(line.len() - rest.len());
+    Ok((rest, parsed))
 }
 
 fn double_entry(line: &str) -> IResult<&str, f64> {

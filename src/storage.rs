@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
 };
 
@@ -8,7 +8,7 @@ use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, hepmc2::reader::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}};
+use crate::{file::File, hepmc2::reader::{HepMCParser, UpdateHepMCWeights}, traits::{Rewind, TryConvert, UpdateWeights, WriteEvent}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -17,13 +17,16 @@ const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
 /// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
-pub struct FileStorage(Box<dyn EventFileStorage>);
+pub struct FileStorage{
+    reader: Box<dyn EventFileStorage>,
+    writer: Box<dyn WriteEvent<EventRecord, Error = std::io::Error>>,
+}
 
 impl Rewind for FileStorage {
-    type Error = RewindError;
+    type Error = StorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        self.0.rewind()
+        self.reader.rewind()
     }
 }
 
@@ -31,11 +34,11 @@ impl Iterator for FileStorage {
     type Item = Result<EventRecord, StorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+        self.reader.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
+        self.reader.size_hint()
     }
 }
 
@@ -52,14 +55,20 @@ impl FileStorage {
         _scaling: &HashMap<String, f64>, // only used in "stripper-xml" feature
     ) -> Result<FileStorage, CreateError> {
         use crate::hepmc2::FileReader as HepMCReader;
+        use crate::hepmc2::Writer as HepMCWriter;
+        let mut out = path.as_ref().as_os_str().to_os_string(); // TODO: path
+        out.push(".out");
+        let out = PathBuf::from(out);
         let file = File::open(&path)?;
         let mut r = auto_decompress(BufReader::new(file));
         let bytes = match r.fill_buf() {
             Ok(bytes) => bytes,
             Err(_) => {
                 let file = File::open(&path)?;
-                let reader = HepMCReader::new(file)?;
-                return Ok(FileStorage(Box::new(reader)));
+                let reader = Box::new(HepMCReader::new(file)?);
+                // TODO: compression
+                let writer = Box::new(HepMCWriter::try_new(out, None)?);
+                return Ok(FileStorage{reader, writer});
             }
         };
         if bytes.starts_with(&ROOT_MAGIC_BYTES) {
@@ -95,9 +104,11 @@ impl FileStorage {
             return Ok(FileStorage(Box::new(reader)));
         }
         debug!("Read {:?} as HepMC file", path.as_ref());
-        let file = File::open(path)?;
-        let reader = HepMCReader::new(file)?;
-        Ok(FileStorage(Box::new(reader)))
+        let file = File::open(&path)?;
+        let reader = Box::new(HepMCReader::new(file)?);
+        // TODO: compression
+        let writer = Box::new(HepMCWriter::try_new(out, None)?);
+        Ok(FileStorage{reader, writer})
     }
 }
 
@@ -124,20 +135,15 @@ pub enum CreateError {
     XMLError(PathBuf, #[source] crate::stripper_xml::reader::XMLError),
 }
 
-/// Error rewinding an event storage
+/// Error reading an event
 #[derive(Debug, Error)]
-pub enum RewindError {
+pub enum StorageError {
     /// I/O error
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
     /// Error cloning the underlying source
     #[error("Source clone error: {0}")]
     CloneError(std::io::Error),
-}
-
-/// Error reading an event
-#[derive(Debug, Error)]
-pub enum StorageError {
     /// Error reading an event
     #[error("Error reading HepMC record")]
     HepMCError(#[from] crate::hepmc2::HepMCError),
@@ -160,6 +166,7 @@ pub enum StorageError {
 pub struct CombinedStorage<R> {
     storage: Vec<R>,
     current: usize,
+    weight_names: Vec<String>,
 }
 
 impl<R> CombinedStorage<R> {
@@ -168,7 +175,12 @@ impl<R> CombinedStorage<R> {
         Self {
             storage,
             current: 0,
+            weight_names: Vec::new(),
         }
+    }
+
+    pub fn weight_names(&self) -> &[String] {
+        self.weight_names.as_ref()
     }
 }
 
@@ -259,7 +271,25 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
     type Error = StorageError;
 
     fn update_weights(&mut self, weights: &[Weights]) -> Result<(), Self::Error> {
-        todo!()
+        self.rewind()?;
+        let mut nevent = 0;
+        let weight_names = self.weight_names().to_owned();
+        let weight_names = &weight_names;
+        let progress = ProgressBar::new(weights.len() as u64, "events written:");
+        for source in &mut self.storage {
+            for record in &mut source.reader {
+                let mut record = record?;
+                record.update_weights(
+                    weight_names,
+                    &weights[nevent],
+                )?;
+                source.writer.write(record)?;
+                nevent += 1;
+                progress.inc(1);
+            }
+        }
+        progress.finish();
+        Ok(())
     }
 }
 
@@ -267,7 +297,7 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
 /// Reader from an event file
 pub trait EventFileStorage:
     Iterator<Item = Result<EventRecord, StorageError>>
-    + Rewind<Error = RewindError>
+    + Rewind<Error = StorageError>
 {
 }
 
@@ -289,6 +319,21 @@ impl EventFileStorage for crate::hepmc2::FileReader {}
 pub enum EventRecord {
     /// Bare HepMC event record
     HepMC(String),
+}
+impl EventRecord {
+    fn update_weights(
+        &mut self,
+        weight_names: &[String],
+        weights: &Weights
+    ) -> Result<(), StorageError> {
+        use EventRecord::*;
+        match self {
+            HepMC(ref mut record) => {
+                Self::update_hepmc_weights(record, weight_names, weights)?;
+            },
+        }
+        Ok(())
+    }
 }
 
 /// Converter from event records to internal event format
