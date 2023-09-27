@@ -102,6 +102,9 @@ pub enum HepMCError {
     /// Invalid energy unit
     #[error("Invalid energy unit: {0}")]
     InvalidEnergyUnit(String),
+    /// Weight not found
+    #[error("Failed to find weight\"{0}\": Event has weights {1}")]
+    WeightNotFound(String, String),
 }
 
 pub trait HepMCParser {
@@ -234,7 +237,18 @@ fn parse_weight_names_line<'a>(
             event.add_weight(n64(all_weights[i]));
         }
     }
-    Ok(record)
+    let missing =
+        weight_seen
+        .into_iter()
+        .find_map(|(name, seen)| if seen { None } else { Some(name) });
+    if let Some(missing) = missing {
+        Err(HepMCError::WeightNotFound(
+            missing.to_owned(),
+            names.to_owned(),
+        ))
+    } else {
+        Ok(record)
+    }
 }
 
 impl From<nom::Err<nom::error::Error<&str>>> for HepMCError {
