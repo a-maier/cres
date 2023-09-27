@@ -48,6 +48,7 @@ use std::iter::Iterator;
 
 use log::{info, trace};
 use noisy_float::prelude::*;
+use parking_lot::Mutex;
 use rayon::prelude::*;
 use thiserror::Error;
 
@@ -149,10 +150,16 @@ pub enum CresError<E1, E2, E3, E4, E5, E6, E7> {
 impl<R, C, Cl, S, U, W, E> Cres<R, C, Cl, S, U, W>
 where
     R: Iterator<Item = Result<EventRecord, E>> + Rewind,
-    C: TryConvert<EventRecord, Event>,
-    Cl: Clustering,
+    C: TryConvert<EventRecord, Event> + Sync,
+    Cl: Clustering + Sync,
     S: Resample,
     U: Unweight,
+    E: Send,
+    <R as Rewind>::Error: Send,
+    U::Error: Send,
+    S::Error: Send,
+    C::Error: Send,
+    Cl::Error: Send,
     // W: Write<R>,
 {
     /// Run the cell resampler
@@ -183,7 +190,6 @@ where
 
         self.reader.rewind().map_err(RewindErr)?;
 
-        let clustering = &mut self.clustering;
         let expected_nevents = self.reader.size_hint().0;
         let event_progress = if expected_nevents > 0 {
             ProgressBar::new(expected_nevents as u64, "events read")
@@ -191,26 +197,38 @@ where
             info!("Reading events");
             ProgressBar::default()
         };
-        let events: Result<Vec<_>, _> = (&mut self.reader)
-            .map(|ev| match ev {
-                Ok(ev) => {
-                    let ev = self.converter.try_convert(ev).map_err(ConversionErr)?;
-                    clustering.cluster(ev).map_err(ClusterErr)
-                },
-                Err(err) => Err(ReadErr(err)),
-            })
-            .inspect(|_| event_progress.inc(1))
-            .collect();
-        event_progress.finish();
-        let mut events = events?;
-
-        for (id, ev) in events.iter_mut().enumerate() {
-            if ev.id != 0 {
-                return Err(IdErr(ev.id));
-            }
-            ev.id = id;
-            trace!("{ev:#?}");
+        let events = Mutex::new(Vec::with_capacity(expected_nevents));
+        {
+            let converter = &self.converter;
+            let clustering = &self.clustering;
+            let events = &events;
+            let progress = &event_progress;
+            rayon::in_place_scope_fifo(|s| {
+                for (id, record) in (&mut self.reader).enumerate() {
+                    let record = record.map_err(ReadErr)?;
+                    s.spawn_fifo(move |_| {
+                        let ev = match converter.try_convert(record) {
+                            Ok(ev) => match clustering.cluster(ev) {
+                                Ok(mut ev) => if ev.id != 0 {
+                                    Err(IdErr(ev.id))
+                                } else {
+                                    ev.id = id;
+                                    Ok(ev)
+                                }
+                                Err(err) => Err(ClusterErr(err)),
+                            }
+                            Err(err) => Err(ConversionErr(err)),
+                        };
+                        events.lock().push(ev);
+                        progress.inc(1)
+                    });
+                }
+                Ok(())
+            })?;
         }
+        event_progress.finish();
+        let events: Result<Vec<_>, _> = events.into_inner().into_iter().collect();
+        let events = events?;
         info!("Read {} events", events.len());
 
         let events = self.resampler.resample(events).map_err(ResamplingErr)?;
