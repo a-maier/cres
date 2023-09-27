@@ -8,18 +8,18 @@ use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, hepmc2::reader::HepMCParser, traits::{Rewind, TryConvert}, util::trim_ascii_start, event::Event};
+use crate::{file::File, hepmc2::reader::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
-/// Reader for a single event file
+/// Event storage backed by a single event file
 ///
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
 /// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
-pub struct FileReader(Box<dyn EventFileReader>);
+pub struct FileStorage(Box<dyn EventFileStorage>);
 
-impl Rewind for FileReader {
+impl Rewind for FileStorage {
     type Error = RewindError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
@@ -27,7 +27,7 @@ impl Rewind for FileReader {
     }
 }
 
-impl Iterator for FileReader {
+impl Iterator for FileStorage {
     type Item = Result<EventRecord, EventReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -39,18 +39,18 @@ impl Iterator for FileReader {
     }
 }
 
-impl FileReader {
-    /// Returns an event reader for the file at `path`
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<FileReader, CreateError> {
+impl FileStorage {
+    /// Returns an event storage for the file at `path`
+    pub fn new<P: AsRef<Path>>(path: P) -> Result<FileStorage, CreateError> {
         Self::with_scaling(path, &HashMap::new())
     }
 
-    /// Returns an event reader for the file at `path`,
+    /// Returns an event storage for the file at `path`,
     /// with channel-dependent scaling factors for STRIPPER XML events
     pub fn with_scaling<P: AsRef<Path>>(
         path: P,
         _scaling: &HashMap<String, f64>, // only used in "stripper-xml" feature
-    ) -> Result<FileReader, CreateError> {
+    ) -> Result<FileStorage, CreateError> {
         use crate::hepmc2::FileReader as HepMCReader;
         let file = File::open(&path)?;
         let mut r = auto_decompress(BufReader::new(file));
@@ -59,7 +59,7 @@ impl FileReader {
             Err(_) => {
                 let file = File::open(&path)?;
                 let reader = HepMCReader::new(file)?;
-                return Ok(FileReader(Box::new(reader)));
+                return Ok(FileStorage(Box::new(reader)));
             }
         };
         if bytes.starts_with(&ROOT_MAGIC_BYTES) {
@@ -71,7 +71,7 @@ impl FileReader {
             {
                 debug!("Read {path:?} as ROOT ntuple");
                 let reader = crate::ntuple::Reader::new(path)?;
-                return Ok(FileReader(Box::new(reader)));
+                return Ok(FileStorage(Box::new(reader)));
             }
         } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
             let path = path.as_ref();
@@ -83,7 +83,7 @@ impl FileReader {
                 use crate::stripper_xml::FileReader as XMLReader;
                 let file = File::open(path)?;
                 let reader = XMLReader::new(file, _scaling)?;
-                return Ok(FileReader(Box::new(reader)));
+                return Ok(FileStorage(Box::new(reader)));
             }
         }
         #[cfg(feature = "lhef")]
@@ -92,16 +92,16 @@ impl FileReader {
             debug!("Read {:?} as LHEF file", path.as_ref());
             let file = File::open(path)?;
             let reader = LHEFReader::new(file)?;
-            return Ok(FileReader(Box::new(reader)));
+            return Ok(FileStorage(Box::new(reader)));
         }
         debug!("Read {:?} as HepMC file", path.as_ref());
         let file = File::open(path)?;
         let reader = HepMCReader::new(file)?;
-        Ok(FileReader(Box::new(reader)))
+        Ok(FileStorage(Box::new(reader)))
     }
 }
 
-/// Error creating an event reader
+/// Error creating an event storage
 #[derive(Debug, Error)]
 pub enum CreateError {
     /// I/O error
@@ -124,7 +124,7 @@ pub enum CreateError {
     XMLError(PathBuf, #[source] crate::stripper_xml::reader::XMLError),
 }
 
-/// Error rewinding an event reader
+/// Error rewinding an event storage
 #[derive(Debug, Error)]
 pub enum RewindError {
     /// I/O error
@@ -155,44 +155,44 @@ pub enum EventReadError {
     LHEFError(#[from] ::lhef::reader::ReadError),
 }
 
-/// Combined sequential reader from several sources (e.g. files)
+/// Combined storage from several sources (e.g. files)
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct CombinedReader<R> {
-    readers: Vec<R>,
+pub struct CombinedStorage<R> {
+    storage: Vec<R>,
     current: usize,
 }
 
-impl<R> CombinedReader<R> {
-    /// Combine multiple readers into a single one
-    pub fn new(readers: Vec<R>) -> Self {
+impl<R> CombinedStorage<R> {
+    /// Combine multiple event storages into a single one
+    pub fn new(storage: Vec<R>) -> Self {
         Self {
-            readers,
+            storage,
             current: 0,
         }
     }
 }
 
-impl<R: Rewind> Rewind for CombinedReader<R> {
+impl<R: Rewind> Rewind for CombinedStorage<R> {
     type Error = <R as Rewind>::Error;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        for reader in &mut self.readers[..=self.current] {
-            reader.rewind()?;
+        for storage in &mut self.storage[..=self.current] {
+            storage.rewind()?;
         }
         self.current = 0;
         Ok(())
     }
 }
 
-impl<R: Iterator> Iterator for CombinedReader<R> {
+impl<R: Iterator> Iterator for CombinedStorage<R> {
     type Item = <R as Iterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = self.readers[self.current].next();
+        let next = self.storage[self.current].next();
         if next.is_some() {
             return next;
         }
-        if self.current + 1 == self.readers.len() {
+        if self.current + 1 == self.storage.len() {
             return None;
         }
         self.current += 1;
@@ -200,7 +200,7 @@ impl<R: Iterator> Iterator for CombinedReader<R> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.readers[self.current..]
+        self.storage[self.current..]
             .iter()
             .map(|r| r.size_hint())
             .reduce(|(accmin, accmax), (min, max)| {
@@ -214,8 +214,8 @@ impl<R: Iterator> Iterator for CombinedReader<R> {
     }
 }
 
-impl CombinedReader<FileReader> {
-    /// Construct a new reader reading from the files with the given names
+impl CombinedStorage<FileStorage> {
+    /// Construct a new storage backed by the files with the given names
     pub fn from_files<I, P>(files: I) -> Result<Self, CreateError>
     where
         I: IntoIterator<Item = P>,
@@ -240,10 +240,10 @@ impl CombinedReader<FileReader> {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let readers: Result<_, _> = files
+        let storage: Result<_, _> = files
             .into_iter()
             .map(|f| {
-                FileReader::with_scaling(f.as_ref(), scaling).map_err(|err| {
+                FileStorage::with_scaling(f.as_ref(), scaling).map_err(|err| {
                     CreateError::FileError(
                         f.as_ref().to_path_buf(),
                         Box::new(err),
@@ -251,24 +251,33 @@ impl CombinedReader<FileReader> {
                 })
             })
             .collect();
-        Ok(Self::new(readers?))
+        Ok(Self::new(storage?))
     }
 }
 
+impl UpdateWeights for CombinedStorage<FileStorage> {
+    type Error = EventReadError;
+
+    fn update_weights(&mut self, weights: &[Weights]) -> Result<(), Self::Error> {
+        todo!()
+    }
+}
+
+
 /// Reader from an event file
-pub trait EventFileReader:
+pub trait EventFileStorage:
     Iterator<Item = Result<EventRecord, EventReadError>>
     + Rewind<Error = RewindError>
 {
 }
 
 #[cfg(feature = "ntuple")]
-impl EventFileReader for crate::ntuple::Reader {}
+impl EventFileStorage for crate::ntuple::Reader {}
 
 #[cfg(feature = "lhef")]
-impl EventFileReader for crate::lhef::FileReader {}
+impl EventFileStorage for crate::lhef::FileReader {}
 
-impl EventFileReader for crate::hepmc2::FileReader {}
+impl EventFileStorage for crate::hepmc2::FileReader {}
 
 /// A bare-bones event record
 ///

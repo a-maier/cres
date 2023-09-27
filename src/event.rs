@@ -14,11 +14,11 @@ pub type MomentumSet = Box<[FourVector]>;
 #[cfg(feature = "multiweight")]
 type BuilderWeights = Vec<N64>;
 #[cfg(feature = "multiweight")]
-type Weights = Box<[N64]>;
+pub type Weights = Box<[N64]>;
 #[cfg(not(feature = "multiweight"))]
 type BuilderWeights = N64;
 #[cfg(not(feature = "multiweight"))]
-type Weights = N64;
+pub type Weights = N64;
 
 /// Build an [Event]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]

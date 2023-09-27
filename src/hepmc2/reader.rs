@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     file::File,
-    reader::{EventReadError, RewindError, EventRecord, Converter},
+    storage::{EventReadError, RewindError, EventRecord, Converter},
     traits::{Rewind, TryClone}, event::{Event, EventBuilder},
 };
 

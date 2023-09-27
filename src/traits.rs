@@ -1,9 +1,15 @@
 use crate::cell::Cell;
-use crate::event::Event;
+use crate::event::{Event, Weights};
 
 pub use crate::distance::Distance;
 pub use crate::neighbour_search::{NeighbourSearchAlgo, NeighbourSearch};
 pub use crate::seeds::SelectSeeds;
+
+pub trait UpdateWeights {
+    type Error;
+
+    fn update_weights(&mut self, weights: &[Weights]) -> Result<(), Self::Error>;
+}
 
 /// Rewind to the beginning of a stream
 pub trait Rewind {

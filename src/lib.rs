@@ -17,7 +17,7 @@
 //!
 //! - [prelude] exports a list of the most relevant classes and objects
 //! - [cres] contains the main class and lists the steps that are performed
-//! - [reader] defines readers from one or more event files
+//! - [storage] defines event storage backed by event files
 //! - [writer] for writing events to a file
 //! - [event] for the internal event format
 //! - [distance] for user-defined distance functions
@@ -61,8 +61,8 @@ pub mod ntuple;
 pub mod prelude;
 /// Progress bar
 pub mod progress_bar;
-/// Event readers
-pub mod reader;
+/// Event storage
+pub mod storage;
 /// Cell resampling
 pub mod resampler;
 /// Cell seed selection

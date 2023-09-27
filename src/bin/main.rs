@@ -14,7 +14,7 @@ use crate::opt_cres_validate::validate;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::cluster::DefaultClustering;
-use cres::reader::{CombinedReader, Converter};
+use cres::storage::{CombinedStorage, Converter};
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
 use cres::writer::FileWriter;
@@ -70,7 +70,7 @@ where
 
     debug!("settings: {:#?}", opt);
 
-    let reader = CombinedReader::from_files(opt.infiles)?;
+    let event_storage = CombinedStorage::from_files(opt.infiles)?;
 
     let cell_collector = if opt.dumpcells {
         Some(Rc::new(RefCell::new(CellCollector::new())))
@@ -101,20 +101,19 @@ where
     #[cfg(not(feature = "multiweight"))]
     let converter = Converter::new();
 
-    let writer = FileWriter::builder()
-        .filename(opt.outfile.clone())
-        .format(opt.outformat.into())
-        .compression(opt.compression)
-        .cell_collector(cell_collector);
-    let writer = writer.build();
+    // let writer = FileWriter::builder()
+    //     .filename(opt.outfile.clone())
+    //     .format(opt.outformat.into())
+    //     .compression(opt.compression)
+    //     .cell_collector(cell_collector);
+    // let writer = writer.build();
 
     let mut cres = CresBuilder {
-        reader,
+        event_storage,
         converter,
         clustering,
         resampler,
         unweighter,
-        writer,
     }
     .build();
     cres.run()?;
