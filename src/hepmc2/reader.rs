@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::{
     file::File,
-    storage::{EventReadError, RewindError, EventRecord, Converter},
+    storage::{StorageError, RewindError, EventRecord, Converter},
     traits::{Rewind, TryClone}, event::{Event, EventBuilder},
 };
 
@@ -59,7 +59,7 @@ impl Rewind for FileReader {
 }
 
 impl Iterator for FileReader {
-    type Item = Result<EventRecord, EventReadError>;
+    type Item = Result<EventRecord, StorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut record = vec![b'E'];

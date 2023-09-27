@@ -28,7 +28,7 @@ impl Rewind for FileStorage {
 }
 
 impl Iterator for FileStorage {
-    type Item = Result<EventRecord, EventReadError>;
+    type Item = Result<EventRecord, StorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -137,7 +137,7 @@ pub enum RewindError {
 
 /// Error reading an event
 #[derive(Debug, Error)]
-pub enum EventReadError {
+pub enum StorageError {
     /// Error reading an event
     #[error("Error reading HepMC record")]
     HepMCError(#[from] crate::hepmc2::HepMCError),
@@ -256,7 +256,7 @@ impl CombinedStorage<FileStorage> {
 }
 
 impl UpdateWeights for CombinedStorage<FileStorage> {
-    type Error = EventReadError;
+    type Error = StorageError;
 
     fn update_weights(&mut self, weights: &[Weights]) -> Result<(), Self::Error> {
         todo!()
@@ -266,7 +266,7 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
 
 /// Reader from an event file
 pub trait EventFileStorage:
-    Iterator<Item = Result<EventRecord, EventReadError>>
+    Iterator<Item = Result<EventRecord, StorageError>>
     + Rewind<Error = RewindError>
 {
 }
@@ -318,7 +318,7 @@ impl Converter {
 }
 
 impl TryConvert<EventRecord, Event> for Converter {
-    type Error = EventReadError;
+    type Error = StorageError;
 
     fn try_convert(&self, record: EventRecord) -> Result<Event, Self::Error> {
         let event = match record {
