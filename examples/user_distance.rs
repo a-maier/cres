@@ -44,10 +44,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut args = std::env::args();
     let _ = args.next().unwrap(); // ignore program name
-    let infile = args.next().unwrap();
-    let outfile = args.next().unwrap();
+    let infile = args.next().unwrap().into();
+    let outfile = args.next().unwrap().into();
 
-    let reader = CombinedStorage::from_files(vec![infile])?;
+    let event_storage = StorageBuilder::default();
+    let event_storage = event_storage.build_from_files(infile, outfile)?;
 
     let converter = Converter::new();
 
@@ -55,14 +56,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .distance(MyDistance { e_fact: n64(0.5) })
         .build();
 
-    let writer = FileWriter::builder().filename(outfile.into()).build();
-
     let mut cres = CresBuilder {
-        reader,
-        clustering: converter,
+        event_storage,
+        converter,
+        clustering: NO_CLUSTERING, // disable jet clustering
         resampler,
         unweighter: NO_UNWEIGHTING, // disable unweighting
-        writer,
     }
     .build();
     cres.run()?;

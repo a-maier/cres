@@ -13,30 +13,32 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // access command line arguments, ignoring the program name
     let mut args = std::env::args().skip(1);
-    let infile = args.next().unwrap();
-    let outfile = args.next().unwrap();
+    let infile = args.next().unwrap().into();
+    let outfile = args.next().unwrap().into();
 
-    // How to read events
-    let reader = CombinedStorage::from_files(vec![infile])?;
+    // How to access (read & write) events
+    let event_storage = StorageBuilder::default();
+    let event_storage = event_storage.build_from_files(infile, outfile)?;
 
     // How to convert into internal event format
-    // To perform jet clustering use `ClusteringConverter` instead
     let converter = Converter::new();
+
+    // Cluster outgoing particles into IRC safe objects
+    // To actually perform clustering use `DefaultClustering` instead
+    let clustering = NO_CLUSTERING;
 
     // Resample with default settings
     let resampler = ResamplerBuilder::default().build();
 
-    // Where to write the output
-    let writer = FileWriter::builder().filename(outfile.into()).build();
-
     let mut cres = CresBuilder {
-        reader,
-        clustering: converter,
+        event_storage,
+        converter,
+        clustering,
         resampler,
         unweighter: NO_UNWEIGHTING, // disable unweighting
-        writer,
     }
     .build();
+
     // Run the resampler
     cres.run()?;
     Ok(())

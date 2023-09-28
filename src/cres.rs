@@ -4,14 +4,15 @@
 //! [CresBuilder].
 //!
 //! This requires
-//! 1. A reader for the input events
-//!    (e.g. [CombinedReader](crate::reader::CombinedReader)).
+//! 1. A storage for reading and writing events
+//!    (e.g. [CombinedStorage](crate::storage::CombinedStorage)).
 //! 2. A converter to the internal format
-//!    (e.g. [ClusteringConverter](crate::converter::ClusteringConverter))
-//! 3. A [Resampler](crate::traits::Resample).
-//! 4. An [Unweighter](crate::traits::Unweight)
+//!    (e.g. [Converter](crate::storage::Converter))
+//! 3. A clustering of outgoing particles into IRC safe objects
+//!    (e.g. [DefaultClustering](crate::cluster::DefaultClustering))
+//! 4. A [Resampler](crate::traits::Resample).
+//! 5. An [Unweighter](crate::traits::Unweight)
 //!    (e.g. [NO_UNWEIGHTING](crate::unweight::NO_UNWEIGHTING)).
-//! 5. A [Writer](crate::traits::Write) (e.g. [FileWriter](crate::writer::FileWriter)).
 //!
 //! Finally, call [Cres::run].
 //!
@@ -21,20 +22,21 @@
 //!# fn cres_doc() -> Result<(), Box<dyn std::error::Error>> {
 //! use cres::prelude::*;
 //!
-//! // Define `reader`, `converter`, `resampler`, `unweighter`, `writer`
-//!# let reader = CombinedReader::from_files(vec![""])?;
-//!# let converter = cres::converter::Converter::new();
+//! // Define `event_storage`, `converter`, `clustering`, `resampler`, `unweighter`
+//!# let filename = std::path::PathBuf::from("");
+//!# let event_storage = StorageBuilder::default().build_from_files(filename.clone(), filename)?;
+//!# let converter = Converter::new();
+//!# let clustering = NO_CLUSTERING;
 //!# let resampler = cres::resampler::ResamplerBuilder::default().build();
-//!# let writer = cres::writer::FileWriter::builder().filename("out.hepmc".into()).build();
 //!# let unweighter = cres::unweight::NO_UNWEIGHTING;
 //!
 //! // Build the resampler
 //! let mut cres = CresBuilder {
-//!     reader,
+//!     event_storage,
 //!     converter,
+//!     clustering,
 //!     resampler,
 //!     unweighter,
-//!     writer
 //! }.build();
 //!
 //! // Run the resampler

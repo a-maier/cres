@@ -158,7 +158,20 @@ impl Clustering for DefaultClustering {
     }
 }
 
+/// Perform no clustering into IRC safe objects
+#[derive(Clone, Debug)]
+pub struct NoClustering { }
 
+/// Perform no clustering into IRC safe objects
+pub const NO_CLUSTERING: NoClustering = NoClustering{};
+
+impl Clustering for NoClustering {
+    type Error = std::convert::Infallible;
+
+    fn cluster(&self, ev: Event) -> Result<Event, Self::Error> {
+        Ok(ev)
+    }
+}
 
 /// Placeholder for an unknown jet algorithm
 #[derive(Debug, Clone, Error)]
