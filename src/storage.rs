@@ -8,7 +8,7 @@ use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, hepmc2::reader::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}};
+use crate::{file::File, hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
