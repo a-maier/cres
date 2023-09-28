@@ -66,8 +66,8 @@ path = "src/bin/shell_completion.rs"
 
 [features]
 default = ["multiweight", "hardware-lock-elision"]
-ntuple = ["dep:cc", "dep:bindgen"]
-capi = ["multiweight"]
+# ntuple = ["dep:cc", "dep:bindgen"]
+# capi = ["multiweight"]
 multiweight = []
 hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
 
