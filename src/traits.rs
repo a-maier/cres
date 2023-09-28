@@ -8,7 +8,9 @@ pub use crate::seeds::SelectSeeds;
 pub trait UpdateWeights {
     type Error;
 
-    fn update_weights(&mut self, weights: &[Weights]) -> Result<(), Self::Error>;
+    fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error>;
+
+    fn update_next_weights(&mut self, weights: &Weights) -> Result<bool, Self::Error>;
 }
 
 /// Rewind to the beginning of a stream

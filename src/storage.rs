@@ -8,7 +8,7 @@ use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, hepmc2::reader::{HepMCParser, UpdateHepMCWeights}, traits::{Rewind, TryConvert, UpdateWeights, WriteEvent}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}};
+use crate::{file::File, hepmc2::reader::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -17,16 +17,13 @@ const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
 /// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
-pub struct FileStorage{
-    reader: Box<dyn EventFileStorage>,
-    writer: Box<dyn WriteEvent<EventRecord, Error = std::io::Error>>,
-}
+pub struct FileStorage(Box<dyn EventFileStorage>);
 
 impl Rewind for FileStorage {
     type Error = StorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        self.reader.rewind()
+        self.0.rewind()
     }
 }
 
@@ -34,14 +31,13 @@ impl Iterator for FileStorage {
     type Item = Result<EventRecord, StorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.reader.next()
+        self.0.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.reader.size_hint()
+        self.0.size_hint()
     }
 }
-
 impl FileStorage {
     /// Returns an event storage for the file at `path`
     pub fn new<P: AsRef<Path>>(path: P) -> Result<FileStorage, CreateError> {
@@ -54,9 +50,10 @@ impl FileStorage {
         path: P,
         _scaling: &HashMap<String, f64>, // only used in "stripper-xml" feature
     ) -> Result<FileStorage, CreateError> {
-        use crate::hepmc2::FileReader as HepMCReader;
-        use crate::hepmc2::Writer as HepMCWriter;
-        let mut out = path.as_ref().as_os_str().to_os_string(); // TODO: path
+        let weight_names = Vec::new(); //TODO
+        use crate::hepmc2::FileStorage as HepMCStorage;
+        let path = path.as_ref();
+        let mut out = path.as_os_str().to_os_string(); // TODO: path
         out.push(".out");
         let out = PathBuf::from(out);
         let file = File::open(&path)?;
@@ -64,15 +61,17 @@ impl FileStorage {
         let bytes = match r.fill_buf() {
             Ok(bytes) => bytes,
             Err(_) => {
-                let file = File::open(&path)?;
-                let reader = Box::new(HepMCReader::new(file)?);
-                // TODO: compression
-                let writer = Box::new(HepMCWriter::try_new(out, None)?);
-                return Ok(FileStorage{reader, writer});
+                let storage =  HepMCStorage::try_new(
+                    path.to_path_buf(),
+                    out,
+                    None, // TODO: compression
+                    weight_names
+                )?;
+                return Ok(FileStorage(Box::new(storage)))
             }
         };
         if bytes.starts_with(&ROOT_MAGIC_BYTES) {
-            let path = path.as_ref().to_owned();
+            let path = path.to_path_buf();
             if !cfg!(feature = "ntuple") {
                 return Err(CreateError::RootUnsupported(path));
             }
@@ -83,7 +82,6 @@ impl FileStorage {
                 return Ok(FileStorage(Box::new(reader)));
             }
         } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
-            let path = path.as_ref();
             #[cfg(not(feature = "stripper-xml"))]
             return Err(CreateError::XMLUnsupported(path.to_owned()));
             #[cfg(feature = "stripper-xml")]
@@ -98,17 +96,37 @@ impl FileStorage {
         #[cfg(feature = "lhef")]
         if bytes.starts_with(b"<LesHouchesEvents") {
             use crate::lhef::FileReader as LHEFReader;
-            debug!("Read {:?} as LHEF file", path.as_ref());
+            debug!("Read {path:?} as LHEF file");
             let file = File::open(path)?;
             let reader = LHEFReader::new(file)?;
             return Ok(FileStorage(Box::new(reader)));
         }
-        debug!("Read {:?} as HepMC file", path.as_ref());
-        let file = File::open(&path)?;
-        let reader = Box::new(HepMCReader::new(file)?);
-        // TODO: compression
-        let writer = Box::new(HepMCWriter::try_new(out, None)?);
-        Ok(FileStorage{reader, writer})
+        debug!("Read {path:?} as HepMC file");
+        let storage = HepMCStorage::try_new(
+            path.to_path_buf(),
+            out,
+            None, // TODO: compression
+            weight_names
+        )?;
+        Ok(FileStorage(Box::new(storage)))
+    }
+}
+
+impl UpdateWeights for FileStorage {
+    type Error = StorageError;
+
+    fn update_all_weights(
+        &mut self,
+        weights: &[Weights]
+    ) -> Result<usize, Self::Error> {
+        self.0.update_all_weights(weights)
+    }
+
+    fn update_next_weights(
+        &mut self,
+        weights: &Weights
+    ) -> Result<bool, Self::Error> {
+        self.0.update_next_weights(weights)
     }
 }
 
@@ -270,34 +288,42 @@ impl CombinedStorage<FileStorage> {
 impl UpdateWeights for CombinedStorage<FileStorage> {
     type Error = StorageError;
 
-    fn update_weights(&mut self, weights: &[Weights]) -> Result<(), Self::Error> {
+    fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
         self.rewind()?;
         let mut nevent = 0;
-        let weight_names = self.weight_names().to_owned();
-        let weight_names = &weight_names;
         let progress = ProgressBar::new(weights.len() as u64, "events written:");
         for source in &mut self.storage {
-            for record in &mut source.reader {
-                let mut record = record?;
-                record.update_weights(
-                    weight_names,
-                    &weights[nevent],
-                )?;
-                source.writer.write(record)?;
-                nevent += 1;
+            while nevent < weights.len() {
+                let updated = source.update_next_weights(&weights[nevent])?;
+                debug_assert!(updated);
                 progress.inc(1);
+                nevent += 1;
             }
         }
         progress.finish();
-        Ok(())
+        Ok(nevent)
+    }
+
+    fn update_next_weights(
+        &mut self,
+        weights: &Weights,
+    ) -> Result<bool, Self::Error> {
+        while self.current < self.storage.len() {
+            let res = self.storage[self.current].update_next_weights(weights)?;
+            if res {
+                return Ok(true);
+            }
+            self.current += 1;
+        }
+        Ok(false)
     }
 }
-
 
 /// Reader from an event file
 pub trait EventFileStorage:
     Iterator<Item = Result<EventRecord, StorageError>>
     + Rewind<Error = StorageError>
+    + UpdateWeights<Error = StorageError>
 {
 }
 
@@ -307,7 +333,7 @@ impl EventFileStorage for crate::ntuple::Reader {}
 #[cfg(feature = "lhef")]
 impl EventFileStorage for crate::lhef::FileReader {}
 
-impl EventFileStorage for crate::hepmc2::FileReader {}
+impl EventFileStorage for crate::hepmc2::FileStorage {}
 
 /// A bare-bones event record
 ///
@@ -319,21 +345,6 @@ impl EventFileStorage for crate::hepmc2::FileReader {}
 pub enum EventRecord {
     /// Bare HepMC event record
     HepMC(String),
-}
-impl EventRecord {
-    fn update_weights(
-        &mut self,
-        weight_names: &[String],
-        weights: &Weights
-    ) -> Result<(), StorageError> {
-        use EventRecord::*;
-        match self {
-            HepMC(ref mut record) => {
-                Self::update_hepmc_weights(record, weight_names, weights)?;
-            },
-        }
-        Ok(())
-    }
 }
 
 /// Converter from event records to internal event format

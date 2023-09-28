@@ -244,7 +244,7 @@ where
             weights[event.id] = event.weights.into_inner();
         }
 
-        self.event_storage.update_weights(&weights).map_err(StorageErr)?;
+        self.event_storage.update_all_weights(&weights).map_err(StorageErr)?;
         Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Seek, BufWriter, Write};
+use std::{io::{BufRead, BufReader, BufWriter, Write}, path::{PathBuf, Path}};
 
 use audec::auto_decompress;
 use log::trace;
@@ -10,63 +10,46 @@ use thiserror::Error;
 use crate::{
     file::File,
     storage::{StorageError, EventRecord, Converter},
-    traits::{Rewind, TryClone}, event::{Event, EventBuilder, Weights},
+    traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer},
 };
 
-/// Reader for a single (potentially compressed) HepMC2 event file
-pub struct FileReader {
-    buf: Box<dyn BufRead>,
-    source: File,
+/// Storage backed by (potentially compressed) HepMC2 event files
+pub struct FileStorage {
+    source_path: PathBuf,
+    source: Box<dyn BufRead>,
+    sink_path: PathBuf,
+    sink: Box<dyn Write>,
+    weight_names: Vec<String>,
 }
 
-impl FileReader {
-    /// Construct a reader for the given (potentially compressed) HepMC2 event file
-    pub fn new(source: File) -> Result<Self, std::io::Error> {
-        let cloned_source = source.try_clone()?;
-        let mut buf = init_buf(cloned_source)?;
-        Ok(FileReader {
+impl FileStorage {
+    /// Construct a reader for the given (potentially compressed) HepMC2 event files
+    pub fn try_new(
+        source_path: PathBuf,
+        sink_path: PathBuf,
+        compression: Option<Compression>,
+        weight_names: Vec<String>
+    ) -> Result<Self, std::io::Error> {
+        let source = init_source(&source_path)?;
+        let outfile = File::create(&sink_path)?;
+        let sink = BufWriter::new(outfile);
+        let sink = compress_writer(sink, compression)?;
+
+        Ok(FileStorage {
+            source_path,
             source,
-            buf,
+            sink_path,
+            sink,
+            weight_names,
         })
     }
-}
 
-fn init_buf(source: File) -> Result<Box<dyn BufRead>, std::io::Error> {
-    let mut buf = auto_decompress(BufReader::new(source));
-
-    // read until start of first event
-    let mut dump = Vec::new();
-    while !dump.ends_with(b"\nE") {
-        dump.clear();
-        if buf.read_until(b'E', &mut dump)? == 0 {
-            break;
-        }
-    }
-    Ok(buf)
-}
-
-impl Rewind for FileReader {
-    type Error = StorageError;
-
-    fn rewind(&mut self) -> Result<(), Self::Error> {
-        use StorageError::*;
-        self.source.rewind()?;
-        let cloned_source = self.source.try_clone().map_err(CloneError)?;
-        self.buf = init_buf(cloned_source)?;
-
-        Ok(())
-    }
-}
-
-impl Iterator for FileReader {
-    type Item = Result<EventRecord, StorageError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    fn read_record(&mut self) -> Option<Result<String, HepMCError>> {
         let mut record = vec![b'E'];
         assert!(record.starts_with(b"E"));
         while !record.ends_with(b"\nE") {
             assert!(record.starts_with(b"E"));
-            match self.buf.read_until(b'E', &mut record) {
+            match self.source.read_until(b'E', &mut record) {
                 Ok(0) => if record.len() > 1 {
                     break;
                 } else {
@@ -80,9 +63,94 @@ impl Iterator for FileReader {
         let record = String::from_utf8(record).unwrap();
         assert!(record.starts_with("E"));
         trace!("Read HepMC record:\n{record}");
-        Some(Ok(EventRecord::HepMC(record)))
+        Some(Ok(record))
     }
 }
+
+fn init_source(source: impl AsRef<Path>) -> Result<Box<dyn BufRead>, std::io::Error> {
+    let source = File::open(source)?;
+    let mut buf = auto_decompress(BufReader::new(source));
+
+    // read until start of first event
+    let mut dump = Vec::new();
+    while !dump.ends_with(b"\nE") {
+        dump.clear();
+        if buf.read_until(b'E', &mut dump)? == 0 {
+            break;
+        }
+    }
+    Ok(buf)
+}
+
+impl Rewind for FileStorage {
+    type Error = StorageError;
+
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        self.source = init_source(&self.source_path)?;
+
+        Ok(())
+    }
+}
+
+impl Iterator for FileStorage {
+    type Item = Result<EventRecord, StorageError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_record()
+            .map(|r| match r {
+                Ok(record) => Ok(EventRecord::HepMC(record)),
+                Err(err) => Err(err.into()),
+            })
+    }
+}
+
+impl UpdateWeights for FileStorage {
+    type Error = StorageError;
+
+    fn update_all_weights(
+        &mut self,
+        weights: &[Weights]
+    ) -> Result<usize, Self::Error> {
+        self.rewind()?;
+        let mut nevent = 0;
+        while self.update_next_weights(&weights[nevent])? {
+            nevent += 1;
+        }
+        Ok(nevent)
+    }
+
+    fn update_next_weights(
+        &mut self,
+        weights: &Weights
+    ) -> Result<bool, Self::Error> {
+        let Some(record) = self.read_record() else {
+            return Ok(false)
+        };
+        let mut record = record?;
+
+        debug_assert!(record.starts_with('E'));
+        let (weight_entries, _non_weight) = non_weight_entries(&record)
+            .map_err(HepMCError::from)?;
+        let (rest, _nweights) = u32_entry(weight_entries)
+            .map_err(HepMCError::from)?;
+
+        let weights_start = record.len() - rest.len();
+        update_central_weight(&mut record, weights_start, weights)?;
+
+        #[cfg(feature = "multiweight")]
+        update_named_weights(
+            &mut record,
+            weights_start,
+            _nweights as usize,
+            &self.weight_names,
+            weights,
+        )?;
+        self.sink.write_all(record.as_bytes())?;
+        self.sink.write(b"\n")?;
+        Ok(true)
+    }
+}
+
 
 /// Error reading a HepMC event record
 #[derive(Debug, Error)]
@@ -114,19 +182,6 @@ pub trait HepMCParser {
 
     /// Parse HepMC event record
     fn parse_hepmc(&self, record: &str) -> Result<Event, Self::Error>;
-}
-
-/// Update weights in HepMC event record
-pub trait UpdateHepMCWeights {
-    /// Error updating weights in HepMC event record
-    type Error;
-
-    /// Update weights in HepMC event record
-    fn update_hepmc_weights(
-        record: &mut String,
-        weight_names: &[String],
-        weights: &Weights,
-    ) -> Result<(), Self::Error>;
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -173,33 +228,6 @@ impl HepMCParser for Converter {
             event.rescale_energies(n64(1e-3));
         }
         Ok(event.build())
-    }
-}
-
-impl UpdateHepMCWeights for EventRecord {
-    type Error = HepMCError;
-
-    fn update_hepmc_weights(
-        record: &mut String,
-        _weight_names: &[String],
-        weights: &Weights,
-    ) -> Result<(), Self::Error> {
-        assert!(record.starts_with('E'));
-        let (weight_entries, _non_weight) = non_weight_entries(record)?;
-        let (rest, _nweights) = u32_entry(weight_entries)?;
-
-        let weights_start = record.len() - rest.len();
-        update_central_weight(record, weights_start, weights)?;
-
-        #[cfg(feature = "multiweight")]
-        update_named_weights(
-            record,
-            weights_start,
-            _nweights as usize,
-            _weight_names,
-            weights,
-        )?;
-        Ok(())
     }
 }
 

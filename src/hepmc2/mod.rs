@@ -3,5 +3,5 @@ pub mod reader;
 /// Writer to HepMC 2 format
 pub mod writer;
 
-pub use reader::{FileReader, HepMCError};
+pub use reader::{FileStorage, HepMCError};
 pub use writer::Writer;
