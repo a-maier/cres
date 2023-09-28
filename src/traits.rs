@@ -65,64 +65,6 @@ pub trait Unweight {
     fn unweight(&mut self, e: Vec<Event>) -> Result<Vec<Event>, Self::Error>;
 }
 
-/// Write events to some output
-///
-/// When using the [Cres](crate::cres::Cres) class, the Reader originally
-/// used to read the events is passed alongside after a [Rewind]. The
-/// events are guaranteed to be ordered according to their
-/// [id](crate::event::Event::id). Apart from ill-behaved user-defined
-/// conversions, this means they are ordered in the original way they
-/// were read. Apart from its weight, the `Event` with `id == 0`
-/// should correspond to the first event returned by the Reader. This
-/// makes it possible to reconstruct information that is not kept
-/// internally.
-pub trait Write<Reader> {
-    /// Write error
-    type Error;
-
-    /// Write events to some output
-    fn write(&mut self, r: &mut Reader, e: &[Event])
-        -> Result<(), Self::Error>;
-}
-
-/// Write a single event
-pub trait WriteEvent<Ev> {
-    /// Write error
-    type Error;
-
-    /// Write an event
-    fn write(&mut self, e: Ev) -> Result<(), Self::Error>;
-
-    /// Wrap up (optional)
-    fn finish(self) -> Result<(), Self::Error>
-    where
-        Self: Sized,
-    {
-        Ok(())
-    }
-}
-
-/// Try to clone this object
-///
-/// This trait is similar to [std::clone::Clone], but is allowed to fail.
-pub trait TryClone {
-    /// Clone error
-    type Error;
-
-    /// Try to clone this object
-    fn try_clone(&self) -> Result<Self, Self::Error>
-    where
-        Self: Sized;
-}
-
-impl<T: Clone> TryClone for T {
-    type Error = std::convert::Infallible;
-
-    fn try_clone(&self) -> Result<Self, Self::Error> {
-        Ok(self.clone())
-    }
-}
-
 /// Callback after resampling a cell
 pub trait ObserveCell {
     /// Look at the new cell
