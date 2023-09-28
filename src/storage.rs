@@ -213,9 +213,9 @@ pub enum StorageError {
     /// Error cloning the underlying source
     #[error("Source clone error: {0}")]
     CloneError(std::io::Error),
-    /// Error reading an event
-    #[error("Error reading HepMC record")]
-    HepMCError(#[from] crate::hepmc2::HepMCError),
+    /// HepMC error
+    #[error("HepMC storage error")]
+    HepMCError(#[from] crate::hepmc2::Error),
     #[cfg(feature = "ntuple")]
     /// Error reading a ROOT ntuple event
     #[error("Error reading ntuple event")]
