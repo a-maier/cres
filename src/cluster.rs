@@ -125,15 +125,15 @@ impl Clustering for DefaultClustering {
         // treat all other particles
         for (id, out) in outgoing {
             if is_parton(id) || is_hadron(id.abs()) {
-                for p in out.into_iter() {
+                for p in out.iter() {
                     clustered_to_jets.push(p.into());
                 }
             } else if self.is_clustered_to_lepton(id) {
-                for p in out.into_iter() {
+                for p in out.iter() {
                     clustered_to_leptons.push(p.into());
                 }
             } else if self.include_neutrinos || !id.abs().is_neutrino() {
-                for p in out.into_iter() {
+                for p in out.iter() {
                     ev.add_outgoing(id, *p);
                 }
             }

@@ -46,7 +46,7 @@
 use std::convert::From;
 use std::iter::Iterator;
 
-use log::{info, trace};
+use log::info;
 use noisy_float::prelude::*;
 use parking_lot::Mutex;
 use rayon::prelude::*;

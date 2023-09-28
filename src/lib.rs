@@ -74,8 +74,6 @@ pub mod stripper_xml;
 pub mod traits;
 /// Unweighting
 pub mod unweight;
-/// Event writer
-pub mod writer;
 
 mod util;
 mod vptree;

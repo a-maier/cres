@@ -3,7 +3,6 @@ use std::convert::From;
 use clap::{Parser, ValueEnum};
 use cres::cluster::JetAlgorithm;
 use cres::compression::Compression;
-use cres::writer::OutputFormat;
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -179,18 +178,4 @@ pub(crate) enum FileFormat {
     #[cfg(feature = "stripper-xml")]
     #[clap(name = "stripper-xml")]
     StripperXml,
-}
-
-impl From<FileFormat> for OutputFormat {
-    fn from(source: FileFormat) -> Self {
-        match source {
-            FileFormat::HepMC2 => OutputFormat::HepMC2,
-            #[cfg(feature = "lhef")]
-            FileFormat::Lhef => OutputFormat::Lhef,
-            #[cfg(feature = "ntuple")]
-            FileFormat::Root => OutputFormat::Root,
-            #[cfg(feature = "stripper-xml")]
-            FileFormat::StripperXml => OutputFormat::StripperXml,
-        }
-    }
 }

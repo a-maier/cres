@@ -14,7 +14,7 @@ use crate::opt_cres_validate::validate;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::cluster::DefaultClustering;
-use cres::storage::{CombinedStorage, Converter, StorageBuilder};
+use cres::storage::{Converter, StorageBuilder};
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
 use cres::{

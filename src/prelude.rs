@@ -3,5 +3,4 @@ pub use crate::{
     storage::{CombinedStorage, FileStorage},
     resampler::ResamplerBuilder,
     unweight::{Unweighter, NO_UNWEIGHTING},
-    writer::FileWriter,
 };

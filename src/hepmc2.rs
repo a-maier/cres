@@ -19,7 +19,7 @@ use crate::{
 pub struct FileStorage {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
-    sink_path: PathBuf,
+    _sink_path: PathBuf,
     sink: Box<dyn Write>,
     weight_names: Vec<String>,
 }
@@ -41,7 +41,7 @@ impl FileStorage {
         Ok(FileStorage {
             source_path,
             source,
-            sink_path,
+            _sink_path: sink_path,
             sink,
             weight_names,
         })
@@ -55,19 +55,19 @@ impl FileStorage {
             match self.source.read_until(b'E', &mut record) {
                 Ok(0) => if record.len() > 1 {
                     let record = String::from_utf8(record).unwrap();
-                    assert!(record.starts_with("E"));
+                    assert!(record.starts_with('E'));
                     trace!("Read HepMC record:\n{record}");
                     return Some(Ok(record));
                 } else {
                     return None;
                 },
                 Ok(_) => {},
-                Err(err) => return Some(Err(HepMCError::from(err).into())),
+                Err(err) => return Some(Err(err.into())),
             }
         }
         record.pop();
         let record = String::from_utf8(record).unwrap();
-        assert!(record.starts_with("E"));
+        assert!(record.starts_with('E'));
         trace!("Read HepMC record:\n{record}");
         Some(Ok(record))
     }
@@ -215,13 +215,13 @@ impl HepMCParser for Converter {
                 Some(b'N') => { }
                 #[cfg(feature = "multiweight")]
                 Some(b'N') => record = parse_weight_names_line(
-                    &self,
+                    self,
                     record,
                     &_weights,
                     &mut event
                 )?,
-                Some(b'P') => record = parse_particle_line(&record, &mut event)?,
-                Some(b'U') => (energy_unit, record) = parse_units_line(&record)?,
+                Some(b'P') => record = parse_particle_line(record, &mut event)?,
+                Some(b'U') => (energy_unit, record) = parse_units_line(record)?,
                 _ => if !record.trim().is_empty() {
                     return Err(HepMCError::BadEntry(record.to_owned()));
                 }
@@ -362,12 +362,12 @@ fn parse_weight_names_line<'a>(
         .collect();
     let (names, nnames) = u32_entry(&record[1..])?;
     record = names;
-    for i in 0..(nnames as usize) {
+    for weight in all_weights.iter().take(nnames as usize) {
         let name;
         (record, name) = string_entry(record)?;
         if let Some(seen) = weight_seen.get_mut(name) {
             *seen = true;
-            event.add_weight(n64(all_weights[i]));
+            event.add_weight(n64(*weight));
         }
     }
     let missing =

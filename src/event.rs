@@ -13,6 +13,7 @@ pub type MomentumSet = Box<[FourVector]>;
 
 #[cfg(feature = "multiweight")]
 type BuilderWeights = Vec<N64>;
+/// Event weights
 #[cfg(feature = "multiweight")]
 pub type Weights = Box<[N64]>;
 #[cfg(not(feature = "multiweight"))]

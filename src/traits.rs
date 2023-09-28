@@ -5,11 +5,15 @@ pub use crate::distance::Distance;
 pub use crate::neighbour_search::{NeighbourSearchAlgo, NeighbourSearch};
 pub use crate::seeds::SelectSeeds;
 
+/// Update event weights
 pub trait UpdateWeights {
+    /// Error updating weights
     type Error;
 
+    /// Update all event weights
     fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error>;
 
+    /// Update the weights for the next event
     fn update_next_weights(&mut self, weights: &Weights) -> Result<bool, Self::Error>;
 }
 

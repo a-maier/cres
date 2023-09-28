@@ -1,13 +1,12 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
 };
 
 use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
-use typed_builder::TypedBuilder;
 
 use crate::{file::File, hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
 
