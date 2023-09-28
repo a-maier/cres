@@ -18,15 +18,12 @@
 //! - [prelude] exports a list of the most relevant classes and objects
 //! - [cres] contains the main class and lists the steps that are performed
 //! - [storage] defines event storage backed by event files
-//! - [writer] for writing events to a file
 //! - [event] for the internal event format
 //! - [distance] for user-defined distance functions
 //! - [seeds] and [resampler] for the resampling
 //!
 #![warn(missing_docs)]
 
-/// Partition events by iterative bisection
-pub mod bisect;
 #[cfg(target_family = "unix")]
 #[cfg(feature = "capi")]
 pub mod c_api;
@@ -43,8 +40,6 @@ pub mod cres;
 pub mod distance;
 /// Scattering event class
 pub mod event;
-/// Thin wrapper around [std::fs::File]
-pub mod file;
 /// Four-vector class
 pub mod four_vector;
 /// HepMC2 interface

@@ -1,14 +1,14 @@
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, fs::File,
 };
 
 use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
 
-use crate::{file::File, hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
+use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 

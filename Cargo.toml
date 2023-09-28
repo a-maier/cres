@@ -61,10 +61,6 @@ name = "cres"
 path = "src/bin/main.rs"
 
 [[bin]]
-name = "cres-partition"
-path = "src/bin/partition.rs"
-
-[[bin]]
 name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 

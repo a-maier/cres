@@ -1,4 +1,4 @@
-use std::{io::{BufRead, BufReader, BufWriter, Write}, path::{PathBuf, Path}};
+use std::{io::{BufRead, BufReader, BufWriter, Write}, path::{PathBuf, Path}, fs::File};
 
 use audec::auto_decompress;
 use log::trace;
@@ -8,7 +8,6 @@ use particle_id::ParticleID;
 use thiserror::Error;
 
 use crate::{
-    file::File,
     storage::{StorageError, EventRecord, Converter},
     traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer},
 };
