@@ -18,6 +18,7 @@ type BuilderWeights = Vec<N64>;
 pub type Weights = Box<[N64]>;
 #[cfg(not(feature = "multiweight"))]
 type BuilderWeights = N64;
+/// Event weights
 #[cfg(not(feature = "multiweight"))]
 pub type Weights = N64;
 

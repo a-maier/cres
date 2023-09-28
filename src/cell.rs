@@ -94,6 +94,13 @@ impl<'a> Cell<'a> {
         *first.deref_mut() = avg_wts;
     }
 
+    /// Resample
+    ///
+    /// This redistributes weights in such a way that all weights have
+    /// the same sign.
+    ///
+    /// The current implementation sets all weights to the mean weight
+    /// over the cell.
     #[cfg(not(feature = "multiweight"))]
     pub fn resample(&mut self) {
         let avg_wt = self.weight_sum() / (self.nmembers() as f64);

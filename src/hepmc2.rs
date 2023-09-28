@@ -3,7 +3,7 @@ use std::{io::{BufRead, BufReader, BufWriter, Write}, path::{PathBuf, Path}, fs:
 use audec::auto_decompress;
 use log::trace;
 use noisy_float::prelude::*;
-use nom::{multi::count, character::complete::{char, i32, space1, u32}, sequence::{preceded, delimited}, number::complete::double, IResult, bytes::complete::{take_until, take_while1}};
+use nom::{multi::count, character::complete::{i32, space1, u32}, sequence::preceded, number::complete::double, IResult, bytes::complete::take_while1};
 use particle_id::ParticleID;
 use thiserror::Error;
 
@@ -20,7 +20,7 @@ pub struct FileStorage {
     source: Box<dyn BufRead>,
     _sink_path: PathBuf,
     sink: Box<dyn Write>,
-    weight_names: Vec<String>,
+    _weight_names: Vec<String>,
 }
 
 impl FileStorage {
@@ -29,7 +29,7 @@ impl FileStorage {
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
-        weight_names: Vec<String>
+        _weight_names: Vec<String>
     ) -> Result<Self, std::io::Error> {
         let (header, source) = init_source(&source_path)?;
         let outfile = File::create(&sink_path)?;
@@ -42,7 +42,7 @@ impl FileStorage {
             source,
             _sink_path: sink_path,
             sink,
-            weight_names,
+            _weight_names,
         })
     }
 
@@ -147,7 +147,7 @@ impl UpdateWeights for FileStorage {
             &mut record,
             weights_start,
             _nweights as usize,
-            &self.weight_names,
+            &self._weight_names,
             weights,
         )?;
         self.sink.write_all(record.as_bytes())?;
@@ -416,11 +416,14 @@ fn i32_entry(line: &str) -> IResult<&str, i32> {
     preceded(space1, i32)(line)
 }
 
+#[cfg(feature = "multiweight")]
 fn string_entry(line: &str) -> IResult<&str, &str> {
     preceded(space1, string)(line)
 }
 
+#[cfg(feature = "multiweight")]
 fn string(line: &str) -> IResult<&str, &str> {
+    use nom::{character::complete::char, sequence::delimited, bytes::complete::take_until};
     delimited(char('"'), take_until("\""), char('"'))(line)
 }
 
