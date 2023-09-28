@@ -13,6 +13,9 @@ use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, ut
 #[cfg(feature = "lhef")]
 use crate::lhef::LHEFParser;
 
+#[cfg(feature = "ntuple")]
+use crate::ntuple::NTupleConverter;
+
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
 /// Event storage backed by a single event file
@@ -78,7 +81,7 @@ impl StorageBuilder {
         let bytes = match r.fill_buf() {
             Ok(bytes) => bytes,
             Err(_) => {
-                let storage =  HepMCStorage::try_new(
+                let storage = HepMCStorage::try_new(
                     source,
                     sink,
                     compression,
@@ -93,8 +96,14 @@ impl StorageBuilder {
             }
             #[cfg(feature = "ntuple")]
             {
-                debug!("Read {path:?} as ROOT ntuple");
-                todo!();
+                use crate::ntuple::FileStorage as NTupleStorage;
+                debug!("Read {source:?} as ROOT ntuple");
+                let storage = NTupleStorage::try_new(
+                    source,
+                    sink,
+                    weight_names,
+                )?;
+                return Ok(FileStorage(Box::new(storage)))
             }
         } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
             #[cfg(not(feature = "stripper-xml"))]
@@ -341,7 +350,7 @@ pub trait EventFileStorage:
 }
 
 #[cfg(feature = "ntuple")]
-impl EventFileStorage for crate::ntuple::Reader {}
+impl EventFileStorage for crate::ntuple::FileStorage {}
 
 #[cfg(feature = "lhef")]
 impl EventFileStorage for crate::lhef::FileStorage {}
@@ -354,13 +363,16 @@ impl EventFileStorage for crate::hepmc2::FileStorage {}
 /// to extract the necessary information that can later be used to
 /// construct [Event] objects in parallel.
 #[non_exhaustive]
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum EventRecord {
     /// Bare HepMC event record
     HepMC(String),
     #[cfg(feature = "lhef")]
-    /// Bare Les Houches Event record
+    /// Bare Les Houches Event Format record
     LHEF(String),
+    #[cfg(feature = "ntuple")]
+    /// ROOT NTuple event record
+    NTuple(Box<ntuple::Event>),
 }
 
 /// Converter from event records to internal event format
@@ -397,6 +409,8 @@ impl TryConvert<EventRecord, Event> for Converter {
             EventRecord::HepMC(record) => self.parse_hepmc(&record)?,
             #[cfg(feature = "lhef")]
             EventRecord::LHEF(record) => self.parse_lhef(&record)?,
+            #[cfg(feature = "ntuple")]
+            EventRecord::NTuple(record) => self.convert_ntuple(*record)?,
         };
         Ok(event)
     }

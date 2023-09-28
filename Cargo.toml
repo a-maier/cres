@@ -34,6 +34,7 @@ lz4 = "1.23"
 memchr = { version = "2.5", optional = true }
 noisy_float = "0.2"
 nom = "7.1"
+ntuple = { version = "0.8", optional = true }
 num-traits = "0.2"
 parking_lot = "0.12"
 particle_id = "0.4"
@@ -66,7 +67,7 @@ path = "src/bin/shell_completion.rs"
 
 [features]
 default = ["multiweight", "hardware-lock-elision", "lhef"]
-# ntuple = ["dep:cc", "dep:bindgen"]
+ntuple = ["dep:ntuple", "dep:cc", "dep:bindgen"]
 # capi = ["multiweight"]
 lhef = []
 multiweight = []
