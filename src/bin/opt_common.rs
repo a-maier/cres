@@ -16,7 +16,7 @@ const ZSTD_DEFAULT_LEVEL: u8 = 0;
 
 lazy_static! {
     static ref COMPRESSION_RE: Regex =
-        Regex::new(r"^(?P<algo>[[:alpha:]]+)(?P<lvl>_\d+)?$").unwrap();
+        Regex::new(r"^(?P<algo>[[:alnum:]]+)(?P<lvl>_\d+)?$").unwrap();
 }
 
 pub(crate) fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
