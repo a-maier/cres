@@ -247,7 +247,7 @@ fn update_named_weights(
         return Ok(());
     }
     let start = record.find("\nN").unwrap();
-    let (names, nnames) = u32_entry(&record[(start + 1)..])?;
+    let (names, nnames) = u32_entry(&record[(start + 2)..])?;
     let mut weight_pos = Vec::with_capacity(weight_names.len());
     let mut rest = names;
     for nentry in 0..(nnames as usize) {
@@ -268,10 +268,11 @@ fn update_named_weights(
         weight_entries[*idx] = weight.to_string();
     }
 
+    let start = weights_start + 1;
+    let line_end = record[start..].find('\n').unwrap();
+    let end = start + line_end;
     // there are no entries in the E line after the weights, so this is safe
-    let line_end = record[weights_start..].find('\n').unwrap();
-    let end = weights_start + line_end;
-    record.replace_range(weights_start..end, &weight_entries.join(" "));
+    record.replace_range(start..end, &weight_entries.join(" "));
     Ok(())
 }
 
