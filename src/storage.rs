@@ -7,8 +7,9 @@ use std::{
 use audec::auto_decompress;
 use log::debug;
 use thiserror::Error;
+use typed_builder::TypedBuilder;
 
-use crate::{file::File, hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}};
+use crate::{file::File, hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -16,7 +17,7 @@ const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 ///
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
-/// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
+/// e.g. [hepmc2::FileStorage](crate::hepmc2::FileStorage) instead.
 pub struct FileStorage(Box<dyn EventFileStorage>);
 
 impl Rewind for FileStorage {
@@ -38,77 +39,128 @@ impl Iterator for FileStorage {
         self.0.size_hint()
     }
 }
-impl FileStorage {
-    /// Returns an event storage for the file at `path`
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<FileStorage, CreateError> {
-        Self::with_scaling(path, &HashMap::new())
+
+/// Builder for event storages
+#[derive(Clone, Debug, Default)]
+pub struct StorageBuilder {
+    scaling: HashMap<String, f64>,
+    compression: Option<Compression>,
+    weight_names: Vec<String>,
+}
+
+impl StorageBuilder {
+    /// Set compression of event output files
+    pub fn compression(&mut self, compression: Option<Compression>) -> &mut Self {
+        self.compression = compression;
+        self
     }
 
-    /// Returns an event storage for the file at `path`,
-    /// with channel-dependent scaling factors for STRIPPER XML events
-    pub fn with_scaling<P: AsRef<Path>>(
-        path: P,
-        _scaling: &HashMap<String, f64>, // only used in "stripper-xml" feature
+    /// Specify names of weights that should be updated
+    pub fn weight_names(&mut self, weight_names: Vec<String> ) -> &mut Self {
+        self.weight_names = weight_names;
+        self
+    }
+
+    /// Build an event storage from the given input and output files
+    pub fn build_from_files(
+        self,
+        source: PathBuf,
+        sink: PathBuf
     ) -> Result<FileStorage, CreateError> {
-        let weight_names = Vec::new(); //TODO
+        let StorageBuilder { scaling, compression, weight_names } = self;
+        let _scaling = scaling;
+
         use crate::hepmc2::FileStorage as HepMCStorage;
-        let path = path.as_ref();
-        let mut out = path.as_os_str().to_os_string(); // TODO: path
-        out.push(".out");
-        let out = PathBuf::from(out);
-        let file = File::open(&path)?;
+        let file = File::open(&source)?;
         let mut r = auto_decompress(BufReader::new(file));
         let bytes = match r.fill_buf() {
             Ok(bytes) => bytes,
             Err(_) => {
                 let storage =  HepMCStorage::try_new(
-                    path.to_path_buf(),
-                    out,
-                    None, // TODO: compression
-                    weight_names
+                    source,
+                    sink,
+                    compression,
+                    weight_names,
                 )?;
                 return Ok(FileStorage(Box::new(storage)))
             }
         };
         if bytes.starts_with(&ROOT_MAGIC_BYTES) {
-            let path = path.to_path_buf();
             if !cfg!(feature = "ntuple") {
-                return Err(CreateError::RootUnsupported(path));
+                return Err(CreateError::RootUnsupported(source));
             }
             #[cfg(feature = "ntuple")]
             {
                 debug!("Read {path:?} as ROOT ntuple");
-                let reader = crate::ntuple::Reader::new(path)?;
-                return Ok(FileStorage(Box::new(reader)));
+                todo!();
             }
         } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
             #[cfg(not(feature = "stripper-xml"))]
-            return Err(CreateError::XMLUnsupported(path.to_owned()));
+            return Err(CreateError::XMLUnsupported(source));
             #[cfg(feature = "stripper-xml")]
             {
                 debug!("Read {path:?} as STRIPPER XML file");
-                use crate::stripper_xml::FileReader as XMLReader;
-                let file = File::open(path)?;
-                let reader = XMLReader::new(file, _scaling)?;
-                return Ok(FileStorage(Box::new(reader)));
+                todo!();
             }
         }
         #[cfg(feature = "lhef")]
         if bytes.starts_with(b"<LesHouchesEvents") {
             use crate::lhef::FileReader as LHEFReader;
             debug!("Read {path:?} as LHEF file");
-            let file = File::open(path)?;
-            let reader = LHEFReader::new(file)?;
-            return Ok(FileStorage(Box::new(reader)));
+            todo!();
         }
-        debug!("Read {path:?} as HepMC file");
+        debug!("Read {source:?} as HepMC file");
         let storage = HepMCStorage::try_new(
-            path.to_path_buf(),
-            out,
-            None, // TODO: compression
+            source,
+            sink,
+            compression, // TODO: compression
             weight_names
         )?;
         Ok(FileStorage(Box::new(storage)))
+    }
+
+    /// Construct a new storage backed by the files with the given names
+    ///
+    /// Each item in `files` should have the form `(sourcefile, sinkfile)`.
+    pub fn build_from_files_iter<I, P, Q>(
+        self,
+        files: I
+    ) -> Result<CombinedStorage<FileStorage>, CreateError>
+    where
+        I: IntoIterator<Item = (P, Q)>,
+        P: AsRef<Path>,
+        Q: AsRef<Path>,
+    {
+        #[cfg(feature = "stripper-xml")]
+        {
+            let (files, scaling) =
+                crate::stripper_xml::reader::extract_scaling(files)?;
+            let mut builder = self;
+            builder.scaling = scaling;
+            builder.build_from_files_iter_known_scaling(files)
+        }
+
+        #[cfg(not(feature = "stripper-xml"))]
+        return self.build_from_files_iter_known_scaling(files)
+    }
+
+    fn build_from_files_iter_known_scaling<I, P, Q>(
+        self,
+        files: I
+    ) -> Result<CombinedStorage<FileStorage>, CreateError>
+    where
+        I: IntoIterator<Item = (P, Q)>,
+        P: AsRef<Path>,
+        Q: AsRef<Path>
+    {
+        let storage: Result<_, _> = files
+            .into_iter()
+            .map(|(source, sink)| {
+                let source = source.as_ref().to_path_buf();
+                let sink = sink.as_ref().to_path_buf();
+                self.clone().build_from_files(source, sink)
+            }).collect();
+        Ok(CombinedStorage::new(storage?))
     }
 }
 
@@ -184,7 +236,6 @@ pub enum StorageError {
 pub struct CombinedStorage<R> {
     storage: Vec<R>,
     current: usize,
-    weight_names: Vec<String>,
 }
 
 impl<R> CombinedStorage<R> {
@@ -193,12 +244,7 @@ impl<R> CombinedStorage<R> {
         Self {
             storage,
             current: 0,
-            weight_names: Vec::new(),
         }
-    }
-
-    pub fn weight_names(&self) -> &[String] {
-        self.weight_names.as_ref()
     }
 }
 
@@ -241,47 +287,6 @@ impl<R: Iterator> Iterator for CombinedStorage<R> {
                 (accmin + min, accmax)
             })
             .unwrap_or_default()
-    }
-}
-
-impl CombinedStorage<FileStorage> {
-    /// Construct a new storage backed by the files with the given names
-    pub fn from_files<I, P>(files: I) -> Result<Self, CreateError>
-    where
-        I: IntoIterator<Item = P>,
-        P: AsRef<Path>,
-    {
-        #[cfg(feature = "stripper-xml")]
-        {
-            let (files, scaling) =
-                crate::stripper_xml::reader::extract_scaling(files)?;
-            Self::from_files_with_scaling(files, &scaling)
-        }
-
-        #[cfg(not(feature = "stripper-xml"))]
-        return Self::from_files_with_scaling(files, &HashMap::new());
-    }
-
-    fn from_files_with_scaling<I, P>(
-        files: I,
-        scaling: &HashMap<String, f64>,
-    ) -> Result<Self, CreateError>
-    where
-        I: IntoIterator<Item = P>,
-        P: AsRef<Path>,
-    {
-        let storage: Result<_, _> = files
-            .into_iter()
-            .map(|f| {
-                FileStorage::with_scaling(f.as_ref(), scaling).map_err(|err| {
-                    CreateError::FileError(
-                        f.as_ref().to_path_buf(),
-                        Box::new(err),
-                    )
-                })
-            })
-            .collect();
-        Ok(Self::new(storage?))
     }
 }
 

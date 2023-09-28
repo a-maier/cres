@@ -49,9 +49,12 @@ pub(crate) struct UnweightOpt {
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) struct Opt {
-    /// Output file.
+    /// Output directory.
+    ///
+    /// For each input file, an output file with the same name is
+    /// written to the given directory.
     #[clap(long, short, value_parser)]
-    pub(crate) outfile: PathBuf,
+    pub(crate) outdir: PathBuf,
 
     #[clap(flatten)]
     pub(crate) jet_def: JetDefinition,
@@ -83,10 +86,6 @@ Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
 Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     pub(crate) compression: Option<Compression>,
-
-    /// Output format.
-    #[clap(value_enum, long, default_value_t)]
-    pub(crate) outformat: FileFormat,
 
     /// Verbosity level
     #[clap(

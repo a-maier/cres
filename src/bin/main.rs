@@ -3,9 +3,9 @@ mod opt_cres;
 mod opt_cres_validate;
 
 use std::cell::RefCell;
-#[cfg(feature = "multiweight")]
-use std::collections::HashSet;
 use std::error::Error;
+use std::fs::create_dir_all;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::opt_cres::{Opt, Search};
@@ -14,10 +14,9 @@ use crate::opt_cres_validate::validate;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::cluster::DefaultClustering;
-use cres::storage::{CombinedStorage, Converter};
+use cres::storage::{CombinedStorage, Converter, StorageBuilder};
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
-use cres::writer::FileWriter;
 use cres::{
     cell_collector::CellCollector,
     neighbour_search::{NaiveNeighbourSearch, TreeSearch},
@@ -70,7 +69,18 @@ where
 
     debug!("settings: {:#?}", opt);
 
-    let event_storage = CombinedStorage::from_files(opt.infiles)?;
+    let mut event_storage = StorageBuilder::default();
+    #[cfg(feature = "multiweight")]
+    event_storage.weight_names(opt.weights.clone());
+    event_storage.compression(opt.compression);
+
+    create_dir_all(&opt.outdir)?;
+    let files = opt.infiles.into_iter()
+        .map(|f| {
+            let out = PathBuf::from_iter([opt.outdir.as_os_str(), f.file_name().unwrap()]);
+            (f, out)
+        });
+    let event_storage = event_storage.build_from_files_iter(files)?;
 
     let cell_collector = if opt.dumpcells {
         Some(Rc::new(RefCell::new(CellCollector::new())))
@@ -125,17 +135,18 @@ where
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[test]
     fn test_cres() {
         use std::path::PathBuf;
 
         use cres::cluster::JetAlgorithm;
+        use tempfile::tempdir;
 
         use crate::opt_common::{JetDefinition, LeptonDefinition, PhotonDefinition};
 
+        let tempdir = tempdir().unwrap();
         let opt = Opt {
-            outfile: PathBuf::from("/dev/null"),
+            outdir: tempdir.path().to_path_buf(),
             jet_def: JetDefinition {
                 jetalgorithm: JetAlgorithm::AntiKt,
                 jetradius: 0.4,
@@ -158,7 +169,6 @@ mod tests {
             ptweight: Default::default(),
             dumpcells: Default::default(),
             compression: Default::default(),
-            outformat: Default::default(),
             loglevel: "info".to_owned(),
             search: Default::default(),
             strategy: Default::default(),

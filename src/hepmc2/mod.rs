@@ -13,6 +13,8 @@ use crate::{
     traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer},
 };
 
+// TODO: add file names to errors
+
 /// Storage backed by (potentially compressed) HepMC2 event files
 pub struct FileStorage {
     source_path: PathBuf,
@@ -24,7 +26,7 @@ pub struct FileStorage {
 
 impl FileStorage {
     /// Construct a reader for the given (potentially compressed) HepMC2 event files
-    pub fn try_new(
+    pub fn try_new( // TODO: use builder pattern instead?
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
