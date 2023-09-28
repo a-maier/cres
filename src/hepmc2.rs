@@ -24,7 +24,7 @@ pub struct FileStorage {
 }
 
 impl FileStorage {
-    /// Construct a reader for the given (potentially compressed) HepMC2 event files
+    /// Construct a storage backed by the given (potentially compressed) HepMC2 event files
     pub fn try_new( // TODO: use builder pattern instead?
         source_path: PathBuf,
         sink_path: PathBuf,
