@@ -112,7 +112,7 @@ impl StorageBuilder {
         let storage = HepMCStorage::try_new(
             source,
             sink,
-            compression, // TODO: compression
+            compression,
             weight_names
         )?;
         Ok(FileStorage(Box::new(storage)))
