@@ -32,10 +32,11 @@ impl FileStorage {
         compression: Option<Compression>,
         weight_names: Vec<String>
     ) -> Result<Self, std::io::Error> {
-        let source = init_source(&source_path)?;
+        let (header, source) = init_source(&source_path)?;
         let outfile = File::create(&sink_path)?;
         let sink = BufWriter::new(outfile);
-        let sink = compress_writer(sink, compression)?;
+        let mut sink = compress_writer(sink, compression)?;
+        sink.write_all(&header)?;
 
         Ok(FileStorage {
             source_path,
@@ -53,7 +54,10 @@ impl FileStorage {
             assert!(record.starts_with(b"E"));
             match self.source.read_until(b'E', &mut record) {
                 Ok(0) => if record.len() > 1 {
-                    break;
+                    let record = String::from_utf8(record).unwrap();
+                    assert!(record.starts_with("E"));
+                    trace!("Read HepMC record:\n{record}");
+                    return Some(Ok(record));
                 } else {
                     return None;
                 },
@@ -61,7 +65,7 @@ impl FileStorage {
                 Err(err) => return Some(Err(HepMCError::from(err).into())),
             }
         }
-        record.truncate(record.len() - 2);
+        record.pop();
         let record = String::from_utf8(record).unwrap();
         assert!(record.starts_with("E"));
         trace!("Read HepMC record:\n{record}");
@@ -69,26 +73,26 @@ impl FileStorage {
     }
 }
 
-fn init_source(source: impl AsRef<Path>) -> Result<Box<dyn BufRead>, std::io::Error> {
+fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), std::io::Error> {
     let source = File::open(source)?;
     let mut buf = auto_decompress(BufReader::new(source));
 
     // read until start of first event
-    let mut dump = Vec::new();
-    while !dump.ends_with(b"\nE") {
-        dump.clear();
-        if buf.read_until(b'E', &mut dump)? == 0 {
+    let mut header = Vec::new();
+    while !header.ends_with(b"\nE") {
+        if buf.read_until(b'E', &mut header)? == 0 {
             break;
         }
     }
-    Ok(buf)
+    header.pop();
+    Ok((header, buf))
 }
 
 impl Rewind for FileStorage {
     type Error = StorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        self.source = init_source(&self.source_path)?;
+        (_, self.source) = init_source(&self.source_path)?;
 
         Ok(())
     }
@@ -148,7 +152,6 @@ impl UpdateWeights for FileStorage {
             weights,
         )?;
         self.sink.write_all(record.as_bytes())?;
-        self.sink.write(b"\n")?;
         Ok(true)
     }
 }
