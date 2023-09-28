@@ -10,6 +10,9 @@ use thiserror::Error;
 
 use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
 
+#[cfg(feature = "lhef")]
+use crate::lhef::LHEFParser;
+
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
 /// Event storage backed by a single event file
@@ -104,9 +107,15 @@ impl StorageBuilder {
         }
         #[cfg(feature = "lhef")]
         if bytes.starts_with(b"<LesHouchesEvents") {
-            use crate::lhef::FileReader as LHEFReader;
-            debug!("Read {path:?} as LHEF file");
-            todo!();
+            use crate::lhef::FileStorage as LHEFStorage;
+            debug!("Read {source:?} as LHEF file");
+            let storage =  LHEFStorage::try_new(
+                source,
+                sink,
+                compression,
+                weight_names,
+            )?;
+            return Ok(FileStorage(Box::new(storage)))
         }
         debug!("Read {source:?} as HepMC file");
         let storage = HepMCStorage::try_new(
@@ -225,9 +234,9 @@ pub enum StorageError {
     #[error("Error reading STRIPPER XML event")]
     StripperXMLError(#[from] crate::stripper_xml::reader::ReadError),
     #[cfg(feature = "lhef")]
-    /// Error reading a LHEF event
-    #[error("Error reading LHEF event")]
-    LHEFError(#[from] ::lhef::reader::ReadError),
+    /// LHEF error
+    #[error("LHEF error")]
+    LHEFError(#[from] crate::lhef::Error),
 }
 
 /// Combined storage from several sources (e.g. files)
@@ -335,7 +344,7 @@ pub trait EventFileStorage:
 impl EventFileStorage for crate::ntuple::Reader {}
 
 #[cfg(feature = "lhef")]
-impl EventFileStorage for crate::lhef::FileReader {}
+impl EventFileStorage for crate::lhef::FileStorage {}
 
 impl EventFileStorage for crate::hepmc2::FileStorage {}
 
@@ -349,6 +358,9 @@ impl EventFileStorage for crate::hepmc2::FileStorage {}
 pub enum EventRecord {
     /// Bare HepMC event record
     HepMC(String),
+    #[cfg(feature = "lhef")]
+    /// Bare Les Houches Event record
+    LHEF(String),
 }
 
 /// Converter from event records to internal event format
@@ -383,6 +395,8 @@ impl TryConvert<EventRecord, Event> for Converter {
     fn try_convert(&self, record: EventRecord) -> Result<Event, Self::Error> {
         let event = match record {
             EventRecord::HepMC(record) => self.parse_hepmc(&record)?,
+            #[cfg(feature = "lhef")]
+            EventRecord::LHEF(record) => self.parse_lhef(&record)?,
         };
         Ok(event)
     }

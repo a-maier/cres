@@ -3,13 +3,13 @@ use std::{io::{BufRead, BufReader, BufWriter, Write}, path::{PathBuf, Path}, fs:
 use audec::auto_decompress;
 use log::trace;
 use noisy_float::prelude::*;
-use nom::{multi::count, character::complete::{i32, space1, u32}, sequence::preceded, number::complete::double, IResult, bytes::complete::take_while1};
+use nom::{multi::count, IResult};
 use particle_id::ParticleID;
 use thiserror::Error;
 
 use crate::{
     storage::{StorageError, EventRecord, Converter},
-    traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer},
+    traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer}, parsing::{any_entry, u32_entry, i32_entry, double_entry},
 };
 
 // TODO: add file names to errors
@@ -278,7 +278,7 @@ fn update_named_weights(
     Ok(())
 }
 
-fn update_central_weight(
+pub(crate) fn update_central_weight(
     record: &mut String,
     entry_pos: usize,
     weights: &Weights,
@@ -400,24 +400,9 @@ fn non_weight_entries(line: &str) -> IResult<&str, &str> {
     Ok((rest, parsed))
 }
 
-fn double_entry(line: &str) -> IResult<&str, f64> {
-    preceded(space1, double)(line)
-}
-
-fn any_entry(line: &str) -> IResult<&str, &str> {
-    preceded(space1, non_space)(line)
-}
-
-fn u32_entry(line: &str) -> IResult<&str, u32> {
-    preceded(space1, u32)(line)
-}
-
-fn i32_entry(line: &str) -> IResult<&str, i32> {
-    preceded(space1, i32)(line)
-}
-
 #[cfg(feature = "multiweight")]
 fn string_entry(line: &str) -> IResult<&str, &str> {
+    use nom::{character::complete::space1, sequence::preceded};
     preceded(space1, string)(line)
 }
 
@@ -425,8 +410,4 @@ fn string_entry(line: &str) -> IResult<&str, &str> {
 fn string(line: &str) -> IResult<&str, &str> {
     use nom::{character::complete::char, sequence::delimited, bytes::complete::take_until};
     delimited(char('"'), take_until("\""), char('"'))(line)
-}
-
-fn non_space(line: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| !c.is_ascii_whitespace())(line)
 }

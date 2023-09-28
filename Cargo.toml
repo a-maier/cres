@@ -65,9 +65,10 @@ name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 
 [features]
-default = ["multiweight", "hardware-lock-elision"]
+default = ["multiweight", "hardware-lock-elision", "lhef"]
 # ntuple = ["dep:cc", "dep:bindgen"]
 # capi = ["multiweight"]
+lhef = []
 multiweight = []
 hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
 
