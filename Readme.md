@@ -47,14 +47,14 @@ Usage
 
 The basic usage is
 
-    cres -a JETALGO -R JETR --jetpt JETPT --max-cell-size R -o OUT.HEPMC2 IN.HEPMC2
+    cres -a JETALGO -R JETR --jetpt JETPT --max-cell-size R -o OUTDIR EVENTFILES...
 
-This takes a file `IN.HEPMC2` (or several files) in hepmc2 or Les
-Houches Event format with mixed-weight events and produces a file
-`OUT.HEPMC2` with a smaller contribution from negative weights. The
-input file can be compressed with bzip2, gzip, zstd, or lz4. The input
-format is detected automatically, the output format can be set with
-the `--outformat` option and defaults to hepmc2.
+This takes a a number of input events files in HepMC2 or Les Houches
+Event format with mixed-weight events and for each file produces an
+output file of the same name inside `OUTDIR` with a smaller
+contribution from negative weights. The input file can be compressed
+with bzip2, gzip, zstd, or lz4. The input format is detected
+automatically.
 
 We recommend to set the jet algorithm `JETALGO`, jet radius `JETR`,
 and minimum jet transverse momentum `JETPT` to the same values that
