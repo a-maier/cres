@@ -76,9 +76,11 @@ pub(crate) struct Opt {
     #[clap(long, default_value = "0.")]
     pub(crate) ptweight: f64,
 
-    /// Whether to dump selected cells of interest.
-    #[clap(short = 'd', long)]
-    pub(crate) dumpcells: bool,
+    // TODO: make this option work again
+    // this will require some update to the `UpdateWeights` implementations
+    // /// Whether to dump selected cells of interest.
+    // #[clap(short = 'd', long)]
+    // pub(crate) dumpcells: bool,
 
     #[clap(long, value_parser = parse_compr,
                 help = "Compress output file.

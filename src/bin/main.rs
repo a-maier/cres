@@ -2,11 +2,9 @@ mod opt_common;
 mod opt_cres;
 mod opt_cres_validate;
 
-use std::cell::RefCell;
 use std::error::Error;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use crate::opt_cres::{Opt, Search};
 use crate::opt_cres_validate::validate;
@@ -18,7 +16,6 @@ use cres::storage::{Converter, StorageBuilder};
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
 use cres::{
-    cell_collector::CellCollector,
     neighbour_search::{NaiveNeighbourSearch, TreeSearch},
     prelude::*,
     resampler::DefaultResamplerBuilder,
@@ -82,11 +79,12 @@ where
         });
     let event_storage = event_storage.build_from_files_iter(files)?;
 
-    let cell_collector = if opt.dumpcells {
-        Some(Rc::new(RefCell::new(CellCollector::new())))
-    } else {
-        None
-    };
+    let cell_collector = None;
+    // let cell_collector = if opt.dumpcells {
+    //     Some(Rc::new(RefCell::new(CellCollector::new())))
+    // } else {
+    //     None
+    // };
     let resampler = DefaultResamplerBuilder::default()
         .max_cell_size(opt.max_cell_size)
         .ptweight(opt.ptweight)
