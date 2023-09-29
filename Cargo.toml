@@ -72,7 +72,7 @@ hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
 lhef = []
 ntuple = ["dep:ntuple", "dep:cc", "dep:bindgen"]
 stripper-xml = ["dep:stripper-xml", "serde", "quick-xml"]
-# capi = ["multiweight"]
+capi = ["multiweight"]
 
 [build-dependencies]
 anyhow = "1.0"

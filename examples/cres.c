@@ -12,6 +12,7 @@
  * ```
  * cargo build --release --features=ntuple
  * ```
+ * and similar for other features described in the Readme.
  *
  * Then copy the compiled libraries (`libcres.a` and `libcres.so` on
  * linux) and the generated header `cres.h` to a directory where
@@ -24,7 +25,7 @@
  *
  * Finally, run with
  * ```
- * ./cres INFILES.hepmc OUTFILE.hepmc
+ * ./cres INFILES OUTDIR
  * ```
  */
 
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
   opt.n_infiles = argc - 2;
   opt.infiles = argv + 1;
   /* and the last command line arguments is the output file */
-  opt.outfile = argv[argc - 1];
+  opt.outdir = argv[argc - 1];
 
   /* settings for jet clustering */
   opt.jet_def.algorithm = AntiKt;

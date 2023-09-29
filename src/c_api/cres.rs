@@ -2,24 +2,24 @@
 #![allow(clippy::unnecessary_cast)]
 use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
-use crate::cluster;
-use crate::converter::ClusteringConverter;
+use crate::cluster::{self, DefaultClustering};
 use crate::distance::{Distance, EuclWithScaledPt};
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
-use crate::reader::CombinedReader;
 use crate::resampler::{NoObserver, ResamplerBuilder};
 use crate::seeds::StrategicSelector;
+use crate::storage::{StorageBuilder, Converter};
 use crate::traits::Resample;
 
 use crate::neighbour_search::{
     NaiveNeighbourSearch, TreeSearch,
 };
-use crate::writer::FileWriter;
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
+use std::fs::create_dir_all;
 use std::os::raw::{c_char, c_double};
 use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Error};
 use log::debug;
@@ -30,14 +30,11 @@ use noisy_float::prelude::*;
 #[derive(Copy, Clone, Debug)]
 pub struct Opt {
     /// Names of input files
-    ///
-    /// Input files should be in HepMC2 format,
-    /// possibly compressed with bzip2, gzip, lz4, or zstd
     infiles: *mut *mut c_char,
     /// Number of input files
     n_infiles: usize,
-    /// Name of HepMC output file
-    outfile: *mut c_char,
+    /// Name of output directory
+    outdir: *mut c_char,
     /// Which distance function to use
     ///
     /// If set to `NULL`, the default distance function from
@@ -171,28 +168,30 @@ where
 
     let infiles: Vec<_> = unsafe {
         let names = std::slice::from_raw_parts(opt.infiles, opt.n_infiles);
-        names.iter().map(|&p| CStr::from_ptr(p)).collect()
+        names.iter().map(|&p| OsStr::from_bytes(CStr::from_ptr(p).to_bytes())).collect()
     };
     debug!("Will read input from {:?}", infiles);
 
-    let outfile = unsafe { CStr::from_ptr(opt.outfile) };
-    let outfile = OsStr::from_bytes(outfile.to_bytes());
-    debug!("Will write output to {:?}", outfile);
+    let outdir = unsafe { CStr::from_ptr(opt.outdir) };
+    let outdir = OsStr::from_bytes(outdir.to_bytes());
+    debug!("Will write output to {:?}", outdir);
+    create_dir_all(outdir)?;
 
-    let reader = CombinedReader::from_files(
-        infiles
-            .iter()
-            .rev()
-            .map(|f| OsStr::from_bytes(f.to_bytes())),
-    )?;
+    let files = infiles.into_iter()
+        .map(|f| {
+            let out = PathBuf::from_iter([outdir, PathBuf::from(f).file_name().unwrap()]);
+            (f, out)
+        });
 
-    let converter = ClusteringConverter::new(opt.jet_def.into());
+    // TODO: multiple weights, output compression
+    let event_storage = StorageBuilder::default()
+        .build_from_files_iter(files)?;
+
+    let converter = Converter::new();
+    let clustering = DefaultClustering::new(opt.jet_def.into());
 
     // TODO: unweighting
     let unweighter = NO_UNWEIGHTING;
-
-    // TODO: other output formats
-    let writer = FileWriter::builder().filename(outfile.into()).build();
 
     // TODO: seeds, observer
     let resampler = ResamplerBuilder::default()
@@ -202,11 +201,11 @@ where
         .build();
 
     let mut cres = CresBuilder {
-        reader,
+        event_storage,
         converter,
+        clustering,
         resampler,
         unweighter,
-        writer,
     }
     .build();
     debug!("Starting resampler");

@@ -165,7 +165,7 @@ mod tests {
             include_neutrinos: Default::default(),
             unweight: Default::default(),
             ptweight: Default::default(),
-            dumpcells: Default::default(),
+            // dumpcells: Default::default(),
             compression: Default::default(),
             loglevel: "info".to_owned(),
             search: Default::default(),
