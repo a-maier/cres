@@ -117,11 +117,12 @@ impl UpdateWeights for FileStorage {
         weights: &[Weights]
     ) -> Result<usize, Self::Error> {
         self.rewind()?;
-        let mut nevent = 0;
-        while self.update_next_weights(&weights[nevent])? {
-            nevent += 1;
+        for (n, weight) in weights.iter().enumerate() {
+            if !self.update_next_weights(weight)? {
+                return Ok(n)
+            }
         }
-        Ok(nevent)
+        Ok(weights.len())
     }
 
     fn update_next_weights(
