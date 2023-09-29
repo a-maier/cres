@@ -12,9 +12,10 @@ use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, ut
 
 #[cfg(feature = "lhef")]
 use crate::lhef::LHEFParser;
-
 #[cfg(feature = "ntuple")]
 use crate::ntuple::NTupleConverter;
+#[cfg(feature = "stripper-xml")]
+use crate::stripper_xml::StripperXmlParser;
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
@@ -110,8 +111,16 @@ impl StorageBuilder {
             return Err(CreateError::XMLUnsupported(source));
             #[cfg(feature = "stripper-xml")]
             {
-                debug!("Read {path:?} as STRIPPER XML file");
-                todo!();
+                use crate::stripper_xml::FileStorage as XMLStorage;
+                debug!("Read {source:?} as ROOT ntuple");
+                let storage = XMLStorage::try_new(
+                    source,
+                    sink,
+                    compression,
+                    weight_names,
+                    &_scaling,
+                )?;
+                return Ok(FileStorage(Box::new(storage)))
             }
         }
         #[cfg(feature = "lhef")]
@@ -151,7 +160,7 @@ impl StorageBuilder {
         #[cfg(feature = "stripper-xml")]
         {
             let (files, scaling) =
-                crate::stripper_xml::reader::extract_scaling(files)?;
+                crate::stripper_xml::extract_scaling(files)?;
             let mut builder = self;
             builder.scaling = scaling;
             builder.build_from_files_iter_known_scaling(files)
@@ -223,7 +232,7 @@ pub enum CreateError {
     #[cfg(feature = "stripper-xml")]
     /// XML error in STRIPPER XML file
     #[error("XML Error in file `{0}`")]
-    XMLError(PathBuf, #[source] crate::stripper_xml::reader::XMLError),
+    XMLError(PathBuf, #[source] crate::stripper_xml::Error),
 }
 
 /// Error reading an event
@@ -245,7 +254,7 @@ pub enum StorageError {
     #[cfg(feature = "stripper-xml")]
     /// Error reading a STRIPPER XML event
     #[error("Error reading STRIPPER XML event")]
-    StripperXMLError(#[from] crate::stripper_xml::reader::ReadError),
+    StripperXMLError(#[from] crate::stripper_xml::Error),
     #[cfg(feature = "lhef")]
     /// LHEF error
     #[error("LHEF error")]
@@ -355,13 +364,16 @@ pub trait EventFileStorage:
 {
 }
 
-#[cfg(feature = "ntuple")]
-impl EventFileStorage for crate::ntuple::FileStorage {}
+impl EventFileStorage for crate::hepmc2::FileStorage {}
 
 #[cfg(feature = "lhef")]
 impl EventFileStorage for crate::lhef::FileStorage {}
 
-impl EventFileStorage for crate::hepmc2::FileStorage {}
+#[cfg(feature = "ntuple")]
+impl EventFileStorage for crate::ntuple::FileStorage {}
+
+#[cfg(feature = "stripper-xml")]
+impl EventFileStorage for crate::stripper_xml::FileStorage {}
 
 /// A bare-bones event record
 ///
@@ -379,6 +391,9 @@ pub enum EventRecord {
     #[cfg(feature = "ntuple")]
     /// ROOT NTuple event record
     NTuple(Box<ntuple::Event>),
+    #[cfg(feature = "stripper-xml")]
+    /// STRIPPER XML event record
+    StripperXml(String),
 }
 
 /// Converter from event records to internal event format
@@ -417,6 +432,8 @@ impl TryConvert<EventRecord, Event> for Converter {
             EventRecord::LHEF(record) => self.parse_lhef(&record)?,
             #[cfg(feature = "ntuple")]
             EventRecord::NTuple(record) => self.convert_ntuple(*record)?,
+            #[cfg(feature = "stripper-xml")]
+            EventRecord::StripperXml(record) => self.parse_stripper_xml(&record)?,
         };
         Ok(event)
     }
