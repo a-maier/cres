@@ -15,6 +15,11 @@ pub trait UpdateWeights {
 
     /// Update the weights for the next event
     fn update_next_weights(&mut self, weights: &Weights) -> Result<bool, Self::Error>;
+
+    /// Finish updating weights
+    fn finish_weight_update(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// Rewind to the beginning of a stream

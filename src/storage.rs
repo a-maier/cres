@@ -197,6 +197,10 @@ impl UpdateWeights for FileStorage {
     ) -> Result<bool, Self::Error> {
         self.0.update_next_weights(weights)
     }
+
+    fn finish_weight_update(&mut self) -> Result<(), Self::Error> {
+        self.0.finish_weight_update()
+    }
 }
 
 /// Error creating an event storage
@@ -321,6 +325,7 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
                 progress.inc(1);
                 nevent += 1;
             }
+            source.finish_weight_update()?;
         }
         progress.finish();
         Ok(nevent)
@@ -335,6 +340,7 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
             if res {
                 return Ok(true);
             }
+            self.storage[self.current].finish_weight_update()?;
             self.current += 1;
         }
         Ok(false)

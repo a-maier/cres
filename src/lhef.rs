@@ -152,6 +152,7 @@ impl UpdateWeights for FileStorage {
                 return Ok(n)
             }
         }
+        self.finish_weight_update()?;
         Ok(weights.len())
     }
 
@@ -176,6 +177,11 @@ impl UpdateWeights for FileStorage {
         }
         self.sink.write_all(record.as_bytes())?;
         Ok(true)
+    }
+
+    fn finish_weight_update(&mut self) -> Result<(), Self::Error> {
+        self.sink.write_all(b"\n</LesHouchesEvents>\n")?;
+        Ok(())
     }
 }
 
