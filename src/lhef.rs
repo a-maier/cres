@@ -5,15 +5,14 @@ use log::trace;
 use noisy_float::prelude::*;
 use nom::{sequence::preceded, character::complete::{i32, space0, u32}, IResult, multi::count};
 use particle_id::ParticleID;
-use thiserror::Error;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{StorageError, EventRecord, Converter}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight};
+use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{FileStorageError, EventRecord, Converter, CreateError, ErrorKind, ReadError, WriteError}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight, util::take_chars};
 
 /// Storage backed by (potentially compressed) Les Houches Event Files
 pub struct FileStorage {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
-    _sink_path: PathBuf,
+    sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
 }
@@ -25,23 +24,38 @@ impl FileStorage {
         sink_path: PathBuf,
         compression: Option<Compression>,
         _weight_names: Vec<String>
-    ) -> Result<Self, std::io::Error> {
+    ) -> Result<Self, CreateError> {
+        use CreateError::*;
+
         let (header, source) = init_source(&source_path)?;
-        let outfile = File::create(&sink_path)?;
+        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression)?;
-        sink.write_all(&header)?;
+        let mut sink = compress_writer(sink, compression)
+            .map_err(CompressTarget)?;
+        sink.write_all(&header).map_err(Write)?;
 
         Ok(FileStorage {
             source_path,
             source,
-            _sink_path: sink_path,
+            sink_path,
             sink,
             _weight_names,
         })
     }
 
-    fn read_record(&mut self) -> Option<Result<String, Error>> {
+    #[allow(clippy::wrong_self_convention)]
+    fn into_storage_error<T, E: Into<ErrorKind>>(
+        &self,
+        res: Result<T, E>
+    ) -> Result<T, FileStorageError> {
+        res.map_err(|err| FileStorageError::new(
+            self.source_path.clone(),
+            self.sink_path.clone(),
+            err.into()
+        ))
+    }
+
+    fn read_record(&mut self) -> Option<Result<String, ReadError>> {
         let mut record = Vec::new();
         while !record.ends_with(b"</event>") {
             match self.source.read_until(b'>', &mut record) {
@@ -54,38 +68,67 @@ impl FileStorage {
         trace!("Read Les Houches Event record:\n{record}");
         Some(Ok(record))
     }
+
+    fn update_next_weights_helper(&mut self, weights: &Weights) -> Result<bool, ErrorKind> {
+        use ErrorKind::*;
+        use ReadError::ParseEntry;
+        use WriteError::IO;
+
+        let parse_err = |what, record: &str| Read(
+            ParseEntry(what, take_chars(record, 100))
+        );
+
+        let Some(record) = self.read_record() else {
+            return Ok(false)
+        };
+        let mut record = record?;
+
+        let (rest, _non_weight) = non_weight_entries(&record)
+            .map_err(|_| parse_err("entries before weight", &record))?;
+
+        let weights_start = record.len() - rest.len();
+        update_central_weight(&mut record, weights_start, weights)?;
+
+        #[cfg(feature = "multiweight")]
+        if weights.len() > 1 {
+            unimplemented!("Multiple weights in LHEF")
+        }
+        self.sink.write_all(record.as_bytes()).map_err(IO)?;
+        Ok(true)
+    }
 }
 
 impl Rewind for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        (_, self.source) = init_source(&self.source_path)?;
+        (_, self.source) = self.into_storage_error(
+            init_source(&self.source_path)
+        )?;
 
         Ok(())
     }
 }
 
 impl Iterator for FileStorage {
-    type Item = Result<EventRecord, StorageError>;
+    type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.read_record()
-            .map(|r| match r {
-                Ok(record) => Ok(EventRecord::LHEF(record)),
-                Err(err) => Err(err.into()),
-            })
+            .map(|r| self.into_storage_error(r).map(EventRecord::LHEF))
     }
 }
 
-fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), std::io::Error> {
-    let source = File::open(source)?;
+fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
+    use CreateError::*;
+
+    let source = File::open(source).map_err(OpenInput)?;
     let mut buf = auto_decompress(BufReader::new(source));
 
     // read until start of first event
     let mut header = Vec::new();
     while !header.ends_with(b"\n</init>") {
-        if buf.read_until(b'>', &mut header)? == 0 {
+        if buf.read_until(b'>', &mut header).map_err(Read)? == 0 {
             break;
         }
     }
@@ -102,36 +145,50 @@ pub trait LHEFParser {
 }
 
 impl LHEFParser for Converter {
-    type Error = Error;
+    type Error = ReadError;
 
     fn parse_lhef(&self, mut record: &str) -> Result<Event, Self::Error> {
+        use ReadError::*;
         const STATUS_OUTGOING: i32 = 1;
+
+        let parse_err = |entry, record: &str| ParseEntry(entry, take_chars(record, 100));
+
 
         // TODO: multiple weights
         record = record.trim_start();
         let Some(line_end) = record.find('\n') else {
-            return Err(Error::NoLineBreak(record.to_string()));
+            return Err(FindEntry("line break", record.to_string()));
         };
         record = &record[(1 + line_end)..];
-        let (rest, nparticles) = preceded(space0, u32)(record)?;
+        let (rest, nparticles): (_, u32) = u32_entry0(record)
+            .map_err(|_| parse_err("NUP entry", record))?;
         let nparticles = nparticles as usize;
         let mut event = EventBuilder::with_capacity(nparticles - 2);
-        let (rest, _idrup) = any_entry(rest)?;
-        let (rest, wt) = double_entry(rest)?;
+        let (rest, _idrup) = any_entry(rest)
+            .map_err(|_| parse_err("IDRUP entry", rest))?;
+        let (rest, wt) = double_entry(rest)
+            .map_err(|_| parse_err("XWGTUP entry", rest))?;
         event.add_weight(n64(wt));
         for line in rest.lines().skip(1).take(nparticles) {
-            let (rest, id) = preceded(space0, i32)(line)?;
+            let (rest, id) = i32_entry0(line)
+                .map_err(|_| parse_err("IDUP entry", line))?;
             let id = ParticleID::new(id);
-            let (rest, status) = i32_entry(rest)?;
+            let (rest, status) = i32_entry(rest)
+                .map_err(|_| parse_err("ISTUP entry", rest))?;
             if status != STATUS_OUTGOING {
                 continue;
             }
             // ignore decay parents & colour
-            let (rest, _) = count(any_entry, 4)(rest)?;
-            let (rest, px) = double_entry(rest)?;
-            let (rest, py) = double_entry(rest)?;
-            let (rest, pz) = double_entry(rest)?;
-            let (_, e) = double_entry(rest)?;
+            let (rest, _) = count(any_entry, 4)(rest)
+                .map_err(|_| parse_err("entries before particle momentum", rest))?;
+            let (rest, px) = double_entry(rest)
+                .map_err(|_| parse_err("px entry", rest))?;
+            let (rest, py) = double_entry(rest)
+                .map_err(|_| parse_err("py entry", rest))?;
+            let (rest, pz) = double_entry(rest)
+                .map_err(|_| parse_err("py entry", rest))?;
+            let (_, e) = double_entry(rest)
+                .map_err(|_| parse_err("energy entry", rest))?;
             event.add_outgoing(id, [n64(e), n64(px), n64(py), n64(pz)].into());
         }
 
@@ -140,7 +197,7 @@ impl LHEFParser for Converter {
 }
 
 impl UpdateWeights for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn update_all_weights(
         &mut self,
@@ -160,48 +217,14 @@ impl UpdateWeights for FileStorage {
         &mut self,
         weights: &Weights
     ) -> Result<bool, Self::Error> {
-        let Some(record) = self.read_record() else {
-            return Ok(false)
-        };
-        let mut record = record?;
-
-        let (rest, _non_weight) = non_weight_entries(&record)
-            .map_err(Error::from)?;
-
-        let weights_start = record.len() - rest.len();
-        update_central_weight(&mut record, weights_start, weights)?;
-
-        #[cfg(feature = "multiweight")]
-        if weights.len() > 1 {
-            unimplemented!("Multiple weights in LHEF")
-        }
-        self.sink.write_all(record.as_bytes())?;
-        Ok(true)
+        let res = self.update_next_weights_helper(weights);
+        self.into_storage_error(res)
     }
 
     fn finish_weight_update(&mut self) -> Result<(), Self::Error> {
-        self.sink.write_all(b"\n</LesHouchesEvents>\n")?;
+        let res = self.sink.write_all(b"\n</LesHouchesEvents>\n");
+        self.into_storage_error(res.map_err(WriteError::IO))?;
         Ok(())
-    }
-}
-
-/// Les Houches Event Format error
-#[derive(Debug, Error)]
-pub enum Error {
-    /// No line breaks
-    #[error("No line breaks in event record {0}")]
-    NoLineBreak(String),
-    /// Parse error
-    #[error("Error parsing entry in event record: {0}")]
-    ParseError(String),
-    /// I/O error
-    #[error("I/O error")]
-    IOError(#[from] std::io::Error),
-}
-
-impl From<nom::Err<nom::error::Error<&str>>> for Error {
-    fn from(source: nom::Err<nom::error::Error<&str>>) -> Self {
-        Self::ParseError(source.to_string())
     }
 }
 
@@ -213,4 +236,12 @@ fn non_weight_entries(record: &str) -> IResult<&str, &str> {
     let (rest, _idrup) = any_entry(rest)?;
     let (parsed, rest) = record.split_at(record.len() - rest.len());
     Ok((rest, parsed))
+}
+
+pub(crate) fn u32_entry0(line: &str) -> IResult<&str, u32> {
+    preceded(space0, u32)(line)
+}
+
+pub(crate) fn i32_entry0(line: &str) -> IResult<&str, i32> {
+    preceded(space0, i32)(line)
 }

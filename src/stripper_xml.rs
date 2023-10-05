@@ -1,20 +1,21 @@
-use std::{path::{PathBuf, Path}, io::{BufRead, Read, Write, BufWriter, BufReader}, collections::HashMap, fs::File, borrow::Cow, str::Utf8Error, num::ParseIntError, fmt::{Display, self}, string::FromUtf8Error};
+use std::{path::{PathBuf, Path}, io::{BufRead, Read, Write, BufWriter, BufReader}, collections::HashMap, fs::File, borrow::Cow, fmt::{Display, self}};
 
 use audec::auto_decompress;
 use log::{debug, trace};
 use noisy_float::prelude::*;
-use nom::{sequence::{tuple, preceded}, character::complete::{char, i32, space0, space1, multispace0}, number::complete::double, IResult, bytes::complete::tag};
+use nom::{sequence::{tuple, preceded}, character::complete::{char, i32, space0, space1, multispace0, u64}, IResult, bytes::complete::tag, combinator::all_consuming};
 use particle_id::ParticleID;
+use quick_xml::events::attributes::Attribute;
 use stripper_xml::normalization::Normalization;
 use thiserror::Error;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{StorageError, EventRecord, CreateError, Converter}, util::trim_ascii_start, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
+use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{EventRecord, CreateError, Converter, FileStorageError, ErrorKind, ReadError, Utf8Error, WriteError}, util::{trim_ascii_start, take_chars}, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
 
 /// Storage backed by (potentially compressed) Les Houches Event Files
 pub struct FileStorage {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
-    _sink_path: PathBuf,
+    sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
     weight_scale: f64,
@@ -37,35 +38,28 @@ impl FileStorage {
         use CreateError::*;
 
         let (header, source) = init_source(&source_path)?;
-        let outfile = File::create(&sink_path)?;
+        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression)?;
-        sink.write_all(&header)?;
-        let header_info = extract_xml_info(header.as_slice())
-            .map_err(|e| XMLError(source_path.clone(), e))?;
+        let mut sink = compress_writer(sink, compression).map_err(CompressTarget)?;
+        sink.write_all(&header).map_err(Write)?;
+        let header_info = extract_xml_info(header.as_slice())?;
         let XMLTag::Eventrecord {
             alpha_s_power: _,
             name,
             nevents: _,
             nsubevents
         } = header_info else {
-            return Err(XMLError(
-                source_path,
-                Error::BadTag(header_info.to_string())
-            ))
+            return Err(XMLError(Error::BadTag(header_info.to_string())))
         };
 
         let Some(weight_scale) = scaling.get(&name).copied() else {
-            return Err(XMLError(
-                source_path,
-                Error::MissingScaling(name)
-            ))
+            return Err(XMLError(Error::MissingScaling(name)))
         };
 
         Ok(FileStorage {
             source_path,
             source,
-            _sink_path: sink_path,
+            sink_path,
             sink,
             _weight_names,
             weight_scale,
@@ -73,7 +67,7 @@ impl FileStorage {
         })
     }
 
-    fn read_record(&mut self) -> Option<Result<String, Error>> {
+    fn read_record(&mut self) -> Option<Result<String, ReadError>> {
         let mut record = b"<se".to_vec();
         loop {
             match self.source.read_until(b'e', &mut record) {
@@ -92,7 +86,7 @@ impl FileStorage {
 
         let record = match String::from_utf8(record) {
             Ok(record) => record,
-            Err(err) => return Some(Err(err.into())),
+            Err(err) => return Some(Err(Utf8Error::from(err).into())),
         };
 
         assert!(record.starts_with("<se"));
@@ -103,44 +97,103 @@ impl FileStorage {
         Some(Ok(record))
     }
 
-    fn rescale_weight(&self, record: &mut String) -> Result<(), Error> {
-        let (rest, start) = weight_start(record.as_str())?;
-        let (rest, weight) = double(rest)?;
+    #[allow(clippy::wrong_self_convention)]
+    fn into_storage_error<T, E: Into<ErrorKind>>(
+        &self,
+        res: Result<T, E>
+    ) -> Result<T, FileStorageError> {
+        res.map_err(|err| FileStorageError::new(
+            self.source_path.clone(),
+            self.sink_path.clone(),
+            err.into()
+        ))
+    }
+
+    fn rescale_weight(&self, record: &mut String) -> Result<(), ReadError> {
+        use ReadError::*;
+
+        let parse_err = |what, record: &str| {
+            ParseEntry(what, take_chars(record, 100))
+        };
+
+        let (rest, start) = weight_start(record.as_str())
+            .map_err(|_| parse_err("start of event record", record))?;
+        let (rest, weight) = double(rest)
+            .map_err(|_| parse_err("weight entry", rest))?;
         let start = start.len();
         let end = record.len() - rest.len();
         record.replace_range(start..end, &(self.weight_scale * weight).to_string());
         trace!("rescaled weight: {weight} -> {}", self.weight_scale * weight);
         Ok(())
     }
+
+    fn update_next_weights_helper(&mut self, weights: &Weights) -> Result<bool, ErrorKind> {
+        use ErrorKind::*;
+        use ReadError::ParseEntry;
+        use WriteError::IO;
+
+        let parse_err = |what, record: &str| {
+            Read(ParseEntry(what, take_chars(record, 100)))
+        };
+
+        let Some(record) = self.read_record() else {
+            return Ok(false)
+        };
+        let mut record = record?;
+
+        #[cfg(feature = "multiweight")]
+        let weight = weights[0];
+        #[cfg(not(feature = "multiweight"))]
+        let weight = weights;
+
+        let weight = weight / self.weight_scale;
+
+        // TODO: code duplication with `rescale_weight`
+        let (rest, start) = weight_start(record.as_str())
+            .map_err(|_| parse_err("start of event record", &record))?;
+        let (rest, old_weight) = double(rest)
+            .map_err(|_| parse_err("weight entry", rest))?;
+
+        let start = start.len();
+        let end = record.len() - rest.len();
+        record.replace_range(start..end, &weight.to_string());
+        trace!("replaced weight: {old_weight} -> {weight}");
+
+        #[cfg(feature = "multiweight")]
+        if weights.len() > 1 {
+            unimplemented!("Multiple weights in STRIPPER XML format")
+        }
+        self.sink.write_all(record.as_bytes()).map_err(IO)?;
+        Ok(true)
+    }
 }
 
 impl Rewind for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        (_, self.source) = init_source(&self.source_path)?;
+        let init = init_source(&self.source_path);
+        (_, self.source) = self.into_storage_error(init)?;
 
         Ok(())
     }
 }
 
 impl Iterator for FileStorage {
-    type Item = Result<EventRecord, StorageError>;
+    type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_record()
+        let res = self.read_record()
             .map(|r| match r {
                 Ok(mut record) => {
                     // TODO: might be better to do this in the Converter, but it
                     // doesn't have the information
-                    if let Err(err) = self.rescale_weight(&mut record) {
-                        return Err(err.into());
-                    } else {
-                        Ok(EventRecord::StripperXml(record))
-                    }
+                    self.rescale_weight(&mut record)
+                        .map(|_| EventRecord::StripperXml(record))
                 },
-                Err(err) => Err(err.into()),
-            })
+                Err(err) => Err(err),
+            });
+        res.map(|n| self.into_storage_error(n))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -156,19 +209,19 @@ where
     P: AsRef<Path>,
     Q: AsRef<Path>,
 {
+    use CreateError::*;
+
     let mut event_files = Vec::new();
     let mut rescale: HashMap<_, (f64, u64)> = HashMap::new();
     for (path, out) in paths {
         let path = path.as_ref();
-        let file = File::open(path)?;
+        let file = File::open(path).map_err(OpenInput)?;
         let mut r = auto_decompress(BufReader::new(file));
         if let Ok(buf) = r.fill_buf() {
             let buf = trim_ascii_start(buf);
             if buf.starts_with(b"<?xml") {
                 debug!("extracting scaling information from {path:?}");
-                let tag = extract_xml_info(r).map_err(|err| {
-                    CreateError::XMLError(path.to_owned(), err)
-                })?;
+                let tag = extract_xml_info(r)?;
                 match tag {
                     XMLTag::Normalization { name, scale } => {
                         let entry = rescale.entry(name).or_default();
@@ -196,7 +249,7 @@ where
     Ok((event_files, rescale))
 }
 
-pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, Error> {
+pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
     use quick_xml::events::Event;
     use Error::*;
 
@@ -214,7 +267,7 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, Error> {
                         let rest = reader.into_inner();
                         let all = buf.chain(rest);
                         let norm: Normalization =
-                            quick_xml::de::from_reader(all)?;
+                            quick_xml::de::from_reader(all).map_err(NormalizationDeser)?;
                         return Ok(XMLTag::Normalization {
                             name: norm.contribution.name,
                             scale: norm.contribution.xsection.0[0],
@@ -231,34 +284,45 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, Error> {
                                 Err(_) => None,
                             });
                         for attr in attributes {
+                            let attr_err = |attr, val: &Attribute<'_>| {
+                                let val: &[u8] = val.value.as_ref();
+                                Error::AttrType {
+                                    attr,
+                                    val: String::from_utf8_lossy(val).to_string(),
+                                    wanted: "64bit floating-point number",
+                                }
+                            };
                             match attr.key.0 {
                                 b"nevents" => {
-                                    nevents =
-                                        Some(parse_u64(attr.value.as_ref())?)
+                                    let (_, val)  = parse_u64(&attr)
+                                        .map_err(|_| attr_err("nevents", &attr))?;
+                                    nevents = Some(val);
                                 }
                                 b"nsubevents" => {
-                                    nsubevents =
-                                        Some(parse_u64(attr.value.as_ref())?)
+                                    let (_, val)  = parse_u64(&attr)
+                                        .map_err(|_| attr_err("nsubevents", &attr))?;
+                                    nsubevents = Some(val);
                                 }
                                 b"name" => name = Some(to_string(attr.value)?),
                                 b"as" => {
-                                    alpha_s_power =
-                                        Some(parse_u64(attr.value.as_ref())?)
+                                    let (_, val)  = parse_u64(&attr)
+                                        .map_err(|_| attr_err("as", &attr))?;
+                                    alpha_s_power = Some(val);
                                 }
                                 _ => {}
                             }
                         }
                         let Some(name) = name else {
-                            return Err(NoEventrecordAttr("name"));
+                            return Err(NoEventrecordAttr("name").into());
                         };
                         let Some(nsubevents) = nsubevents else {
-                            return Err(NoEventrecordAttr("nsubevents"));
+                            return Err(NoEventrecordAttr("nsubevents").into());
                         };
                         let Some(nevents) = nevents else {
-                            return Err(NoEventrecordAttr("nevents"));
+                            return Err(NoEventrecordAttr("nevents").into());
                         };
                         let Some(alpha_s_power) = alpha_s_power else {
-                            return Err(NoEventrecordAttr("as"));
+                            return Err(NoEventrecordAttr("as").into());
                         };
                         return Ok(XMLTag::Eventrecord {
                             alpha_s_power,
@@ -268,15 +332,21 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, Error> {
                         });
                     }
                     name => {
-                        let name = std::str::from_utf8(name)?;
-                        return Err(BadTag(name.to_owned()));
+                        let name = std::str::from_utf8(name).map_err(Utf8Error::Utf8)?;
+                        return Err(BadTag(name.to_owned()).into());
                     }
                 }
             }
             Ok(Event::Decl(_) | Event::Text(_)) => {} // ignore,
-            _ => return Err(NoTag),
+            _ => return Err(NoTag.into()),
         }
     }
+}
+
+fn parse_u64<'a, 'b: 'a>(
+    attr: &'a Attribute<'b>
+) -> IResult<&'a [u8], u64> {
+    all_consuming(u64)(attr.value.as_ref())
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -306,26 +376,16 @@ impl Display for XMLTag {
     }
 }
 
-
-fn to_string(value: Cow<[u8]>) -> Result<String, Error> {
+fn to_string(value: Cow<[u8]>) -> Result<String, Utf8Error> {
     match value {
         Cow::Borrowed(s) => Ok(std::str::from_utf8(s)?.to_owned()),
         Cow::Owned(s) => Ok(String::from_utf8(s).map_err(|e| e.utf8_error())?),
     }
 }
 
-fn parse_u64(num: &[u8]) -> Result<u64, Error> {
-    let num: &str = std::str::from_utf8(num)?;
-    let num = num.parse()?;
-    Ok(num)
-}
-
 /// STRIPPER XML Error
 #[derive(Debug, Error)]
 pub enum Error {
-    /// Error opening a file
-    #[error("Failed to open file: {0}")]
-    FileOpen(#[from] std::io::Error),
     /// Missing XML tag
     #[error("File does not start with an XML tag")]
     NoTag,
@@ -338,40 +398,37 @@ pub enum Error {
     /// Missing attribute in event record
     #[error("XML tag `Eventrecord` does not have a `{0}` attribute")]
     NoEventrecordAttr(&'static str),
+    /// Wrong attribute type
+    #[error("Value {val} of attribute `{attr}` is not a `{wanted}`")]
+    AttrType{
+        /// Attribute name
+        attr: &'static str,
+        /// Attribute value
+        val: String,
+        /// Wanted type
+        wanted: &'static str,
+    },
     /// Deserialisation error for [stripper_xml::Normalization]
-    #[error("Failed to deserialise `Normalization`: {0}")]
+    #[error("Failed to deserialise `Normalization`")]
     NormalizationDeser(#[from] quick_xml::DeError),
-    /// UTF8 error
-    #[error("UTF8 error: {0}")]
-    Utf8(#[from] Utf8Error),
-    /// UTF8 error
-    #[error("UTF8 error: {0}")]
-    FromUtf8(#[from] FromUtf8Error),
-    /// Error parsing an integer
-    #[error("Failed to parse integer: {0}")]
-    ParseInt(#[from] ParseIntError),
-    /// Parsing error
-    #[error("Parsing error: {0}")]
-    ParseError(String),
     /// Unclosed tag
     #[error("Tag {0} is not closed in {1}")]
     UnclosedTag(String, String),
+    /// Missing end tag
+    #[error("Failed to find end of tag {0} in {1}")]
+    IncompleteTag(&'static str, String),
 }
 
-impl From<nom::Err<nom::error::Error<&str>>> for Error {
-    fn from(source: nom::Err<nom::error::Error<&str>>) -> Self {
-        Self::ParseError(source.to_string())
-    }
-}
+fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
+    use CreateError::*;
 
-fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), std::io::Error> {
-    let source = File::open(source)?;
+    let source = File::open(source).map_err(OpenInput)?;
     let mut buf = auto_decompress(BufReader::new(source));
 
     // read until start of first event
     let mut header = Vec::new();
     while !header.ends_with(b"<se") {
-        if buf.read_until(b'e', &mut header)? == 0 {
+        if buf.read_until(b'e', &mut header).map_err(Read)? == 0 {
             break;
         }
     }
@@ -389,41 +446,57 @@ pub trait StripperXmlParser {
 }
 
 impl StripperXmlParser for Converter {
-    type Error = Error;
+    type Error = ReadError;
 
     fn parse_stripper_xml(&self, record: &str) -> Result<Event, Self::Error> {
+        use ReadError::*;
+
+        let parse_err = |what, record: &str| {
+            ParseEntry(what, take_chars(record, 100))
+        };
+
         const STATUS_OUTGOING: i32 = 0;
 
         let mut event = EventBuilder::new();
 
-        let (rest, _start) = weight_start(record)?;
-        let (rest, weight) = double(rest)?;
+        let (rest, _start) = weight_start(record)
+            .map_err(|_| parse_err("start of event record", record))?;
+
+        let (rest, weight) = double(rest)
+            .map_err(|_| parse_err("weight entry", rest))?;
+
         // TODO: it might be best to do the weight rescaling here, but
         // the Converter doesn't have that information
         event.add_weight(n64(weight));
 
         let Some(tag_end) = rest.find('>') else {
-            return Err(Error::ParseError(
-                format!("Failed to find end of <se> tag in {record}")
-            ))
+            return Err(Error::IncompleteTag("<se>", take_chars(record, 100)).into());
         };
         let mut rest = &rest[(tag_end + 1)..];
 
         while let Ok((r, _)) = particle_start(rest) {
-            let (r, status) = particle_status(r)?;
+            let (r, status) = particle_status(r)
+                .map_err(|_| parse_err("particle status entry", r))?;
+
             if status != STATUS_OUTGOING {
                 let Some(particle_end) = r.find("</p>") else {
-                    return Err(Error::UnclosedTag("<p".to_string(), rest.to_string()))
+                    return Err(Error::UnclosedTag("<p".to_string(), take_chars(rest, 100)).into())
                 };
                 rest = &r[(particle_end + "</p>".len())..];
                 continue;
             }
 
-            let (r, pid) = particle_id(r)?;
-            let (r, _) = tag("\">")(r)?;
-            let (r, p) = particle_momentum(&r[1..])?;
+            type NomErr<'a> = nom::Err<nom::error::Error<&'a str>>;
+            let (r, pid) = particle_id(r)
+                .map_err(|_| parse_err("particle id entry", r))?;
+            let (r, _) = tag("\">")(r)
+                .map_err(|_err: NomErr<'_>| Error::IncompleteTag("<p>", take_chars(r, 100)))?;
+            let (r, p) = particle_momentum(&r[1..])
+                .map_err(|_| parse_err("particle momentum entry", r))?;
             event.add_outgoing(pid, p);
-            (rest, _) = tag("</p>")(r)?;
+            (rest, _) = tag("</p>")(r).map_err(
+                |_err: NomErr<'_>| Error::UnclosedTag("<p".to_string(), take_chars(r, 100))
+            )?;
         }
 
         // TODO: multiple weights
@@ -460,7 +533,7 @@ fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
 }
 
 impl UpdateWeights for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
         self.rewind()?;
@@ -472,34 +545,15 @@ impl UpdateWeights for FileStorage {
         Ok(weights.len())
     }
 
-    fn update_next_weights(&mut self, weights: &Weights) -> Result<bool, Self::Error> {
-        let Some(record) = self.read_record() else {
-            return Ok(false)
-        };
-        let mut record = record?;
-
-        #[cfg(feature = "multiweight")]
-        let weight = weights[0];
-        #[cfg(not(feature = "multiweight"))]
-        let weight = weights;
-
-        let weight = weight / self.weight_scale;
-
-        // TODO: code duplication with `rescale_weight`
-        let (rest, start) = weight_start(record.as_str())
-            .map_err(Error::from)?;
-        let (rest, old_weight) = double(rest)
-            .map_err(Error::from)?;
-        let start = start.len();
-        let end = record.len() - rest.len();
-        record.replace_range(start..end, &weight.to_string());
-        trace!("replaced weight: {old_weight} -> {weight}");
-
-        #[cfg(feature = "multiweight")]
-        if weights.len() > 1 {
-            unimplemented!("Multiple weights in STRIPPER XML format")
-        }
-        self.sink.write_all(record.as_bytes())?;
-        Ok(true)
+    fn update_next_weights(
+        &mut self,
+        weights: &Weights
+    ) -> Result<bool, Self::Error> {
+        let res = self.update_next_weights_helper(weights);
+        self.into_storage_error(res)
     }
+}
+
+fn double(input: &str) -> IResult<&str, f64> {
+    nom::number::complete::double(input)
 }

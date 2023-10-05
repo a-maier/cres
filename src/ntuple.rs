@@ -1,19 +1,20 @@
 use std::fmt::Debug;
-use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
 use noisy_float::prelude::*;
 use particle_id::ParticleID;
 
 use crate::event::{Weights, Event, EventBuilder};
-use crate::storage::{EventRecord, StorageError, Converter};
+use crate::storage::{EventRecord, FileStorageError, Converter, ReadError, ErrorKind, CreateError};
 use crate::traits::{Rewind, UpdateWeights};
 
 /// Reader for a single ROOT ntuple event file
 #[derive(Debug)]
 pub struct FileStorage{
     reader: ntuple::Reader,
+    source_path: PathBuf,
     writer: ntuple::Writer,
+    sink_path: PathBuf,
     _weight_names: Vec<String>,
 }
 
@@ -23,19 +24,34 @@ impl FileStorage {
         source_path: PathBuf,
         sink_path: PathBuf,
         _weight_names: Vec<String>
-    ) -> Result<Self, Error> {
-        let reader = ntuple::Reader::new(&source_path).ok_or_else(|| create_reader_error(source_path))?;
-        let writer = ntuple::Writer::new(&sink_path, "").ok_or_else(|| create_writer_error(sink_path))?;
-        Ok(Self{reader, writer, _weight_names})
+    ) -> Result<Self, CreateError> {
+        use CreateError::NTuple;
+        let reader = ntuple::Reader::new(&source_path)
+            .ok_or_else(|| NTuple(format!("Failed to create ntuple reader for {source_path:?}")))?;
+        let writer = ntuple::Writer::new(&sink_path, "")
+            .ok_or_else(|| NTuple(format!("Failed to create ntuple writer to {sink_path:?}")))?;
+        Ok(Self{reader, writer, _weight_names, source_path, sink_path })
     }
 
-    fn read_next(&mut self) -> Option<Result<ntuple::Event, ntuple::reader::ReadError>> {
-        self.reader.next()
+    #[allow(clippy::wrong_self_convention)]
+    fn into_storage_error<T, E: Into<ErrorKind>>(
+        &self,
+        res: Result<T, E>
+    ) -> Result<T, FileStorageError> {
+        res.map_err(|err| FileStorageError::new(
+            self.source_path.clone(),
+            self.sink_path.clone(),
+            err.into()
+        ))
+    }
+
+    fn read_next(&mut self) -> Option<Result<ntuple::Event, ReadError>> {
+        self.reader.next().map(|n| n.map_err(ReadError::from))
     }
 }
 
 impl Rewind for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         *self.reader.nevent_mut() = 0;
@@ -44,11 +60,11 @@ impl Rewind for FileStorage {
 }
 
 impl Iterator for FileStorage {
-    type Item = Result<EventRecord, StorageError>;
+    type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.read_next() {
-            Some(Err(err)) => Some(Err(err.into())),
+            Some(Err(err)) => Some(self.into_storage_error(Err(err))),
             Some(Ok(ev)) => Some(Ok(EventRecord::NTuple(Box::new(ev)))),
             None => None,
         }
@@ -57,20 +73,6 @@ impl Iterator for FileStorage {
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.reader.size_hint()
     }
-}
-
-fn create_reader_error(file: impl Debug) -> Error {
-    Error::new(
-        ErrorKind::Other,
-        format!("Failed to create ntuple reader for {file:?}"),
-    )
-}
-
-fn create_writer_error(file: impl Debug) -> Error {
-    Error::new(
-        ErrorKind::Other,
-        format!("Failed to create ntuple writer to {file:?}"),
-    )
 }
 
 /// Converter for ROOT ntuple event records
@@ -83,7 +85,7 @@ pub trait NTupleConverter {
 }
 
 impl NTupleConverter for Converter {
-    type Error = Error;
+    type Error = ErrorKind;
 
     fn convert_ntuple(&self, record: ntuple::Event) -> Result<Event, Self::Error> {
         let nparticle = record.nparticle as usize;
@@ -115,7 +117,7 @@ impl NTupleConverter for Converter {
 }
 
 impl UpdateWeights for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn update_all_weights(
         &mut self,
@@ -136,7 +138,7 @@ impl UpdateWeights for FileStorage {
         let Some(record) = self.read_next() else {
             return Ok(false)
         };
-        let mut record = record?;
+        let mut record = self.into_storage_error(record)?;
 
         #[cfg(feature = "multiweight")]
         let weight = weights[0];

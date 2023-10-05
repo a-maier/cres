@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
-    path::{Path, PathBuf}, fs::File,
+    path::{Path, PathBuf}, fs::File, string::FromUtf8Error,
 };
 
 use audec::auto_decompress;
@@ -27,7 +27,7 @@ const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 pub struct FileStorage(Box<dyn EventFileStorage>);
 
 impl Rewind for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         self.0.rewind()
@@ -35,7 +35,7 @@ impl Rewind for FileStorage {
 }
 
 impl Iterator for FileStorage {
-    type Item = Result<EventRecord, StorageError>;
+    type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -70,21 +70,23 @@ impl StorageBuilder {
     /// Build an event storage from the given input and output files
     pub fn build_from_files(
         self,
-        source: PathBuf,
-        sink: PathBuf
+        infile: PathBuf,
+        outfile: PathBuf
     ) -> Result<FileStorage, CreateError> {
+        use CreateError::*;
+
         let StorageBuilder { scaling, compression, weight_names } = self;
         let _scaling = scaling;
 
         use crate::hepmc2::FileStorage as HepMCStorage;
-        let file = File::open(&source)?;
+        let file = File::open(&infile).map_err(OpenInput)?;
         let mut r = auto_decompress(BufReader::new(file));
         let bytes = match r.fill_buf() {
             Ok(bytes) => bytes,
             Err(_) => {
                 let storage = HepMCStorage::try_new(
-                    source,
-                    sink,
+                    infile,
+                    outfile,
                     compression,
                     weight_names,
                 )?;
@@ -92,30 +94,29 @@ impl StorageBuilder {
             }
         };
         if bytes.starts_with(&ROOT_MAGIC_BYTES) {
-            if !cfg!(feature = "ntuple") {
-                return Err(CreateError::RootUnsupported(source));
-            }
+            #[cfg(not(feature = "ntuple"))]
+            return Err(RootUnsupported);
             #[cfg(feature = "ntuple")]
             {
                 use crate::ntuple::FileStorage as NTupleStorage;
-                debug!("Read {source:?} as ROOT ntuple");
+                debug!("Read {infile:?} as ROOT ntuple");
                 let storage = NTupleStorage::try_new(
-                    source,
-                    sink,
+                    infile,
+                    outfile,
                     weight_names,
                 )?;
                 return Ok(FileStorage(Box::new(storage)))
             }
         } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
             #[cfg(not(feature = "stripper-xml"))]
-            return Err(CreateError::XMLUnsupported(source));
+            return Err(XMLUnsupported);
             #[cfg(feature = "stripper-xml")]
             {
                 use crate::stripper_xml::FileStorage as XMLStorage;
-                debug!("Read {source:?} as ROOT ntuple");
+                debug!("Read {infile:?} as ROOT ntuple");
                 let storage = XMLStorage::try_new(
-                    source,
-                    sink,
+                    infile,
+                    outfile,
                     compression,
                     weight_names,
                     &_scaling,
@@ -126,19 +127,19 @@ impl StorageBuilder {
         #[cfg(feature = "lhef")]
         if bytes.starts_with(b"<LesHouchesEvents") {
             use crate::lhef::FileStorage as LHEFStorage;
-            debug!("Read {source:?} as LHEF file");
+            debug!("Read {infile:?} as LHEF file");
             let storage =  LHEFStorage::try_new(
-                source,
-                sink,
+                infile,
+                outfile,
                 compression,
                 weight_names,
             )?;
             return Ok(FileStorage(Box::new(storage)))
         }
-        debug!("Read {source:?} as HepMC file");
+        debug!("Read {infile:?} as HepMC file");
         let storage = HepMCStorage::try_new(
-            source,
-            sink,
+            infile,
+            outfile,
             compression,
             weight_names
         )?;
@@ -151,7 +152,7 @@ impl StorageBuilder {
     pub fn build_from_files_iter<I, P, Q>(
         self,
         files: I
-    ) -> Result<CombinedStorage<FileStorage>, CreateError>
+    ) -> Result<CombinedStorage<FileStorage>, CombinedBuildError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
@@ -161,19 +162,20 @@ impl StorageBuilder {
         {
             let (files, scaling) =
                 crate::stripper_xml::extract_scaling(files)?;
+
             let mut builder = self;
             builder.scaling = scaling;
-            builder.build_from_files_iter_known_scaling(files)
+            Ok(builder.build_from_files_iter_known_scaling(files)?)
         }
 
         #[cfg(not(feature = "stripper-xml"))]
-        return self.build_from_files_iter_known_scaling(files)
+        Ok(self.build_from_files_iter_known_scaling(files)?)
     }
 
     fn build_from_files_iter_known_scaling<I, P, Q>(
         self,
         files: I
-    ) -> Result<CombinedStorage<FileStorage>, CreateError>
+    ) -> Result<CombinedStorage<FileStorage>, FileStorageError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
@@ -182,16 +184,17 @@ impl StorageBuilder {
         let storage: Result<_, _> = files
             .into_iter()
             .map(|(source, sink)| {
-                let source = source.as_ref().to_path_buf();
-                let sink = sink.as_ref().to_path_buf();
-                self.clone().build_from_files(source, sink)
+                let infile = source.as_ref().to_path_buf();
+                let outfile = sink.as_ref().to_path_buf();
+                self.clone().build_from_files(infile.clone(), outfile.clone())
+                    .map_err(|err| FileStorageError { infile, outfile, source: err.into() })
             }).collect();
         Ok(CombinedStorage::new(storage?))
     }
 }
 
 impl UpdateWeights for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn update_all_weights(
         &mut self,
@@ -212,53 +215,168 @@ impl UpdateWeights for FileStorage {
     }
 }
 
+/// Error building a combined event storage
+#[derive(Debug, Error)]
+pub enum CombinedBuildError {
+    /// Error building a file-based event storage
+    #[error("Failed to build file-based event storage")]
+    FileStorage(#[from] FileStorageError),
+
+    #[cfg(feature = "stripper-xml")]
+    /// Error extracting weight scaling
+    #[error("Failed to extract weight scaling")]
+    WeightScaling(#[from] CreateError),
+}
+
+/// Error from event storage operations
+#[derive(Debug, Error)]
+#[error("Error in event storage reading from {infile} and writing to {outfile}")]
+pub struct FileStorageError {
+    infile: PathBuf,
+    outfile: PathBuf,
+    source: ErrorKind
+}
+
+impl FileStorageError {
+    /// New error for storage associated with the given input and output files
+    pub fn new(
+        infile: PathBuf,
+        outfile: PathBuf,
+        source: ErrorKind,
+    ) -> Self {
+        Self {
+            infile,
+            outfile,
+            source,
+        }
+    }
+
+    /// Path of the file we are reading from
+    pub fn infile(&self) -> &PathBuf {
+        &self.infile
+    }
+
+    /// Path of the file we are writing to
+    pub fn outfile(&self) -> &PathBuf {
+        &self.outfile
+    }
+}
+
+/// Error from event storage operations
+#[derive(Debug, Error)]
+pub enum ErrorKind {
+    /// Error creating an event storage
+    #[error("Failed to create event storage")]
+    Create(#[from] CreateError),
+    /// Error reading in or parsing an event record
+    #[error("Failed to read event")]
+    Read(#[from] ReadError),
+    /// Error writing out an event
+    #[error("Failed to write event")]
+    Write(#[from] WriteError),
+}
+
 /// Error creating an event storage
 #[derive(Debug, Error)]
 pub enum CreateError {
-    /// I/O error
-    #[error("I/O error")]
-    IoError(#[from] std::io::Error),
-    /// Error reading from file
-    #[error("Failed to read from {0}")]
-    FileError(PathBuf, #[source] Box<CreateError>),
+    /// Failed to open input file
+    #[error("Failed to open input file")]
+    OpenInput(#[source] std::io::Error),
+    /// Failed to read from input file
+    #[error("Failed to read from input file")]
+    Read(#[source] std::io::Error),
+    /// Failed to create target file
+    #[error("Failed to create target file")]
+    CreateTarget(#[source] std::io::Error),
+    /// Failed to compress target file
+    #[error("Failed to compress target file")]
+    CompressTarget(#[source] std::io::Error),
+    /// Failed to write to target file
+    #[error("Failed to compress target file")]
+    Write(#[source] std::io::Error),
+    /// UTF8 error
+    #[error("UTF8 error")]
+    Utf8(#[from] Utf8Error),
 
-    /// Attempt to read from unsupported format
-    #[error("Cannot read ROOT ntuple event file `{0}`. Reinstall cres with `cargo install cres --features = ntuple`")]
-    RootUnsupported(PathBuf),
-    /// Attempt to read from unsupported format
-    #[error("Cannot read XML event file `{0}`. Reinstall cres with `cargo install cres --features = stripper-xml`")]
-    XMLUnsupported(PathBuf),
+    #[cfg(not(feature = "ntuple"))]
+    /// Attempt to use unsupported format
+    #[error("Support for ROOT ntuple format is not enabled. Reinstall cres with `cargo install cres --features = ntuple`")]
+    RootUnsupported,
+    #[cfg(not(feature = "stripper-xml"))]
+    /// Attempt to use unsupported format
+    #[error("Support for STRIPPER XML format is not enabled. Reinstall cres with `cargo install cres --features = stripper-xml`")]
+    XMLUnsupported,
+
+    #[cfg(feature = "ntuple")]
+    /// ROOT NTuple error
+    #[error("{0}")]
+    NTuple(String),
 
     #[cfg(feature = "stripper-xml")]
     /// XML error in STRIPPER XML file
-    #[error("XML Error in file `{0}`")]
-    XMLError(PathBuf, #[source] crate::stripper_xml::Error),
+    #[error("XML Error in input file")]
+    XMLError(#[from] crate::stripper_xml::Error),
 }
 
-/// Error reading an event
+/// UTF-8 error
 #[derive(Debug, Error)]
-pub enum StorageError {
+pub enum Utf8Error {
+    /// UTF8 error
+    #[error("UTF8 error")]
+    Utf8(#[from] std::str::Utf8Error),
+    /// UTF8 error
+    #[error("UTF8 error")]
+    FromUtf8(#[from] FromUtf8Error),
+}
+
+/// Error reading or parsing an event
+#[derive(Debug, Error)]
+pub enum ReadError {
     /// I/O error
-    #[error("I/O error: {0}")]
-    IoError(#[from] std::io::Error),
-    /// Error cloning the underlying source
-    #[error("Source clone error: {0}")]
-    CloneError(std::io::Error),
-    /// HepMC error
-    #[error("HepMC storage error")]
-    HepMCError(#[from] crate::hepmc2::Error),
+    #[error("I/O error")]
+    IO(#[from] std::io::Error),
+    /// Failed to find event record entry
+    #[error("Failed to find {0} in {1}")]
+    FindEntry(&'static str, String),
+    /// Missing named weight entry
+    #[error("Failed to find weight\"{0}\": Event has weights {1}")]
+    FindWeight(String, String),
+    /// Invalid entry
+    #[error("{value} is not a valid value for {entry} in {record}")]
+    InvalidEntry{
+        /// Invalid value of the entry
+        value: String,
+        /// Entry name
+        entry: &'static str,
+        /// Event record
+        record: String,
+    },
+    /// Failed to parse event record entry
+    #[error("Failed to parse {0} in {1}")]
+    ParseEntry(&'static str, String),
+    /// Entry not recognised
+    #[error("Failed to recognise {0} in {1}")]
+    UnrecognisedEntry(&'static str, String),
+    /// UTF8 error
+    #[error("UTF8 error")]
+    Utf8(#[from] Utf8Error),
+
     #[cfg(feature = "ntuple")]
-    /// Error reading a ROOT ntuple event
-    #[error("Error reading ntuple event")]
-    NTupleError(#[from] ::ntuple::reader::ReadError),
+    /// ROOT NTuple error
+    #[error("Failed to read NTuple record")]
+    NTuple(#[from] ntuple::reader::ReadError),
     #[cfg(feature = "stripper-xml")]
-    /// Error reading a STRIPPER XML event
-    #[error("Error reading STRIPPER XML event")]
-    StripperXMLError(#[from] crate::stripper_xml::Error),
-    #[cfg(feature = "lhef")]
-    /// LHEF error
-    #[error("LHEF error")]
-    LHEFError(#[from] crate::lhef::Error),
+    /// XML error in STRIPPER XML file
+    #[error("XML Error in input file")]
+    XMLError(#[from] crate::stripper_xml::Error),
+}
+
+/// Error writing out an event
+#[derive(Debug, Error)]
+pub enum WriteError {
+    /// I/O error
+    #[error("I/O error")]
+    IO(#[from] std::io::Error),
 }
 
 /// Combined storage from several sources (e.g. files)
@@ -321,7 +439,7 @@ impl<R: Iterator> Iterator for CombinedStorage<R> {
 }
 
 impl UpdateWeights for CombinedStorage<FileStorage> {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
         self.rewind()?;
@@ -358,9 +476,9 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
 
 /// Reader from an event file
 pub trait EventFileStorage:
-    Iterator<Item = Result<EventRecord, StorageError>>
-    + Rewind<Error = StorageError>
-    + UpdateWeights<Error = StorageError>
+    Iterator<Item = Result<EventRecord, FileStorageError>>
+    + Rewind<Error = FileStorageError>
+    + UpdateWeights<Error = FileStorageError>
 {
 }
 
@@ -423,7 +541,7 @@ impl Converter {
 }
 
 impl TryConvert<EventRecord, Event> for Converter {
-    type Error = StorageError;
+    type Error = ErrorKind;
 
     fn try_convert(&self, record: EventRecord) -> Result<Event, Self::Error> {
         let event = match record {

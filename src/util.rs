@@ -7,3 +7,7 @@ pub(crate) fn trim_ascii_start(buf: &[u8]) -> &[u8] {
         &[]
     }
 }
+
+pub(crate) fn take_chars(s: &str, n: usize) -> String {
+    s.chars().take(n).collect()
+}

@@ -5,52 +5,49 @@ use log::trace;
 use noisy_float::prelude::*;
 use nom::{multi::count, IResult};
 use particle_id::ParticleID;
-use thiserror::Error;
 
 use crate::{
-    storage::{StorageError, EventRecord, Converter},
-    traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer}, parsing::{any_entry, u32_entry, i32_entry, double_entry},
+    storage::{FileStorageError, EventRecord, Converter, CreateError, ReadError, WriteError, ErrorKind},
+    traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer}, parsing::{any_entry, u32_entry, i32_entry, double_entry}, util::take_chars,
 };
-
-// TODO: add file names to errors
 
 /// Storage backed by (potentially compressed) HepMC2 event files
 pub struct FileStorage {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
-    _sink_path: PathBuf,
+    sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
 }
 
 impl FileStorage {
     /// Construct a storage backed by the given (potentially compressed) HepMC2 event files
-    pub fn try_new( // TODO: use builder pattern instead?
+    pub fn try_new(
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
         _weight_names: Vec<String>
-    ) -> Result<Self, std::io::Error> {
+    ) -> Result<Self, CreateError> {
+        use CreateError::*;
         let (header, source) = init_source(&source_path)?;
-        let outfile = File::create(&sink_path)?;
+        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression)?;
-        sink.write_all(&header)?;
+        let mut sink = compress_writer(sink, compression)
+            .map_err(CompressTarget)?;
+        sink.write_all(&header).map_err(Write)?;
 
         Ok(FileStorage {
             source_path,
             source,
-            _sink_path: sink_path,
+            sink_path,
             sink,
             _weight_names,
         })
     }
 
-    fn read_record(&mut self) -> Option<Result<String, Error>> {
+    fn read_record(&mut self) -> Option<Result<String, ReadError>> {
         let mut record = vec![b'E'];
-        assert!(record.starts_with(b"E"));
         while !record.ends_with(b"\nE") {
-            assert!(record.starts_with(b"E"));
             match self.source.read_until(b'E', &mut record) {
                 Ok(0) => if record.len() > 1 {
                     let record = String::from_utf8(record).unwrap();
@@ -70,16 +67,65 @@ impl FileStorage {
         trace!("Read HepMC record:\n{record}");
         Some(Ok(record))
     }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn into_storage_error<T, E: Into<ErrorKind>>(
+        &self,
+        res: Result<T, E>
+    ) -> Result<T, FileStorageError> {
+        res.map_err(|err| FileStorageError::new(
+            self.source_path.clone(),
+            self.sink_path.clone(),
+            err.into()
+        ))
+    }
+
+    fn update_next_weights_helper(&mut self, weights: &Weights) -> Result<bool, ErrorKind> {
+        use ErrorKind::*;
+        use ReadError::ParseEntry;
+        use WriteError::IO;
+
+        let parse_err = |what, record: &str| Read(
+            ParseEntry(what, take_chars(record, 100))
+        );
+
+        let Some(record) = self.read_record() else {
+            return Ok(false)
+        };
+        let mut record = record?;
+
+        debug_assert!(record.starts_with('E'));
+        let (weight_entries, _non_weight) = non_weight_entries(&record)
+            .map_err(|_| parse_err("entries before weight", &record))?;
+        let (rest, _nweights) = u32_entry(weight_entries)
+            .map_err(|_| parse_err("number of weights entry", weight_entries))?;
+
+        let weights_start = record.len() - rest.len();
+        update_central_weight(&mut record, weights_start, weights)?;
+
+        #[cfg(feature = "multiweight")]
+        update_named_weights(
+            &mut record,
+            weights_start,
+            _nweights as usize,
+            &self._weight_names,
+            weights,
+        )?;
+        self.sink.write_all(record.as_bytes()).map_err(IO)?;
+        Ok(true)
+    }
 }
 
-fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), std::io::Error> {
-    let source = File::open(source)?;
+fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
+    use CreateError::*;
+
+    let source = File::open(source).map_err(OpenInput)?;
     let mut buf = auto_decompress(BufReader::new(source));
 
     // read until start of first event
     let mut header = Vec::new();
     while !header.ends_with(b"\nE") {
-        if buf.read_until(b'E', &mut header)? == 0 {
+        if buf.read_until(b'E', &mut header).map_err(Read)? == 0 {
             break;
         }
     }
@@ -88,29 +134,28 @@ fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), 
 }
 
 impl Rewind for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        (_, self.source) = init_source(&self.source_path)?;
+        (_, self.source) = self.into_storage_error(
+            init_source(&self.source_path)
+        )?;
 
         Ok(())
     }
 }
 
 impl Iterator for FileStorage {
-    type Item = Result<EventRecord, StorageError>;
+    type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.read_record()
-            .map(|r| match r {
-                Ok(record) => Ok(EventRecord::HepMC(record)),
-                Err(err) => Err(err.into()),
-            })
+            .map(|r| self.into_storage_error(r).map(EventRecord::HepMC))
     }
 }
 
 impl UpdateWeights for FileStorage {
-    type Error = StorageError;
+    type Error = FileStorageError;
 
     fn update_all_weights(
         &mut self,
@@ -129,55 +174,10 @@ impl UpdateWeights for FileStorage {
         &mut self,
         weights: &Weights
     ) -> Result<bool, Self::Error> {
-        let Some(record) = self.read_record() else {
-            return Ok(false)
-        };
-        let mut record = record?;
-
-        debug_assert!(record.starts_with('E'));
-        let (weight_entries, _non_weight) = non_weight_entries(&record)
-            .map_err(Error::from)?;
-        let (rest, _nweights) = u32_entry(weight_entries)
-            .map_err(Error::from)?;
-
-        let weights_start = record.len() - rest.len();
-        update_central_weight(&mut record, weights_start, weights)?;
-
-        #[cfg(feature = "multiweight")]
-        update_named_weights(
-            &mut record,
-            weights_start,
-            _nweights as usize,
-            &self._weight_names,
-            weights,
-        )?;
-        self.sink.write_all(record.as_bytes())?;
-        Ok(true)
+        let res = self.update_next_weights_helper(weights);
+        self.into_storage_error(res)
     }
-}
 
-
-/// Error reading a HepMC event record
-#[derive(Debug, Error)]
-pub enum Error {
-    /// Parse error
-    #[error("Error parsing line in event record: {0}")]
-    ParseError(String),
-    /// Invalid start of record
-    #[error("Record does not start with 'E': {0}")]
-    BadRecordStart(String),
-    /// Unrecognized entry
-    #[error("Line does not correspond to a known entry type: {0}")]
-    BadEntry(String),
-    /// I/O error
-    #[error("I/O error")]
-    IOError(#[from] std::io::Error),
-    /// Invalid energy unit
-    #[error("Invalid energy unit: {0}")]
-    InvalidEnergyUnit(String),
-    /// Weight not found
-    #[error("Failed to find weight\"{0}\": Event has weights {1}")]
-    WeightNotFound(String, String),
 }
 
 /// Parser for HepMC event records
@@ -197,9 +197,11 @@ enum EnergyUnit {
 }
 
 impl HepMCParser for Converter {
-    type Error = Error;
+    type Error = ReadError;
 
     fn parse_hepmc(&self, mut record: &str) -> Result<Event, Self::Error> {
+        use ReadError::*;
+
         let mut event = EventBuilder::new();
         let (weight, _weights, rest) = extract_weights(record)?;
         event.add_weight(n64(weight));
@@ -223,7 +225,7 @@ impl HepMCParser for Converter {
                 Some(b'P') => record = parse_particle_line(record, &mut event)?,
                 Some(b'U') => (energy_unit, record) = parse_units_line(record)?,
                 _ => if !record.trim().is_empty() {
-                    return Err(Error::BadEntry(record.to_owned()));
+                    return Err(UnrecognisedEntry("start", take_chars(record, 100)));
                 }
             }
         }
@@ -243,19 +245,26 @@ fn update_named_weights(
     nweights: usize,
     weight_names: &[String],     // TODO: maybe a set is better
     weights: &Weights
-) -> Result<(), Error> {
+) -> Result<(), ReadError> {
+    use ReadError::*;
     assert_eq!(weights.len(), weight_names.len() + 1);
 
     if weight_names.is_empty() {
         return Ok(());
     }
-    let start = record.find("\nN").unwrap();
-    let (names, nnames) = u32_entry(&record[(start + 2)..])?;
+    let start = record.find("\nN").ok_or_else(
+        || FindEntry("weight name entry (line starting with 'N')", record.to_string())
+    )?;
+
+    let names = &record[(start + 2)..];
+    let (names, nnames) = u32_entry(names)
+        .map_err(|_| ParseEntry("number of weight names entry", take_chars(names, 100)))?;
     let mut weight_pos = Vec::with_capacity(weight_names.len());
     let mut rest = names;
     for nentry in 0..(nnames as usize) {
         let name;
-        (rest, name) = string_entry(rest)?;
+        (rest, name) = string_entry(rest)
+            .map_err(|_| ParseEntry("weight name entry", take_chars(rest, 100)))?;
         if weight_names.iter().any(|n| n == name) {
             weight_pos.push(nentry);
         }
@@ -283,12 +292,15 @@ pub(crate) fn update_central_weight(
     record: &mut String,
     entry_pos: usize,
     weights: &Weights,
-) -> Result<(), Error> {
+) -> Result<(), ReadError> {
+    use ReadError::*;
+
     #[cfg(feature = "multiweight")]
     let weight = weights[0];
     #[cfg(not(feature = "multiweight"))]
     let weight = weights;
-    let (_, weight_entry) = any_entry(&record[entry_pos..])?;
+    let (_, weight_entry) = any_entry(&record[entry_pos..])
+        .map_err(|_| ParseEntry("central weight entry", take_chars(record, 100)))?;
     // +1 to ensure we skip one space
     let start = entry_pos + 1;
     let end = entry_pos + weight_entry.len();
@@ -297,29 +309,46 @@ pub(crate) fn update_central_weight(
 }
 
 
-fn parse_units_line(record: &str) -> Result<(EnergyUnit, &str), Error> {
+fn parse_units_line(record: &str) -> Result<(EnergyUnit, &str), ReadError> {
+    use ReadError::*;
+
     debug_assert!(record.starts_with('U'));
-    let (rest, energy) = any_entry(&record[1..])?;
+    let (rest, energy) = any_entry(&record[1..])
+        .map_err(|_| ParseEntry("energy unit entry", take_chars(record, 100)))?;
     let energy = match energy {
         "GEV" => EnergyUnit::GeV,
         "MEV" => EnergyUnit::MeV,
-        _ => return Err(Error::InvalidEnergyUnit(energy.to_owned()))
+        _ => return Err(InvalidEntry {
+            value: energy.to_string(),
+            entry: "energy unit entry",
+            record: take_chars(record, 100),
+        })
     };
     Ok((energy, rest))
 }
 
-fn parse_particle_line<'a>(record: &'a str, event: &mut EventBuilder) -> Result<&'a str, Error> {
+fn parse_particle_line<'a>(record: &'a str, event: &mut EventBuilder) -> Result<&'a str, ReadError> {
     const HEPMC_OUTGOING: i32 = 1;
 
+    let parse_err = |entry| ReadError::ParseEntry(entry, take_chars(record, 100));
+
     debug_assert!(record.starts_with('P'));
-    let (rest, _barcode) = any_entry(&record[1..])?;
-    let (rest, id) = i32_entry(rest)?;
-    let (rest, px) = double_entry(rest)?;
-    let (rest, py) = double_entry(rest)?;
-    let (rest, pz) = double_entry(rest)?;
-    let (rest, e) = double_entry(rest)?;
-    let (rest, _m) = any_entry(rest)?;
-    let (rest, status) = i32_entry(rest)?;
+    let (rest, _barcode) = any_entry(&record[1..])
+        .map_err(|_| parse_err("barcode entry"))?;
+    let (rest, id) = i32_entry(rest)
+        .map_err(|_| parse_err("particle id entry"))?;
+    let (rest, px) = double_entry(rest)
+        .map_err(|_| parse_err("px entry"))?;
+    let (rest, py) = double_entry(rest)
+        .map_err(|_| parse_err("py entry"))?;
+    let (rest, pz) = double_entry(rest)
+        .map_err(|_| parse_err("pz entry"))?;
+    let (rest, e) = double_entry(rest)
+        .map_err(|_| parse_err("energy entry"))?;
+    let (rest, _m) = any_entry(rest)
+        .map_err(|_| parse_err("mass entry"))?;
+    let (rest, status) = i32_entry(rest)
+        .map_err(|_| parse_err("particle status entry"))?;
     if status != HEPMC_OUTGOING {
         return Ok(rest);
     }
@@ -328,17 +357,27 @@ fn parse_particle_line<'a>(record: &'a str, event: &mut EventBuilder) -> Result<
 }
 
 
-fn extract_weights(record: &str) -> Result<(f64, Vec<f64>, &str), Error> {
+fn extract_weights(record: &str) -> Result<(f64, Vec<f64>, &str), ReadError> {
+    use ReadError::*;
+
+    let parse_err = |what, record: &str| ParseEntry(what, take_chars(record, 100));
+
     if !record.starts_with('E') {
-        return Err(Error::BadRecordStart(record.to_owned()));
+        return Err(UnrecognisedEntry("start of record", take_chars(record, 100)));
     }
-    let (rest, _) = non_weight_entries(record)?;
-    let (rest, nweights) = u32_entry(rest)?;
+    let (rest, _) = non_weight_entries(record)
+        .map_err(|_| parse_err("entries before weight", record))?;
+
+    let (rest, nweights) = u32_entry(rest)
+        .map_err(|_| parse_err("number of weights entry", rest))?;
+
     let res = if cfg!(feature = "multiweight") {
-        let (rest, weights) = count(double_entry, nweights as usize)(rest)?;
+        let (rest, weights) = count(double_entry, nweights as usize)(rest)
+            .map_err(|_| parse_err("event weight entries", rest))?;
         (weights[0], weights, rest)
     } else {
-        let (rest, weight) = double_entry(rest)?;
+        let (rest, weight) = double_entry(rest)
+            .map_err(|_| parse_err("event weight entry", rest))?;
         (weight, vec![], rest)
     };
     Ok(res)
@@ -350,8 +389,11 @@ fn parse_weight_names_line<'a>(
     mut record: &'a str,
     all_weights: &[f64],
     event: &mut EventBuilder,
-) -> Result<&'a str, Error> {
+) -> Result<&'a str, ReadError> {
+    use ReadError::*;
     use std::collections::HashMap;
+
+    let parse_err = |what, record: &str| ParseEntry(what, take_chars(record, 100));
 
     let weight_names = converter.weight_names();
     if weight_names.is_empty() {
@@ -360,11 +402,13 @@ fn parse_weight_names_line<'a>(
     let mut weight_seen: HashMap<_, _> = weight_names.iter()
         .map(|n| (n.as_str(), false))
         .collect();
-    let (names, nnames) = u32_entry(&record[1..])?;
+    let (names, nnames) = u32_entry(&record[1..])
+        .map_err(|_| parse_err("number of weight names entry", record))?;
     record = names;
     for weight in all_weights.iter().take(nnames as usize) {
         let name;
-        (record, name) = string_entry(record)?;
+        (record, name) = string_entry(record)
+            .map_err(|_| parse_err("weight name entry", record))?;
         if let Some(seen) = weight_seen.get_mut(name) {
             *seen = true;
             event.add_weight(n64(*weight));
@@ -375,18 +419,12 @@ fn parse_weight_names_line<'a>(
         .into_iter()
         .find_map(|(name, seen)| if seen { None } else { Some(name) });
     if let Some(missing) = missing {
-        Err(Error::WeightNotFound(
+        Err(FindWeight(
             missing.to_owned(),
             names.to_owned(),
         ))
     } else {
         Ok(record)
-    }
-}
-
-impl From<nom::Err<nom::error::Error<&str>>> for Error {
-    fn from(source: nom::Err<nom::error::Error<&str>>) -> Self {
-        Self::ParseError(source.to_string())
     }
 }
 
