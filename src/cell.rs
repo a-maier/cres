@@ -67,13 +67,6 @@ impl<'a> Cell<'a> {
     pub fn resample(&mut self) {
         use std::ops::{Deref, DerefMut};
 
-        fn add_assign(acc: &mut [N64], rhs: &[N64]) {
-            use itertools::zip_eq;
-            for (lhs, rhs) in zip_eq(acc, rhs) {
-                *lhs += rhs;
-            }
-        }
-
         self.members.sort_unstable(); // sort to prevent deadlocks
         let mut member_weights = Vec::from_iter(
             self.members.iter().map(|i| self.events[*i].weights.write()),
@@ -82,14 +75,14 @@ impl<'a> Cell<'a> {
 
         let mut avg_wts = std::mem::take(first.deref_mut());
         for idx in rest.iter() {
-            add_assign(&mut avg_wts, idx.deref());
+            avg_wts += idx.deref();
         }
         let inv_norm = n64(1. / self.nmembers() as f64);
         for wt in avg_wts.iter_mut() {
             *wt *= inv_norm;
         }
         for idx in rest {
-            idx.copy_from_slice(&avg_wts);
+            idx.copy_from(&avg_wts);
         }
         *first.deref_mut() = avg_wts;
     }
@@ -103,9 +96,11 @@ impl<'a> Cell<'a> {
     /// over the cell.
     #[cfg(not(feature = "multiweight"))]
     pub fn resample(&mut self) {
+        use crate::event::Weights;
+
         let avg_wt = self.weight_sum() / (self.nmembers() as f64);
         for &idx in &self.members {
-            *self.events[idx].weights.write() = avg_wt;
+            *self.events[idx].weights.write() = Weights::new_single(avg_wt);
         }
     }
 

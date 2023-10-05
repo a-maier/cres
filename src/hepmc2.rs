@@ -101,7 +101,7 @@ impl FileStorage {
             .map_err(|_| parse_err("number of weights entry", weight_entries))?;
 
         let weights_start = record.len() - rest.len();
-        update_central_weight(&mut record, weights_start, weights)?;
+        update_central_weight(&mut record, weights_start, weights.central())?;
 
         #[cfg(feature = "multiweight")]
         update_named_weights(
@@ -291,14 +291,10 @@ fn update_named_weights(
 pub(crate) fn update_central_weight(
     record: &mut String,
     entry_pos: usize,
-    weights: &Weights,
+    weight: N64,
 ) -> Result<(), ReadError> {
     use ReadError::*;
 
-    #[cfg(feature = "multiweight")]
-    let weight = weights[0];
-    #[cfg(not(feature = "multiweight"))]
-    let weight = weights;
     let (_, weight_entry) = any_entry(&record[entry_pos..])
         .map_err(|_| ParseEntry("central weight entry", take_chars(record, 100)))?;
     // +1 to ensure we skip one space

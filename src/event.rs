@@ -2,6 +2,7 @@ use crate::four_vector::FourVector;
 
 use std::convert::From;
 use std::default::Default;
+use std::ops::AddAssign;
 
 use derivative::Derivative;
 use noisy_float::prelude::*;
@@ -13,14 +14,8 @@ pub type MomentumSet = Box<[FourVector]>;
 
 #[cfg(feature = "multiweight")]
 type BuilderWeights = Vec<N64>;
-/// Event weights
-#[cfg(feature = "multiweight")]
-pub type Weights = Box<[N64]>;
 #[cfg(not(feature = "multiweight"))]
 type BuilderWeights = N64;
-/// Event weights
-#[cfg(not(feature = "multiweight"))]
-pub type Weights = N64;
 
 /// Build an [Event]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Debug, Clone)]
@@ -86,9 +81,9 @@ impl EventBuilder {
         Event {
             id: Default::default(),
             #[cfg(feature = "multiweight")]
-            weights: RwLock::new(self.weights.into_boxed_slice()),
+            weights: RwLock::new(Weights(self.weights.into_boxed_slice())),
             #[cfg(not(feature = "multiweight"))]
-            weights: RwLock::new(self.weights),
+            weights: RwLock::new(Weights(self.weights)),
             outgoing_by_pid,
         }
     }
@@ -166,11 +161,7 @@ impl Event {
 
     /// The central event weight
     pub fn weight(&self) -> N64 {
-        #[cfg(feature = "multiweight")]
-        return self.weights.read()[0];
-
-        #[cfg(not(feature = "multiweight"))]
-        *self.weights.read()
+        self.weights.read().central()
     }
 
     /// Extract the outgoing particle momenta grouped by particle id
@@ -180,23 +171,90 @@ impl Event {
 
     /// Number of weights
     pub fn n_weights(&self) -> usize {
-        #[cfg(feature = "multiweight")]
-        return self.weights.read().len();
-
-        #[cfg(not(feature = "multiweight"))]
-        1
+        self.weights.read().len()
     }
 
     /// Rescale weights by some factor
     pub fn rescale_weights(&mut self, scale: N64) {
-        let mut weights = self.weights.write();
-        #[cfg(feature = "multiweight")]
-        for wt in weights.iter_mut() {
+        for wt in self.weights.write().iter_mut() {
             *wt *= scale
         }
+    }
+}
+
+/// Event weights
+#[cfg(feature = "multiweight")]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct Weights(Box<[N64]>);
+/// Event weights
+#[cfg(not(feature = "multiweight"))]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct Weights(N64);
+
+impl Weights {
+    /// Get central weight
+    pub fn new_single(w: N64) -> Self {
+         #[cfg(feature = "multiweight")]
+        return Self(vec![w].into_boxed_slice());
+
+        #[cfg(not(feature = "multiweight"))]
+        Self(w)
+   }
+
+
+    /// Get central weight
+    pub fn central(&self) -> N64 {
+         #[cfg(feature = "multiweight")]
+        return self.0[0];
+
+        #[cfg(not(feature = "multiweight"))]
+        self.0
+   }
+
+    /// Get number of weights
+    pub fn len(&self) -> usize {
+         #[cfg(feature = "multiweight")]
+        return self.0.len();
+
+        #[cfg(not(feature = "multiweight"))]
+        1
+   }
+
+    /// Iterator over weights
+    pub fn iter(&self) -> impl Iterator<Item = &N64> {
+         #[cfg(feature = "multiweight")]
+        return self.0.iter();
+
+        #[cfg(not(feature = "multiweight"))]
+        std::iter::once(&self.0)
+   }
+
+    /// Mutating iterator over weights
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut N64> {
+         #[cfg(feature = "multiweight")]
+        return self.0.iter_mut();
+
+        #[cfg(not(feature = "multiweight"))]
+        std::iter::once(&mut self.0)
+    }
+
+    /// Copy weight entries
+    pub fn copy_from(&mut self, rhs: &Weights) {
+        #[cfg(feature = "multiweight")]
+        return self.0.copy_from_slice(&rhs.0);
+
         #[cfg(not(feature = "multiweight"))]
         {
-            *weights *= scale;
+            self.0 = rhs.0;
+        }
+    }
+}
+
+impl AddAssign<&Weights> for Weights {
+    fn add_assign(&mut self, rhs: &Weights) {
+        use itertools::zip_eq;
+        for (lhs, rhs) in zip_eq(self.iter_mut(), rhs.iter()) {
+            *lhs += rhs;
         }
     }
 }

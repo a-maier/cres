@@ -140,29 +140,21 @@ impl UpdateWeights for FileStorage {
         };
         let mut record = self.into_storage_error(record)?;
 
-        #[cfg(feature = "multiweight")]
-        let weight = weights[0];
-        #[cfg(not(feature = "multiweight"))]
-        let weight = weights;
-
-        record.weight = weight.into();
+        let mut weights = weights.iter().copied();
+        record.weight = weights.next().unwrap().into();
 
         #[cfg(feature = "multiweight")]
         {
             // beware: order here has to match `convert_ntuple`
             // TODO: user weights
-            let mut idx = 1;
             if self._weight_names.iter().any(|w| w == "2") {
-                record.weight2 = weights[idx].into();
-                idx += 1;
+                record.weight2 = weights.next().unwrap().into();
             }
             if self._weight_names.iter().any(|w| w == "ME") {
-                record.me_weight = weights[idx].into();
-                idx += 1;
+                record.me_weight = weights.next().unwrap().into()
             }
             if self._weight_names.iter().any(|w| w == "ME2") {
-                record.me_weight2 = weights[idx].into();
-                // idx += 1;
+                record.me_weight2 = weights.next().unwrap().into()
             }
         }
         self.writer.write(&record).unwrap();

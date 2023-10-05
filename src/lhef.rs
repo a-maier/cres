@@ -87,7 +87,7 @@ impl FileStorage {
             .map_err(|_| parse_err("entries before weight", &record))?;
 
         let weights_start = record.len() - rest.len();
-        update_central_weight(&mut record, weights_start, weights)?;
+        update_central_weight(&mut record, weights_start, weights.central())?;
 
         #[cfg(feature = "multiweight")]
         if weights.len() > 1 {

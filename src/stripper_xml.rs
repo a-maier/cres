@@ -141,12 +141,7 @@ impl FileStorage {
         };
         let mut record = record?;
 
-        #[cfg(feature = "multiweight")]
-        let weight = weights[0];
-        #[cfg(not(feature = "multiweight"))]
-        let weight = weights;
-
-        let weight = weight / self.weight_scale;
+        let weight = weights.central() / self.weight_scale;
 
         // TODO: code duplication with `rescale_weight`
         let (rest, start) = weight_start(record.as_str())
