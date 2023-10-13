@@ -50,7 +50,7 @@ strum = { version = "0.25", features = ["derive"] }
 thiserror = "1.0"
 thread_local = "1.1"
 typed-builder = "0.16"
-zstd = "0.12"
+zstd = "0.13"
 
 [lib]
 name = "cres"
