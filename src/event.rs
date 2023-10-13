@@ -116,17 +116,22 @@ fn compress_outgoing(
 
 /// A Monte Carlo scattering event
 #[derive(Debug, Default, Derivative)]
-#[derivative(PartialEq, Eq, PartialOrd, Ord)]
+#[derivative(PartialEq, Eq, Ord)]
 pub struct Event {
     /// Event id
     pub id: usize,
     #[derivative(PartialEq = "ignore")]
-    #[derivative(PartialOrd = "ignore")]
     #[derivative(Ord = "ignore")]
     /// Event weights
     pub weights: RwLock<Weights>,
 
     outgoing_by_pid: Box<[(ParticleID, MomentumSet)]>,
+}
+
+impl PartialOrd for Event {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 const EMPTY_SLICE: &[FourVector] = &[];
@@ -218,7 +223,12 @@ impl Weights {
 
         #[cfg(not(feature = "multiweight"))]
         1
-   }
+    }
+
+    /// Check if there are any weights
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     /// Iterator over weights
     pub fn iter(&self) -> impl Iterator<Item = &N64> {
