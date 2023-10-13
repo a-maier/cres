@@ -109,13 +109,6 @@ where
     #[cfg(not(feature = "multiweight"))]
     let converter = Converter::new();
 
-    // let writer = FileWriter::builder()
-    //     .filename(opt.outfile.clone())
-    //     .format(opt.outformat.into())
-    //     .compression(opt.compression)
-    //     .cell_collector(cell_collector);
-    // let writer = writer.build();
-
     let mut cres = CresBuilder {
         event_storage,
         converter,
