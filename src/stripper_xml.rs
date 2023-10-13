@@ -403,7 +403,7 @@ pub enum Error {
         /// Wanted type
         wanted: &'static str,
     },
-    /// Deserialisation error for [stripper_xml::Normalization]
+    /// Deserialisation error for [Normalization]
     #[error("Failed to deserialise `Normalization`")]
     NormalizationDeser(#[from] quick_xml::DeError),
     /// Unclosed tag
