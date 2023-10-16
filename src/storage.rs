@@ -447,8 +447,9 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
         let progress = ProgressBar::new(weights.len() as u64, "events written:");
         for source in &mut self.storage {
             while nevent < weights.len() {
-                let updated = source.update_next_weights(&weights[nevent])?;
-                debug_assert!(updated);
+                if !source.update_next_weights(&weights[nevent])? {
+                    break;
+                }
                 progress.inc(1);
                 nevent += 1;
             }
