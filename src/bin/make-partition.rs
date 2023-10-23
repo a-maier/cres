@@ -6,7 +6,7 @@ use crate::opt_common::*;
 
 use anyhow::{Result, Context, bail};
 use clap::Parser;
-use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, reader::FileReader, prelude::ClusteringConverter, traits::TryConvert, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::{Compression, compress_writer}};
+use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, reader::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::{Compression, compress_writer}, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
 use env_logger::Env;
 use log::{info, debug, trace};
 use noisy_float::prelude::*;
@@ -105,13 +105,15 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
-    let mut converter = ClusteringConverter::new(opt.jet_def.into())
+    let converter = Converter::new();
+
+    let mut clustering = DefaultClustering::new(opt.jet_def.into())
         .include_neutrinos(opt.include_neutrinos);
     if opt.lepton_def.leptonalgorithm.is_some() {
-        converter = converter.with_lepton_def(opt.lepton_def.into())
+        clustering = clustering.with_lepton_def(opt.lepton_def.into())
     }
     if opt.photon_def.photonradius.is_some() {
-        converter = converter.with_photon_def(opt.photon_def.into())
+        clustering = clustering.with_photon_def(opt.photon_def.into())
     }
 
     // TODO: in principle we only need the kinematic part
@@ -126,6 +128,7 @@ fn main() -> Result<()> {
             match weight {
                 Some(w) if w < 0.0 => {
                     let event: Event = converter.try_convert(event)?;
+                    let event = clustering.cluster(event)?;
                     events.push(event)
                 },
                 _ => {}
@@ -178,7 +181,7 @@ fn main() -> Result<()> {
     let out = compress_writer(out, opt.compression).with_context(
         || format!("Failed to compress output to {outfile:?}")
     )?;
-    serde_yaml::to_writer(out, &(converter, partition))?;
+    serde_yaml::to_writer(out, &(clustering, partition))?;
     info!("Done");
     Ok(())
 }
