@@ -1,18 +1,69 @@
 use std::fmt::Debug;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use noisy_float::prelude::*;
 use particle_id::ParticleID;
 
 use crate::event::{Weights, Event, EventBuilder};
-use crate::storage::{EventRecord, FileStorageError, Converter, ReadError, ErrorKind, CreateError};
+use crate::storage::{EventFileReader, EventRecord, FileStorageError, Converter, ReadError, ErrorKind, CreateError};
 use crate::traits::{Rewind, UpdateWeights};
+
+/// Reader from a BlackHat ntuple file
+#[derive(Debug)]
+pub struct FileReader {
+    reader: ntuple::Reader,
+    source_path: PathBuf,
+}
+
+impl FileReader {
+    /// Construct a reader from the given (potentially compressed) HepMC2 event file
+    pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
+        use CreateError::NTuple;
+        let reader = ntuple::Reader::new(&source_path)
+            .ok_or_else(|| NTuple(format!("Failed to create ntuple reader for {source_path:?}")))?;
+
+        Ok(Self {reader, source_path})
+    }
+
+    fn read_raw(&mut self) -> Option<Result<ntuple::Event, ReadError>> {
+        self.reader.next().map(|n| n.map_err(ReadError::from))
+    }
+}
+
+impl EventFileReader for FileReader {
+    fn path(&self) -> &Path {
+        self.source_path.as_path()
+    }
+}
+
+impl Rewind for FileReader {
+    type Error = CreateError;
+
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        *self.reader.nevent_mut() = 0;
+        Ok(())
+    }
+}
+
+impl Iterator for FileReader {
+    type Item = Result<EventRecord, ReadError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.reader.next().map(|n| match n {
+            Ok(event) => Ok(EventRecord::NTuple(Box::new(event))),
+            Err(err) => Err(err.into())
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.reader.size_hint()
+    }
+}
 
 /// Reader for a single ROOT ntuple event file
 #[derive(Debug)]
 pub struct FileStorage{
-    reader: ntuple::Reader,
-    source_path: PathBuf,
+    reader: FileReader,
     writer: ntuple::Writer,
     sink_path: PathBuf,
     _weight_names: Vec<String>,
@@ -26,11 +77,10 @@ impl FileStorage {
         _weight_names: Vec<String>
     ) -> Result<Self, CreateError> {
         use CreateError::NTuple;
-        let reader = ntuple::Reader::new(&source_path)
-            .ok_or_else(|| NTuple(format!("Failed to create ntuple reader for {source_path:?}")))?;
+        let reader = FileReader::try_new(source_path)?;
         let writer = ntuple::Writer::new(&sink_path, "")
             .ok_or_else(|| NTuple(format!("Failed to create ntuple writer to {sink_path:?}")))?;
-        Ok(Self{reader, writer, _weight_names, source_path, sink_path })
+        Ok(Self{reader, writer, _weight_names, sink_path })
     }
 
     #[allow(clippy::wrong_self_convention)]
@@ -39,14 +89,10 @@ impl FileStorage {
         res: Result<T, E>
     ) -> Result<T, FileStorageError> {
         res.map_err(|err| FileStorageError::new(
-            self.source_path.clone(),
+            self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
         ))
-    }
-
-    fn read_next(&mut self) -> Option<Result<ntuple::Event, ReadError>> {
-        self.reader.next().map(|n| n.map_err(ReadError::from))
     }
 }
 
@@ -54,8 +100,8 @@ impl Rewind for FileStorage {
     type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        *self.reader.nevent_mut() = 0;
-        Ok(())
+        let res = self.reader.rewind();
+        self.into_storage_error(res)
     }
 }
 
@@ -63,11 +109,9 @@ impl Iterator for FileStorage {
     type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.read_next() {
-            Some(Err(err)) => Some(self.into_storage_error(Err(err))),
-            Some(Ok(ev)) => Some(Ok(EventRecord::NTuple(Box::new(ev)))),
-            None => None,
-        }
+       self.reader
+            .next()
+            .map(|r| self.into_storage_error(r))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -135,7 +179,7 @@ impl UpdateWeights for FileStorage {
         &mut self,
         weights: &Weights
     ) -> Result<bool, Self::Error> {
-        let Some(record) = self.read_next() else {
+        let Some(record) = self.reader.read_raw() else {
             return Ok(false)
         };
         let mut record = self.into_storage_error(record)?;

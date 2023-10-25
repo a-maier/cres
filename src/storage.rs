@@ -41,11 +41,11 @@ impl FileReader {
             FileFormat::Lhef => {
                 use crate::lhef::FileReader as LhefReader;
                 Box::new(LhefReader::try_new(infile)?)
-
             },
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => {
-                todo!()
+                use crate::ntuple::FileReader as NTupleReader;
+                Box::new(NTupleReader::try_new(infile)?)
             },
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => {
@@ -551,15 +551,6 @@ pub trait EventFileReader:
     /// Path to the file we are reading from
     fn path(&self) -> &Path;
 }
-
-// #[cfg(feature = "lhef")]
-// impl EventFileReader for crate::lhef::FileReader {}
-
-// #[cfg(feature = "ntuple")]
-// impl EventFileReader for crate::ntuple::FileReader {}
-
-// #[cfg(feature = "stripper-xml")]
-// impl EventFileReader for crate::stripper_xml::FileReader {}
 
 /// Event storage backed by files
 pub trait EventFileStorage:
