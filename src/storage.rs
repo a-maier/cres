@@ -49,7 +49,8 @@ impl FileReader {
             },
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => {
-                todo!()
+                use crate::stripper_xml::FileReader as XMLReader;
+                Box::new(XMLReader::try_new(infile)?)
             },
         };
         Ok(Self(reader))

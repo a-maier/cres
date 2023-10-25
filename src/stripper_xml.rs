@@ -9,65 +9,36 @@ use quick_xml::events::attributes::Attribute;
 use stripper_xml::normalization::Normalization;
 use thiserror::Error;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{EventRecord, CreateError, Converter, FileStorageError, ErrorKind, ReadError, Utf8Error, WriteError}, util::{trim_ascii_start, take_chars}, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
+use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{EventRecord, CreateError, Converter, EventFileReader, FileStorageError, ErrorKind, ReadError, Utf8Error, WriteError}, util::{trim_ascii_start, take_chars}, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
 
-/// Storage backed by (potentially compressed) Les Houches Event Files
-pub struct FileStorage {
+/// Reader from a (potentially compressed) Les Houches Event File
+pub struct FileReader {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
-    sink_path: PathBuf,
-    sink: Box<dyn Write>,
-    _weight_names: Vec<String>,
-    weight_scale: f64,
     rem_subevents: usize,
 }
 
-impl FileStorage {
-    /// Construct STRIPPER XML event storage
-    ///
-    /// Construct a storage backed by the given (potentially compressed)
-    /// STRIPPER XMLs file with the given information for
-    /// channel-specific scale factors
-    pub fn try_new( // TODO: use builder pattern instead?
-        source_path: PathBuf,
-        sink_path: PathBuf,
-        compression: Option<Compression>,
-        _weight_names: Vec<String>,
-        scaling: &HashMap<String, f64>,
-    ) -> Result<Self, CreateError> {
-        use CreateError::*;
+impl FileReader {
+    /// Construct a reader from the given (potentially compressed) HepMC2 event file
+    pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
+        Self::try_new_raw(source_path).map(|(res, _)| res)
+    }
+
+    fn try_new_raw(source_path: PathBuf) -> Result<(Self, Vec<u8>), CreateError> {
+        use crate::stripper_xml::CreateError::XMLError;
 
         let (header, source) = init_source(&source_path)?;
-        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
-        let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression).map_err(CompressTarget)?;
-        sink.write_all(&header).map_err(Write)?;
         let header_info = extract_xml_info(header.as_slice())?;
-        let XMLTag::Eventrecord {
-            alpha_s_power: _,
-            name,
-            nevents: _,
-            nsubevents
-        } = header_info else {
+        let XMLTag::Eventrecord {nsubevents, ..} = header_info else {
             return Err(XMLError(Error::BadTag(header_info.to_string())))
         };
 
-        let Some(weight_scale) = scaling.get(&name).copied() else {
-            return Err(XMLError(Error::MissingScaling(name)))
-        };
-
-        Ok(FileStorage {
-            source_path,
-            source,
-            sink_path,
-            sink,
-            _weight_names,
-            weight_scale,
-            rem_subevents: nsubevents as usize,
-        })
+        let rem_subevents = nsubevents as usize;
+        let res = FileReader{ source_path, source, rem_subevents };
+        Ok((res, header))
     }
 
-    fn read_record(&mut self) -> Option<Result<String, ReadError>> {
+    fn read_raw(&mut self) -> Option<Result<String, ReadError>> {
         let mut record = b"<se".to_vec();
         loop {
             match self.source.read_until(b'e', &mut record) {
@@ -96,6 +67,83 @@ impl FileStorage {
         self.rem_subevents -= 1;
         Some(Ok(record))
     }
+}
+
+impl EventFileReader for FileReader {
+    fn path(&self) -> &Path {
+        self.source_path.as_path()
+    }
+}
+
+impl Rewind for FileReader {
+    type Error = CreateError;
+
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        (_, self.source) = init_source(&self.source_path)?;
+
+        Ok(())
+    }
+}
+
+impl Iterator for FileReader {
+    type Item = Result<EventRecord, ReadError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_raw()
+            .map(|r| r.map(EventRecord::StripperXml))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.rem_subevents, Some(self.rem_subevents))
+    }
+}
+
+/// Storage backed by (potentially compressed) STRIPPER XML files
+pub struct FileStorage {
+    reader: FileReader,
+    sink_path: PathBuf,
+    sink: Box<dyn Write>,
+    _weight_names: Vec<String>,
+    weight_scale: f64,
+}
+
+impl FileStorage {
+    /// Construct STRIPPER XML event storage
+    ///
+    /// Construct a storage backed by the given (potentially compressed)
+    /// STRIPPER XMLs file with the given information for
+    /// channel-specific scale factors
+    pub fn try_new( // TODO: use builder pattern instead?
+        source_path: PathBuf,
+        sink_path: PathBuf,
+        compression: Option<Compression>,
+        _weight_names: Vec<String>,
+        scaling: &HashMap<String, f64>,
+    ) -> Result<Self, CreateError> {
+        use CreateError::*;
+
+        let (reader, header) = FileReader::try_new_raw(source_path)?;
+        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
+        let sink = BufWriter::new(outfile);
+        let mut sink = compress_writer(sink, compression).map_err(CompressTarget)?;
+        sink.write_all(&header).map_err(Write)?;
+        let header_info = extract_xml_info(header.as_slice())?;
+        let XMLTag::Eventrecord {name, ..} = header_info else {
+            return Err(XMLError(Error::BadTag(header_info.to_string())))
+        };
+
+        let Some(weight_scale) = scaling.get(&name).copied() else {
+            return Err(XMLError(Error::MissingScaling(name)))
+        };
+
+        Ok(FileStorage {
+            reader,
+            sink_path,
+            sink,
+            _weight_names,
+            weight_scale,
+        })
+    }
 
     #[allow(clippy::wrong_self_convention)]
     fn into_storage_error<T, E: Into<ErrorKind>>(
@@ -103,7 +151,7 @@ impl FileStorage {
         res: Result<T, E>
     ) -> Result<T, FileStorageError> {
         res.map_err(|err| FileStorageError::new(
-            self.source_path.clone(),
+            self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
         ))
@@ -136,7 +184,7 @@ impl FileStorage {
             Read(ParseEntry(what, take_chars(record, 100)))
         };
 
-        let Some(record) = self.read_record() else {
+        let Some(record) = self.reader.read_raw() else {
             return Ok(false)
         };
         let mut record = record?;
@@ -167,10 +215,8 @@ impl Rewind for FileStorage {
     type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        let init = init_source(&self.source_path);
-        (_, self.source) = self.into_storage_error(init)?;
-
-        Ok(())
+        let res = self.reader.rewind();
+        self.into_storage_error(res)
     }
 }
 
@@ -178,7 +224,7 @@ impl Iterator for FileStorage {
     type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let res = self.read_record()
+        let res = self.reader.read_raw()
             .map(|r| match r {
                 Ok(mut record) => {
                     // TODO: might be better to do this in the Converter, but it
@@ -192,7 +238,7 @@ impl Iterator for FileStorage {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.rem_subevents, Some(self.rem_subevents))
+        self.reader.size_hint()
     }
 }
 
