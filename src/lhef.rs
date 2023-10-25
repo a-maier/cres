@@ -15,7 +15,7 @@ pub struct FileReader {
 }
 
 impl FileReader {
-    /// Construct a reader from the given (potentially compressed) HepMC2 event file
+    /// Construct a reader from the given (potentially compressed) Les Houches Event File
     pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
         Self::try_new_raw(source_path).map(|(res, _)| res)
     }
