@@ -12,18 +12,14 @@ use crate::{compression::{Compression, compress_writer}, traits::{Rewind, Update
 pub struct FileReader {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
+    header: Vec<u8>,
 }
 
 impl FileReader {
     /// Construct a reader from the given (potentially compressed) Les Houches Event File
     pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
-        Self::try_new_raw(source_path).map(|(res, _)| res)
-    }
-
-    fn try_new_raw(source_path: PathBuf) -> Result<(Self, Vec<u8>), CreateError> {
         let (header, source) = init_source(&source_path)?;
-        let res = FileReader{ source_path, source };
-        Ok((res, header))
+        Ok(Self{ source_path, source, header })
     }
 
     fn read_raw(&mut self) -> Option<Result<String, ReadError>> {
@@ -44,6 +40,10 @@ impl FileReader {
 impl EventFileReader for FileReader {
     fn path(&self) -> &Path {
         self.source_path.as_path()
+    }
+
+    fn header(&self) -> &[u8] {
+        &self.header
     }
 }
 
@@ -84,12 +84,12 @@ impl FileStorage {
     ) -> Result<Self, CreateError> {
         use CreateError::*;
 
-        let (reader, header) = FileReader::try_new_raw(source_path)?;
+        let reader = FileReader::try_new(source_path)?;
         let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
         let mut sink = compress_writer(sink, compression)
             .map_err(CompressTarget)?;
-        sink.write_all(&header).map_err(Write)?;
+        sink.write_all(reader.header()).map_err(Write)?;
 
         Ok(FileStorage {
             reader,

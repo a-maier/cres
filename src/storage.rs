@@ -61,6 +61,10 @@ impl EventFileReader for FileReader {
     fn path(&self) -> &Path {
         self.0.path()
     }
+
+    fn header(&self) -> &[u8] {
+        self.0.header()
+    }
 }
 
 impl Rewind for FileReader {
@@ -551,6 +555,9 @@ pub trait EventFileReader:
 {
     /// Path to the file we are reading from
     fn path(&self) -> &Path;
+
+    /// Event file header
+    fn header(&self) -> &[u8];
 }
 
 /// Event storage backed by files

@@ -34,6 +34,10 @@ impl EventFileReader for FileReader {
     fn path(&self) -> &Path {
         self.source_path.as_path()
     }
+
+    fn header(&self) -> &[u8] {
+        &[]
+    }
 }
 
 impl Rewind for FileReader {
