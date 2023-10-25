@@ -7,45 +7,29 @@ use nom::{multi::count, IResult};
 use particle_id::ParticleID;
 
 use crate::{
-    storage::{FileStorageError, EventRecord, Converter, CreateError, ReadError, WriteError, ErrorKind},
+    storage::{FileStorageError, EventRecord, Converter, CreateError, ReadError, WriteError, ErrorKind, EventFileReader},
     traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer}, parsing::{any_entry, u32_entry, i32_entry, double_entry}, util::take_chars,
 };
 
-/// Storage backed by (potentially compressed) HepMC2 event files
-pub struct FileStorage {
+/// Reader from a (potentially compressed) HepMC2 event file
+pub struct FileReader {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
-    sink_path: PathBuf,
-    sink: Box<dyn Write>,
-    _weight_names: Vec<String>,
 }
 
-impl FileStorage {
-    /// Construct a storage backed by the given (potentially compressed) HepMC2 event files
-    pub fn try_new(
-        source_path: PathBuf,
-        sink_path: PathBuf,
-        compression: Option<Compression>,
-        _weight_names: Vec<String>
-    ) -> Result<Self, CreateError> {
-        use CreateError::*;
-        let (header, source) = init_source(&source_path)?;
-        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
-        let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression)
-            .map_err(CompressTarget)?;
-        sink.write_all(&header).map_err(Write)?;
-
-        Ok(FileStorage {
-            source_path,
-            source,
-            sink_path,
-            sink,
-            _weight_names,
-        })
+impl FileReader {
+    /// Construct a reader from the given (potentially compressed) HepMC2 event file
+    pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
+        Self::try_new_raw(source_path).map(|(res, _)| res)
     }
 
-    fn read_record(&mut self) -> Option<Result<String, ReadError>> {
+    fn try_new_raw(source_path: PathBuf) -> Result<(Self, Vec<u8>), CreateError> {
+        let (header, source) = init_source(&source_path)?;
+        let res = FileReader{ source_path, source };
+        Ok((res, header))
+    }
+
+    fn read_raw(&mut self) -> Option<Result<String, ReadError>> {
         let mut record = vec![b'E'];
         while !record.ends_with(b"\nE") {
             match self.source.read_until(b'E', &mut record) {
@@ -67,6 +51,81 @@ impl FileStorage {
         trace!("Read HepMC record:\n{record}");
         Some(Ok(record))
     }
+}
+
+impl EventFileReader for FileReader {
+    fn path(&self) -> &Path {
+        self.source_path.as_path()
+    }
+}
+
+impl Rewind for FileReader {
+    type Error = CreateError;
+
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        (_, self.source) = init_source(&self.source_path)?;
+
+        Ok(())
+    }
+}
+
+impl Iterator for FileReader {
+    type Item = Result<EventRecord, ReadError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_raw()
+            .map(|r| r.map(EventRecord::HepMC))
+    }
+}
+
+fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
+    use CreateError::*;
+
+    let source = File::open(source).map_err(OpenInput)?;
+    let mut buf = auto_decompress(BufReader::new(source));
+
+    // read until start of first event
+    let mut header = Vec::new();
+    while !header.ends_with(b"\nE") {
+        if buf.read_until(b'E', &mut header).map_err(Read)? == 0 {
+            break;
+        }
+    }
+    header.pop();
+    Ok((header, buf))
+}
+
+/// Storage backed by (potentially compressed) HepMC2 event files
+pub struct FileStorage {
+    reader: FileReader,
+    sink_path: PathBuf,
+    sink: Box<dyn Write>,
+    _weight_names: Vec<String>,
+}
+
+impl FileStorage {
+    /// Construct a storage backed by the given (potentially compressed) HepMC2 event files
+    pub fn try_new(
+        source_path: PathBuf,
+        sink_path: PathBuf,
+        compression: Option<Compression>,
+        _weight_names: Vec<String>
+    ) -> Result<Self, CreateError> {
+        use CreateError::*;
+        let (reader, header) = FileReader::try_new_raw(source_path)?;
+        let outfile = File::create(&sink_path).map_err(CreateTarget)?;
+        let sink = BufWriter::new(outfile);
+        let mut sink = compress_writer(sink, compression)
+            .map_err(CompressTarget)?;
+        sink.write_all(&header).map_err(Write)?;
+
+        Ok(FileStorage {
+            reader,
+            sink_path,
+            sink,
+            _weight_names,
+        })
+    }
 
     #[allow(clippy::wrong_self_convention)]
     fn into_storage_error<T, E: Into<ErrorKind>>(
@@ -74,7 +133,7 @@ impl FileStorage {
         res: Result<T, E>
     ) -> Result<T, FileStorageError> {
         res.map_err(|err| FileStorageError::new(
-            self.source_path.clone(),
+            self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
         ))
@@ -89,7 +148,7 @@ impl FileStorage {
             ParseEntry(what, take_chars(record, 100))
         );
 
-        let Some(record) = self.read_record() else {
+        let Some(record) = self.reader.read_raw() else {
             return Ok(false)
         };
         let mut record = record?;
@@ -116,32 +175,13 @@ impl FileStorage {
     }
 }
 
-fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
-    use CreateError::*;
-
-    let source = File::open(source).map_err(OpenInput)?;
-    let mut buf = auto_decompress(BufReader::new(source));
-
-    // read until start of first event
-    let mut header = Vec::new();
-    while !header.ends_with(b"\nE") {
-        if buf.read_until(b'E', &mut header).map_err(Read)? == 0 {
-            break;
-        }
-    }
-    header.pop();
-    Ok((header, buf))
-}
 
 impl Rewind for FileStorage {
     type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        (_, self.source) = self.into_storage_error(
-            init_source(&self.source_path)
-        )?;
-
-        Ok(())
+        let res = self.reader.rewind();
+        self.into_storage_error(res)
     }
 }
 
@@ -149,8 +189,9 @@ impl Iterator for FileStorage {
     type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_record()
-            .map(|r| self.into_storage_error(r).map(EventRecord::HepMC))
+        self.reader
+            .next()
+            .map(|r| self.into_storage_error(r))
     }
 }
 

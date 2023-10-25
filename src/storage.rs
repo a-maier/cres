@@ -9,7 +9,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression};
+use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression, formats::FileFormat};
 
 #[cfg(feature = "lhef")]
 use crate::lhef::LHEFParser;
@@ -20,7 +20,67 @@ use crate::stripper_xml::StripperXmlParser;
 
 const ROOT_MAGIC_BYTES: [u8; 4] = [b'r', b'o', b'o', b't'];
 
-/// Event storage backed by a single event file
+/// Event reader from a single file
+///
+/// The format is determined automatically. If you know the format
+/// beforehand, you can use
+/// e.g. [hepmc2::FileReader](crate::hepmc2::FileReader) instead.
+pub struct FileReader(Box<dyn EventFileReader>);
+
+impl FileReader {
+    /// Construct new reader from file
+    pub fn try_new(infile: PathBuf) -> Result<Self, CreateError> {
+        let format = detect_file_format(&infile)?;
+        debug!("Read {infile:?} as {format:?} file");
+        let reader: Box<dyn EventFileReader> = match format {
+            FileFormat::HepMC2 => {
+                use crate::hepmc2::FileReader as HepMCReader;
+                Box::new(HepMCReader::try_new(infile)?)
+            },
+            #[cfg(feature = "lhef")]
+            FileFormat::Lhef => {
+                todo!()
+            },
+            #[cfg(feature = "ntuple")]
+            FileFormat::BlackHatNtuple => {
+                todo!()
+            },
+            #[cfg(feature = "stripper-xml")]
+            FileFormat::StripperXml => {
+                todo!()
+            },
+        };
+        Ok(Self(reader))
+    }
+}
+
+impl EventFileReader for FileReader {
+    fn path(&self) -> &Path {
+        self.0.path()
+    }
+}
+
+impl Rewind for FileReader {
+    type Error = CreateError;
+
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        self.0.rewind()
+    }
+}
+
+impl Iterator for FileReader {
+    type Item = Result<EventRecord, ReadError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+/// Event storage backed by one input and one output event file
 ///
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
@@ -74,77 +134,54 @@ impl StorageBuilder {
         infile: PathBuf,
         outfile: PathBuf
     ) -> Result<FileStorage, CreateError> {
-        use CreateError::*;
-
         let StorageBuilder { scaling, compression, weight_names } = self;
         let _scaling = scaling;
 
-        use crate::hepmc2::FileStorage as HepMCStorage;
-        let file = File::open(&infile).map_err(OpenInput)?;
-        let mut r = auto_decompress(BufReader::new(file));
-        let bytes = match r.fill_buf() {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                let storage = HepMCStorage::try_new(
+        let format = detect_file_format(&infile)?;
+        debug!("Read {infile:?} as {format:?} file");
+
+        let storage: Box<dyn EventFileStorage> = match format {
+            FileFormat::HepMC2 => {
+                use crate::hepmc2::FileStorage as HepMCStorage;
+                Box::new(HepMCStorage::try_new(
                     infile,
                     outfile,
                     compression,
                     weight_names,
-                )?;
-                return Ok(FileStorage(Box::new(storage)))
-            }
-        };
-        if bytes.starts_with(&ROOT_MAGIC_BYTES) {
-            #[cfg(not(feature = "ntuple"))]
-            return Err(RootUnsupported);
+                )?)
+            },
+            #[cfg(feature = "lhef")]
+            FileFormat::Lhef => {
+                use crate::lhef::FileStorage as LHEFStorage;
+                Box::new(LHEFStorage::try_new(
+                    infile,
+                    outfile,
+                    compression,
+                    weight_names,
+                )?)
+            },
             #[cfg(feature = "ntuple")]
-            {
+            FileFormat::BlackHatNtuple => {
                 use crate::ntuple::FileStorage as NTupleStorage;
-                debug!("Read {infile:?} as ROOT ntuple");
-                let storage = NTupleStorage::try_new(
+                Box::new(NTupleStorage::try_new(
                     infile,
                     outfile,
                     weight_names,
-                )?;
-                return Ok(FileStorage(Box::new(storage)))
-            }
-        } else if trim_ascii_start(bytes).starts_with(b"<?xml") {
-            #[cfg(not(feature = "stripper-xml"))]
-            return Err(XMLUnsupported);
+                )?)
+            },
             #[cfg(feature = "stripper-xml")]
-            {
+            FileFormat::StripperXml => {
                 use crate::stripper_xml::FileStorage as XMLStorage;
-                debug!("Read {infile:?} as ROOT ntuple");
-                let storage = XMLStorage::try_new(
+                Box::new(XMLStorage::try_new(
                     infile,
                     outfile,
                     compression,
                     weight_names,
                     &_scaling,
-                )?;
-                return Ok(FileStorage(Box::new(storage)))
-            }
-        }
-        #[cfg(feature = "lhef")]
-        if bytes.starts_with(b"<LesHouchesEvents") {
-            use crate::lhef::FileStorage as LHEFStorage;
-            debug!("Read {infile:?} as LHEF file");
-            let storage =  LHEFStorage::try_new(
-                infile,
-                outfile,
-                compression,
-                weight_names,
-            )?;
-            return Ok(FileStorage(Box::new(storage)))
-        }
-        debug!("Read {infile:?} as HepMC file");
-        let storage = HepMCStorage::try_new(
-            infile,
-            outfile,
-            compression,
-            weight_names
-        )?;
-        Ok(FileStorage(Box::new(storage)))
+                )?)
+            },
+        };
+        Ok(FileStorage(storage))
     }
 
     /// Construct a new storage backed by the files with the given names
@@ -192,6 +229,34 @@ impl StorageBuilder {
             }).collect();
         Ok(CombinedStorage::new(storage?))
     }
+}
+
+fn detect_file_format(infile: &Path) -> Result<FileFormat, CreateError> {
+    use CreateError::*;
+    use FileFormat::*;
+
+    let file = File::open(infile).map_err(OpenInput)?;
+    let mut r = auto_decompress(BufReader::new(file));
+    let Ok(bytes) = r.fill_buf() else {
+        return Ok(HepMC2)
+    };
+    if bytes.starts_with(&ROOT_MAGIC_BYTES) {
+        #[cfg(not(feature = "ntuple"))]
+        return Err(RootUnsupported);
+        #[cfg(feature = "ntuple")]
+        return Ok(BlackHatNtuple);
+    }
+    if trim_ascii_start(bytes).starts_with(b"<?xml") {
+        #[cfg(not(feature = "stripper-xml"))]
+        return Err(XMLUnsupported);
+        #[cfg(feature = "stripper-xml")]
+        return Ok(StripperXml)
+    }
+    #[cfg(feature = "lhef")]
+    if bytes.starts_with(b"<LesHouchesEvents") {
+        return Ok(Lhef)
+    }
+    Ok(HepMC2)
 }
 
 impl UpdateWeights for FileStorage {
@@ -477,6 +542,24 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
 }
 
 /// Reader from an event file
+pub trait EventFileReader:
+    Iterator<Item = Result<EventRecord, ReadError>>
+    + Rewind<Error = CreateError>
+{
+    /// Path to the file we are reading from
+    fn path(&self) -> &Path;
+}
+
+// #[cfg(feature = "lhef")]
+// impl EventFileReader for crate::lhef::FileReader {}
+
+// #[cfg(feature = "ntuple")]
+// impl EventFileReader for crate::ntuple::FileReader {}
+
+// #[cfg(feature = "stripper-xml")]
+// impl EventFileReader for crate::stripper_xml::FileReader {}
+
+/// Event storage backed by files
 pub trait EventFileStorage:
     Iterator<Item = Result<EventRecord, FileStorageError>>
     + Rewind<Error = FileStorageError>

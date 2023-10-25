@@ -40,6 +40,8 @@ pub mod cres;
 pub mod distance;
 /// Scattering event class
 pub mod event;
+/// Supported event file formats
+pub mod formats;
 /// Four-vector class
 pub mod four_vector;
 /// HepMC2 interface
@@ -49,7 +51,7 @@ pub mod hepmc2;
 pub mod lhef;
 /// Nearest neighbour search algorithms
 pub mod neighbour_search;
-/// ntuple interface
+/// BlackHat ntuple interface
 #[cfg(feature = "ntuple")]
 pub mod ntuple;
 /// Phase-space partitions
