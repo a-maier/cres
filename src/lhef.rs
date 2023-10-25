@@ -6,12 +6,69 @@ use noisy_float::prelude::*;
 use nom::{sequence::preceded, character::complete::{i32, space0, u32}, IResult, multi::count};
 use particle_id::ParticleID;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{FileStorageError, EventRecord, Converter, CreateError, ErrorKind, ReadError, WriteError}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight, util::take_chars};
+use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{FileStorageError, EventRecord, Converter, CreateError, ErrorKind, ReadError, WriteError, EventFileReader}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight, util::take_chars};
+
+/// Reader from a (potentially compressed) Les Houches Event File
+pub struct FileReader {
+    source_path: PathBuf,
+    source: Box<dyn BufRead>,
+}
+
+impl FileReader {
+    /// Construct a reader from the given (potentially compressed) HepMC2 event file
+    pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
+        Self::try_new_raw(source_path).map(|(res, _)| res)
+    }
+
+    fn try_new_raw(source_path: PathBuf) -> Result<(Self, Vec<u8>), CreateError> {
+        let (header, source) = init_source(&source_path)?;
+        let res = FileReader{ source_path, source };
+        Ok((res, header))
+    }
+
+    fn read_raw(&mut self) -> Option<Result<String, ReadError>> {
+        let mut record = Vec::new();
+        while !record.ends_with(b"</event>") {
+            match self.source.read_until(b'>', &mut record) {
+                Ok(0) => return None, // TODO: check incomplete record
+                Ok(_) => {},
+                Err(err) => return Some(Err(err.into())),
+            }
+        }
+        let record = String::from_utf8(record).unwrap();
+        trace!("Read Les Houches Event record:\n{record}");
+        Some(Ok(record))
+    }
+}
+
+impl EventFileReader for FileReader {
+    fn path(&self) -> &Path {
+        self.source_path.as_path()
+    }
+}
+
+impl Rewind for FileReader {
+    type Error = CreateError;
+
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        (_, self.source) = init_source(&self.source_path)?;
+
+        Ok(())
+    }
+}
+
+impl Iterator for FileReader {
+    type Item = Result<EventRecord, ReadError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_raw()
+            .map(|r| r.map(EventRecord::LHEF))
+    }
+}
 
 /// Storage backed by (potentially compressed) Les Houches Event Files
 pub struct FileStorage {
-    source_path: PathBuf,
-    source: Box<dyn BufRead>,
+    reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
@@ -27,7 +84,7 @@ impl FileStorage {
     ) -> Result<Self, CreateError> {
         use CreateError::*;
 
-        let (header, source) = init_source(&source_path)?;
+        let (reader, header) = FileReader::try_new_raw(source_path)?;
         let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
         let mut sink = compress_writer(sink, compression)
@@ -35,8 +92,7 @@ impl FileStorage {
         sink.write_all(&header).map_err(Write)?;
 
         Ok(FileStorage {
-            source_path,
-            source,
+            reader,
             sink_path,
             sink,
             _weight_names,
@@ -49,24 +105,10 @@ impl FileStorage {
         res: Result<T, E>
     ) -> Result<T, FileStorageError> {
         res.map_err(|err| FileStorageError::new(
-            self.source_path.clone(),
+            self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
         ))
-    }
-
-    fn read_record(&mut self) -> Option<Result<String, ReadError>> {
-        let mut record = Vec::new();
-        while !record.ends_with(b"</event>") {
-            match self.source.read_until(b'>', &mut record) {
-                Ok(0) => return None, // TODO: check incomplete record
-                Ok(_) => {},
-                Err(err) => return Some(Err(err.into())),
-            }
-        }
-        let record = String::from_utf8(record).unwrap();
-        trace!("Read Les Houches Event record:\n{record}");
-        Some(Ok(record))
     }
 
     fn update_next_weights_helper(&mut self, weights: &Weights) -> Result<bool, ErrorKind> {
@@ -78,7 +120,7 @@ impl FileStorage {
             ParseEntry(what, take_chars(record, 100))
         );
 
-        let Some(record) = self.read_record() else {
+        let Some(record) = self.reader.read_raw() else {
             return Ok(false)
         };
         let mut record = record?;
@@ -102,11 +144,8 @@ impl Rewind for FileStorage {
     type Error = FileStorageError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
-        (_, self.source) = self.into_storage_error(
-            init_source(&self.source_path)
-        )?;
-
-        Ok(())
+        let res = self.reader.rewind();
+        self.into_storage_error(res)
     }
 }
 
@@ -114,9 +153,10 @@ impl Iterator for FileStorage {
     type Item = Result<EventRecord, FileStorageError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_record()
-            .map(|r| self.into_storage_error(r).map(EventRecord::LHEF))
-    }
+       self.reader
+            .next()
+            .map(|r| self.into_storage_error(r))
+     }
 }
 
 fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {

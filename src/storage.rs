@@ -39,7 +39,9 @@ impl FileReader {
             },
             #[cfg(feature = "lhef")]
             FileFormat::Lhef => {
-                todo!()
+                use crate::lhef::FileReader as LhefReader;
+                Box::new(LhefReader::try_new(infile)?)
+
             },
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => {
