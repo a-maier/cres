@@ -1,53 +1,83 @@
 mod opt_common;
 
-use std::{io::Write, path::PathBuf, fs::File};
+use std::{path::PathBuf, fs::File};
 
-use crate::opt_common::{parse_compr, FileFormat};
+use crate::opt_common::*;
 
-use anyhow::{Context, Result};
+use anyhow::{Result, Context, bail};
 use clap::Parser;
-use cres::{GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, progress_bar::ProgressBar, compression::Compression, prelude::ClusteringConverter, partition::VPTreePartition, event::Event, distance::EuclWithScaledPt, traits::{TryConvert, WriteEvent, Progress}};
+use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, storage::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::{Compression, compress_writer}, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
 use env_logger::Env;
-use log::{debug, error, info, trace};
+use log::{info, debug, trace};
+use noisy_float::prelude::*;
+use rayon::prelude::IntoParallelIterator;
 
 // TODO: code duplication with opt::Opt
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 struct Opt {
-    /// File containing partitioning information
-    ///
-    /// This is a file created with `cres-make-partition`
-    #[clap(long, short, value_parser)]
-    partitioning: PathBuf,
-
-    /// Output file prefix.
-    ///
-    /// Output is written to prefixX.suffix, where X is a number and
-    /// suffix is chosen depending on the output format.
+    /// Output file.
     #[clap(long, short, value_parser)]
     outfile: PathBuf,
 
-    /// Output format
-    #[clap(value_enum, long, default_value_t)]
-    outformat: FileFormat,
+    #[clap(flatten)]
+    jet_def: JetDefinition,
 
-    #[clap(short = 'c', long, value_parser = parse_compr,
-                help = "Compress hepmc output files.
-Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
+    #[clap(flatten)]
+    lepton_def: LeptonDefinition,
+
+    #[clap(flatten)]
+    photon_def: PhotonDefinition,
+
+    /// Include neutrinos in the distance measure
+    #[clap(long, default_value_t)]
+    include_neutrinos: bool,
+
+    /// Number of regions
+    ///
+    /// The input event sample is split into the given number of
+    /// regions, which has to be a power of two. Each region is
+    /// written to its own output file.
+    #[clap(long, value_parser = parse_nregions)]
+    regions: u32,
+
+    /// Input files
+    #[clap(name = "INFILES", value_parser)]
+    infiles: Vec<PathBuf>,
+
+    #[clap(long, value_parser = parse_compr,
+           help = "Compress output file.
+Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
 Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
     compression: Option<Compression>,
 
     /// Verbosity level
-    ///
-    /// Possible values with increasing amount of output are
-    /// 'off', 'error', 'warn', 'info', 'debug', 'trace'.
-    #[clap(short, long, default_value = "Info")]
+    #[clap(
+        short,
+        long,
+        default_value = "Info",
+        help = "Verbosity level.
+Possible values with increasing amount of output are
+'off', 'error', 'warn', 'info', 'debug', 'trace'.\n"
+    )]
     loglevel: String,
 
-    /// Input files
-    #[clap(name = "INFILES", value_parser)]
-    infiles: Vec<PathBuf>,
+    #[clap(
+        short,
+        long,
+        default_value_t,
+        help = "Number of threads.
+
+If set to 0, a default number of threads is chosen.
+The default can be set with the `RAYON_NUM_THREADS` environment
+variable."
+    )]
+    threads: usize,
+
+    /// Weight of transverse momentum when calculating particle momentum distances.
+    #[clap(long, default_value = "0.")]
+    ptweight: f64,
 }
 
 fn main() -> Result<()> {
@@ -58,162 +88,138 @@ fn main() -> Result<()> {
     )
     .with_context(|| "Failed to read argument file")?;
     let opt = Opt::parse_from(args);
+    // TODO: validate!
 
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
 
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(opt.threads)
+        .build_global()?;
+
     if let (Some(rev), Some(branch)) = (GIT_REV, GIT_BRANCH) {
-        info!("cres-partition {VERSION} rev {rev} ({branch})");
+        info!("cres-make-partition {VERSION} rev {rev} ({branch}) {FEATURES:?}");
     } else {
-        info!("cres-partition {VERSION}");
+        info!("cres-make-partition {VERSION} {FEATURES:?}");
     }
 
     debug!("settings: {:#?}", opt);
 
-    let part_file = opt.partitioning;
-    let part_info = File::open(&part_file).with_context(
-        || format!("Failed to open {part_file:?}")
-    )?;
-    type PartInfo = (ClusteringConverter, VPTreePartition<Event, EuclWithScaledPt>);
-    let (mut converter, partitions): PartInfo = serde_yaml::from_reader(part_info).with_context(
-        || format!("Failed to read partition information from {part_file:?}")
-    )?;
+    let converter = Converter::new();
 
-    let extension = {
-        let base = opt.outformat.to_string();
-        match opt.compression {
-            Some(Compression::Bzip2) => base + ".bz2",
-            Some(Compression::Gzip(_)) => base + ".gz",
-            Some(Compression::Lz4(_)) => base + ".lz4",
-            Some(Compression::Zstd(_)) => base + ".zst",
-            None => base,
+    let mut clustering = DefaultClustering::new(opt.jet_def.into())
+        .include_neutrinos(opt.include_neutrinos);
+    if opt.lepton_def.leptonalgorithm.is_some() {
+        clustering = clustering.with_lepton_def(opt.lepton_def.into())
+    }
+    if opt.photon_def.photonradius.is_some() {
+        clustering = clustering.with_photon_def(opt.photon_def.into())
+    }
+
+    // TODO: in principle we only need the kinematic part
+    let mut events = Vec::new();
+    for file in opt.infiles {
+        let reader = FileReader::try_new(file.clone())?;
+        for event in reader {
+            let event = event.with_context(
+                || format!("Failed to read event from {file:?}")
+            )?;
+            let event: Event = converter.try_convert(event)?;
+            if event.weight() < 0.0 {
+                let event = clustering.cluster(event)?;
+                events.push(event)
+            }
         }
-    };
-    info!(
-        "Writing output to {outfile}0.{extension}...{outfile}{}.{extension}",
-        partitions.len() - 1,
-        outfile = opt.outfile.display()
+    }
+
+    if (opt.regions as usize) > events.len() {
+        bail!(
+            "Number of negative-weight events ({}) must be at least as large as number of regions ({})",
+            events.len(),
+            opt.regions,
+        )
+    }
+    let nevents = events.len();
+
+    info!("Constructing {} regions from {nevents} negative-weight events", opt.regions);
+    let depth = log2(opt.regions);
+    let distance = EuclWithScaledPt::new(n64(opt.ptweight));
+    let dist = DistWrapper::new(&distance, &events);
+    let partition = VPTree::from_par_iter_with_dist_and_depth(
+        (0..events.len()).into_par_iter(),
+        dist,
+        depth as usize
+    );
+    info!("Converting to output format");
+    let partition = VPTreePartition::from(partition);
+
+    let tree = partition.into_tree();
+    let tree = Vec::from_iter(
+        tree.into_iter()
+            .map(|VPBisection{pt, r}| {
+                let pt = std::mem::take(&mut events[pt]);
+                VPBisection{pt, r}
+            })
     );
 
-    let outfiles = (0..partitions.len()).map(|n| {
-        let mut path = opt.outfile.clone();
-        let mut filename =
-            opt.outfile.file_name().unwrap_or_default().to_owned();
-        filename.push(n.to_string());
-        path.set_file_name(filename);
-        path.set_extension(&extension);
-        path
-    });
-
-    let mut writers: Writers = match opt.outformat {
-        FileFormat::HepMC2 => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| cres::hepmc2::Writer::try_new(&f, opt.compression))
-                .collect();
-            Writers::HepMC(writers?)
-        }
-        #[cfg(feature = "lhef")]
-        FileFormat::Lhef => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| cres::lhef::Writer::try_new(&f, opt.compression))
-                .collect();
-            Writers::Lhef(writers?)
-        }
-        #[cfg(feature = "ntuple")]
-        FileFormat::Root => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| cres::ntuple::Writer::try_new(&f, opt.compression))
-                .collect();
-            Writers::NTuple(writers?)
-        }
-        #[cfg(feature = "stripper-xml")]
-        FileFormat::StripperXml => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| {
-                    cres::stripper_xml::Writer::try_new(&f, opt.compression)
-                })
-                .collect();
-            Writers::StripperXml(writers?)
-        }
+    // Safety: we have changed neither the structure of the tree nor
+    // the distance function
+    let partition = unsafe {
+        VPTreePartition::from_vp(tree, distance)
     };
+    trace!("Partition: {partition:#?}");
 
-    //TODO: code duplication with Cres
-    let reader = CombinedReader::from_files(opt.infiles)?;
-    let expected_nevents = reader.size_hint().0;
-    let event_progress = if expected_nevents > 0 {
-        ProgressBar::new(expected_nevents as u64, "events read")
-    } else {
-        ProgressBar::default()
-    };
-
-    for event in reader {
-        let event = event?;
-        let cres_event = converter.try_convert(event.clone())?;
-        let region = partitions.region(&cres_event);
-        trace!("{event:#?} is in region {region}");
-        writers.write(region, event)?;
-        event_progress.inc(1);
-    }
-
-    match writers {
-        Writers::HepMC(writers) => {
-            for writer in writers {
-                if let Err(err) = writer.finish() {
-                    error!("{err}")
-                }
-            }
-        }
-        #[cfg(feature = "lhef")]
-        Writers::Lhef(writers) => {
-            for writer in writers {
-                if let Err(err) = writer.finish() {
-                    error!("{err}")
-                }
-            }
-        }
-        #[cfg(feature = "stripper-xml")]
-        Writers::StripperXml(writers) => {
-            for writer in writers {
-                if let Err(err) = writer.finish() {
-                    error!("{err}")
-                }
-            }
-        }
-        #[cfg(feature = "ntuple")]
-        _ => {}
-    }
-
+    let outfile = opt.outfile;
+    info!("Writing to {outfile:?}");
+    let out = File::create(&outfile).with_context(
+        || format!("Failed to open {outfile:?}")
+    )?;
+    let out = compress_writer(out, opt.compression).with_context(
+        || format!("Failed to compress output to {outfile:?}")
+    )?;
+    serde_yaml::to_writer(out, &(clustering, partition))?;
+    info!("Done");
     Ok(())
 }
 
-enum Writers {
-    HepMC(Vec<cres::hepmc2::Writer<Box<dyn Write>>>),
-    #[cfg(feature = "lhef")]
-    Lhef(Vec<cres::lhef::Writer<Box<dyn Write>>>),
-    #[cfg(feature = "ntuple")]
-    NTuple(Vec<cres::ntuple::Writer>),
-    #[cfg(feature = "stripper-xml")]
-    StripperXml(Vec<cres::stripper_xml::Writer<Box<dyn Write>>>),
+fn parse_nregions(s: &str) -> Result<u32, String> {
+    use std::str::FromStr;
+
+    match u32::from_str(s) {
+        Ok(n) => {
+            if n.is_power_of_two() {
+                Ok(n)
+            } else {
+                Err("has to be a power of two".to_string())
+            }
+        }
+        Err(err) => Err(err.to_string()),
+    }
 }
 
-impl Writers {
-    fn write(&mut self, idx: usize, event: avery::Event) -> Result<()> {
-        match self {
-            Writers::HepMC(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
-            #[cfg(feature = "lhef")]
-            Writers::Lhef(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
-            #[cfg(feature = "ntuple")]
-            Writers::NTuple(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
-            #[cfg(feature = "stripper-xml")]
-            Writers::StripperXml(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
+/// Logarithm in base 2, rounded down
+pub const fn log2(n: u32) -> u32 {
+    u32::BITS - n.leading_zeros() - 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn tst_log2of0() {
+        log2(0);
+    }
+
+    #[test]
+    fn tst_log2() {
+        assert_eq!(log2(1), 0);
+        for n in 2..=3 {
+            assert_eq!(log2(n), 1);
+        }
+        for n in 4..=7 {
+            assert_eq!(log2(n), 2);
         }
     }
 }
