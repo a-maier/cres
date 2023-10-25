@@ -6,7 +6,7 @@ use crate::opt_common::*;
 
 use anyhow::{Result, Context, bail};
 use clap::Parser;
-use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, reader::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::{Compression, compress_writer}, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
+use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, storage::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::{Compression, compress_writer}, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
 use env_logger::Env;
 use log::{info, debug, trace};
 use noisy_float::prelude::*;
@@ -33,13 +33,13 @@ struct Opt {
     #[clap(long, default_value_t)]
     include_neutrinos: bool,
 
-    /// Number of partitions
+    /// Number of regions
     ///
     /// The input event sample is split into the given number of
-    /// partitions, which has to be a power of two. Each partition is
+    /// regions, which has to be a power of two. Each region is
     /// written to its own output file.
-    #[clap(long, value_parser = parse_npartitions)]
-    partitions: u32,
+    #[clap(long, value_parser = parse_nregions)]
+    regions: u32,
 
     /// Input files
     #[clap(name = "INFILES", value_parser)]
@@ -119,34 +119,30 @@ fn main() -> Result<()> {
     // TODO: in principle we only need the kinematic part
     let mut events = Vec::new();
     for file in opt.infiles {
-        let reader = FileReader::new(&file)?;
+        let reader = FileReader::try_new(file.clone())?;
         for event in reader {
             let event = event.with_context(
                 || format!("Failed to read event from {file:?}")
             )?;
-            let weight = event.weights.first().and_then(|w| w.weight);
-            match weight {
-                Some(w) if w < 0.0 => {
-                    let event: Event = converter.try_convert(event)?;
-                    let event = clustering.cluster(event)?;
-                    events.push(event)
-                },
-                _ => {}
+            let event: Event = converter.try_convert(event)?;
+            if event.weight() < 0.0 {
+                let event = clustering.cluster(event)?;
+                events.push(event)
             }
         }
     }
 
-    if (opt.partitions as usize) > events.len() {
+    if (opt.regions as usize) > events.len() {
         bail!(
-            "Number of negative-weight events ({}) must be at least as large as number of partitions ({})",
+            "Number of negative-weight events ({}) must be at least as large as number of regions ({})",
             events.len(),
-            opt.partitions,
+            opt.regions,
         )
     }
     let nevents = events.len();
 
-    info!("Constructing {} partitions from {nevents} negative-weight events", opt.partitions);
-    let depth = log2(opt.partitions);
+    info!("Constructing {} regions from {nevents} negative-weight events", opt.regions);
+    let depth = log2(opt.regions);
     let distance = EuclWithScaledPt::new(n64(opt.ptweight));
     let dist = DistWrapper::new(&distance, &events);
     let partition = VPTree::from_par_iter_with_dist_and_depth(
@@ -186,7 +182,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn parse_npartitions(s: &str) -> Result<u32, String> {
+fn parse_nregions(s: &str) -> Result<u32, String> {
     use std::str::FromStr;
 
     match u32::from_str(s) {
