@@ -103,7 +103,7 @@ fn main() -> Result<()> {
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => classifier.classify_byte_records(file, format)?,
             #[cfg(feature = "ntuple")]
-            FileFormat::BlackHatNtuple => classifier.classify_ntuple_records(file, format)?,
+            FileFormat::BlackHatNtuple => classifier.classify_ntuple_records(file)?,
         }
     }
     info!("done");
@@ -176,7 +176,6 @@ impl Classifier {
             ntuple::FileReader,
             storage::EventRecord,
         };
-        use anyhow::anyhow;
         use ntuple::Writer;
         use log::warn;
 
