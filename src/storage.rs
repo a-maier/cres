@@ -603,6 +603,23 @@ pub enum EventRecord {
     StripperXml(String),
 }
 
+impl TryFrom<EventRecord> for String {
+    type Error = EventRecord;
+
+    fn try_from(e: EventRecord) -> Result<Self, Self::Error> {
+        use EventRecord::*;
+        match e {
+            HepMC(s) => Ok(s),
+            #[cfg(feature = "lhef")]
+            LHEF(s) => Ok(s),
+            #[cfg(feature = "ntuple")]
+            ev @ NTuple(_) => Err(ev),
+            #[cfg(feature = "stripper-xml")]
+            StripperXml(s) => Ok(s),
+        }
+    }
+}
+
 /// Converter from event records to internal event format
 #[derive(Deserialize, Serialize)]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
