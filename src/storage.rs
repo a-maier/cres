@@ -30,7 +30,7 @@ pub struct FileReader(Box<dyn EventFileReader>);
 impl FileReader {
     /// Construct new reader from file
     pub fn try_new(infile: PathBuf) -> Result<Self, CreateError> {
-        let format = detect_file_format(&infile)?;
+        let format = detect_event_file_format(&infile)?;
         debug!("Read {infile:?} as {format:?} file");
         let reader: Box<dyn EventFileReader> = match format {
             FileFormat::HepMC2 => {
@@ -144,7 +144,7 @@ impl StorageBuilder {
         let StorageBuilder { scaling, compression, weight_names } = self;
         let _scaling = scaling;
 
-        let format = detect_file_format(&infile)?;
+        let format = detect_event_file_format(&infile)?;
         debug!("Read {infile:?} as {format:?} file");
 
         let storage: Box<dyn EventFileStorage> = match format {
@@ -238,7 +238,10 @@ impl StorageBuilder {
     }
 }
 
-fn detect_file_format(infile: &Path) -> Result<FileFormat, CreateError> {
+/// Detect format of an event file
+///
+/// Defaults to [HepMC2] if not other format can be identified.
+pub fn detect_event_file_format(infile: &Path) -> Result<FileFormat, CreateError> {
     use CreateError::*;
     use FileFormat::*;
 
