@@ -1,84 +1,17 @@
 mod opt_common;
+mod opt_partition;
 
-use std::{path::PathBuf, fs::File};
+use std::fs::File;
 
-use crate::opt_common::*;
+use crate::opt_partition::Opt;
 
 use anyhow::{Result, Context, bail};
 use clap::Parser;
-use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, storage::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::{Compression, compress_writer}, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
+use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, storage::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::compress_writer, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
 use env_logger::Env;
 use log::{info, debug, trace};
 use noisy_float::prelude::*;
 use rayon::prelude::IntoParallelIterator;
-
-// TODO: code duplication with opt::Opt
-#[derive(Debug, Parser)]
-#[clap(about, author, version)]
-struct Opt {
-    /// Output file.
-    #[clap(long, short, value_parser)]
-    outfile: PathBuf,
-
-    #[clap(flatten)]
-    jet_def: JetDefinition,
-
-    #[clap(flatten)]
-    lepton_def: LeptonDefinition,
-
-    #[clap(flatten)]
-    photon_def: PhotonDefinition,
-
-    /// Include neutrinos in the distance measure
-    #[clap(long, default_value_t)]
-    include_neutrinos: bool,
-
-    /// Number of regions
-    ///
-    /// The input event sample is split into the given number of
-    /// regions, which has to be a power of two. Each region is
-    /// written to its own output file.
-    #[clap(long, value_parser = parse_nregions)]
-    regions: u32,
-
-    /// Input files
-    #[clap(name = "INFILES", value_parser)]
-    infiles: Vec<PathBuf>,
-
-    #[clap(long, value_parser = parse_compr,
-           help = "Compress output file.
-Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
-Compression levels can be set with algorithm_level e.g. 'zstd_5'.
-Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
-    compression: Option<Compression>,
-
-    /// Verbosity level
-    #[clap(
-        short,
-        long,
-        default_value = "Info",
-        help = "Verbosity level.
-Possible values with increasing amount of output are
-'off', 'error', 'warn', 'info', 'debug', 'trace'.\n"
-    )]
-    loglevel: String,
-
-    #[clap(
-        short,
-        long,
-        default_value_t,
-        help = "Number of threads.
-
-If set to 0, a default number of threads is chosen.
-The default can be set with the `RAYON_NUM_THREADS` environment
-variable."
-    )]
-    threads: usize,
-
-    /// Weight of transverse momentum when calculating particle momentum distances.
-    #[clap(long, default_value = "0.")]
-    ptweight: f64,
-}
 
 fn main() -> Result<()> {
     let args = argfile::expand_args_from(
@@ -180,21 +113,6 @@ fn main() -> Result<()> {
     serde_yaml::to_writer(out, &(clustering, partition))?;
     info!("Done");
     Ok(())
-}
-
-fn parse_nregions(s: &str) -> Result<u32, String> {
-    use std::str::FromStr;
-
-    match u32::from_str(s) {
-        Ok(n) => {
-            if n.is_power_of_two() {
-                Ok(n)
-            } else {
-                Err("has to be a power of two".to_string())
-            }
-        }
-        Err(err) => Err(err.to_string()),
-    }
 }
 
 /// Logarithm in base 2, rounded down

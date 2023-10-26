@@ -1,5 +1,7 @@
 mod opt_common;
 mod opt_cres;
+mod opt_partition;
+mod opt_classify;
 
 use crate::opt_cres::Opt;
 
@@ -44,8 +46,10 @@ struct ShellSelect {
     shell: Shell,
 }
 
-fn gen_completion<S: Generator, W: Write>(shell: S, mut to: W) {
-    generate(shell, &mut Opt::command(), "cres", &mut to)
+fn gen_completion<S: Copy + Generator, W: Write>(shell: S, mut to: W) {
+    generate(shell, &mut Opt::command(), "cres", &mut to);
+    generate(shell, &mut crate::opt_partition::Opt::command(), "cres-partition", &mut to);
+    generate(shell, &mut crate::opt_classify::Opt::command(), "cres-classify-events", &mut to)
 }
 
 fn main() -> Result<()> {
