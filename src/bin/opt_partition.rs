@@ -26,11 +26,7 @@ pub(crate) struct Opt {
     #[clap(long, default_value_t)]
     pub(crate) include_neutrinos: bool,
 
-    /// Number of regions
-    ///
-    /// The input event sample is split into the given number of
-    /// regions, which has to be a power of two. Each region is
-    /// written to its own output file.
+    /// Number of regions into which the phase space is partitioned
     #[clap(long, value_parser = parse_nregions)]
     pub(crate) regions: u32,
 

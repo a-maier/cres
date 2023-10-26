@@ -122,6 +122,39 @@ The argfile can be used like this:
 
     cres @argfile -o OUT.HEPMC2 IN.HEPMC2
 
+
+Scaling to huge samples
+-----------------------
+
+Ideally, `cres` should be run on as many events as possible. Naive
+parallelisation over several nodes is discouraged, as the cell
+resampling quality will not benefit from higher event statistics.
+
+For very large samples consisting of many smaller subsamples the
+following work flow is recommended:
+
+1. Run
+
+        cres-partition @partitionargs -o partition --regions N --SUBSAMPLE.HEPMC2
+
+   on a a single subsample, e.g. 10^6 events. `N` is the number of
+   nodes on which `cres` should be later run in
+   parallel. `cres-partition` should be fast and memory-efficient
+   enough to be run on a single node.
+
+2. Run
+
+        cres-classify @classifyargs -p partition SUBSAMPLE.HEPMC2
+
+   on each subsample. Each subsample can be treated in parallel. This
+   will split `SUBSAMPLE.HEPMC2` into `N` parts `SUBSAMPLE.X.HEPMC2`.
+
+3. For each part `X`, run `cres` on all subsamples
+
+        cres @argfile SUBSAMPLE0.X.HEPMC2 SUBSAMPLE1.X.HEPMC2 ...
+
+   Each instance can be run on a separate node.
+
 Environment variables
 ---------------------
 
@@ -141,7 +174,7 @@ number of threads with the `--threads` command line option or with the
 
 ## Features
 
-To install cres with additional features, add `--features name1,name2`
+To install `cres` with additional features, add `--features name1,name2`
 to your installation command. Default features don't have to be added
 manually. To disable them, add the `--no-default-features` flag.
 
