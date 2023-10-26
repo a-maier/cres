@@ -1,14 +1,14 @@
 mod opt_common;
 
-use std::{io::Write, path::PathBuf, fs::File};
+use std::{path::{PathBuf, Path}, fs::{File, create_dir_all}, io::{Write, BufWriter}};
 
-use crate::opt_common::{parse_compr, FileFormat};
+use crate::opt_common::parse_compr;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use cres::{GIT_REV, GIT_BRANCH, VERSION, reader::CombinedReader, progress_bar::ProgressBar, compression::Compression, prelude::ClusteringConverter, partition::VPTreePartition, event::Event, distance::EuclWithScaledPt, traits::{TryConvert, WriteEvent, Progress}};
+use cres::{GIT_REV, GIT_BRANCH, VERSION, progress_bar::ProgressBar, compression::{Compression, compress_writer}, prelude::{Converter, DefaultClustering}, partition::VPTreePartition, event::Event, distance::EuclWithScaledPt, traits::{TryConvert, Progress, Clustering}, storage::{EventFileReader, detect_event_file_format, FileReader}, formats::FileFormat};
 use env_logger::Env;
-use log::{debug, error, info, trace};
+use log::{debug, trace, info, error};
 
 // TODO: code duplication with opt::Opt
 #[derive(Debug, Parser)]
@@ -18,21 +18,19 @@ struct Opt {
     ///
     /// This is a file created with `cres-make-partition`
     #[clap(long, short, value_parser)]
-    partitioning: PathBuf,
+    partition: PathBuf,
 
-    /// Output file prefix.
+    /// Output directory.
     ///
-    /// Output is written to prefixX.suffix, where X is a number and
-    /// suffix is chosen depending on the output format.
+    /// For each input file `prefix.suffix`, output is written to
+    /// files `prefix.X.suffix`, where X is a number identifying the
+    /// region. `prefix` is the filename component before the first
+    /// `.`
     #[clap(long, short, value_parser)]
-    outfile: PathBuf,
-
-    /// Output format
-    #[clap(value_enum, long, default_value_t)]
-    outformat: FileFormat,
+    outdir: PathBuf,
 
     #[clap(short = 'c', long, value_parser = parse_compr,
-                help = "Compress hepmc output files.
+                help = "Compress output files.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'
 Compression levels can be set with algorithm_level e.g. 'zstd_5'.
 Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
@@ -70,150 +68,227 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
-    let part_file = opt.partitioning;
+    let part_file = opt.partition;
     let part_info = File::open(&part_file).with_context(
         || format!("Failed to open {part_file:?}")
     )?;
-    type PartInfo = (ClusteringConverter, VPTreePartition<Event, EuclWithScaledPt>);
-    let (mut converter, partitions): PartInfo = serde_yaml::from_reader(part_info).with_context(
+    type PartInfo = (DefaultClustering, VPTreePartition<Event, EuclWithScaledPt>);
+    let (clustering, partitions): PartInfo = serde_yaml::from_reader(part_info).with_context(
         || format!("Failed to read partition information from {part_file:?}")
     )?;
+    info!("Using partitioning into {} regions", partitions.len());
 
-    let extension = {
-        let base = opt.outformat.to_string();
-        match opt.compression {
-            Some(Compression::Bzip2) => base + ".bz2",
-            Some(Compression::Gzip(_)) => base + ".gz",
-            Some(Compression::Lz4(_)) => base + ".lz4",
-            Some(Compression::Zstd(_)) => base + ".zst",
-            None => base,
-        }
-    };
-    info!(
-        "Writing output to {outfile}0.{extension}...{outfile}{}.{extension}",
-        partitions.len() - 1,
-        outfile = opt.outfile.display()
-    );
+    create_dir_all(&opt.outdir).with_context(
+        || format!("Failed to create {:?}", opt.outdir)
+    )?;
 
-    let outfiles = (0..partitions.len()).map(|n| {
-        let mut path = opt.outfile.clone();
-        let mut filename =
-            opt.outfile.file_name().unwrap_or_default().to_owned();
-        filename.push(n.to_string());
-        path.set_file_name(filename);
-        path.set_extension(&extension);
-        path
-    });
-
-    let mut writers: Writers = match opt.outformat {
-        FileFormat::HepMC2 => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| cres::hepmc2::Writer::try_new(&f, opt.compression))
-                .collect();
-            Writers::HepMC(writers?)
-        }
-        #[cfg(feature = "lhef")]
-        FileFormat::Lhef => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| cres::lhef::Writer::try_new(&f, opt.compression))
-                .collect();
-            Writers::Lhef(writers?)
-        }
-        #[cfg(feature = "ntuple")]
-        FileFormat::Root => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| cres::ntuple::Writer::try_new(&f, opt.compression))
-                .collect();
-            Writers::NTuple(writers?)
-        }
-        #[cfg(feature = "stripper-xml")]
-        FileFormat::StripperXml => {
-            let writers: Result<Vec<_>, _> = outfiles
-                .map(|f| {
-                    cres::stripper_xml::Writer::try_new(&f, opt.compression)
-                })
-                .collect();
-            Writers::StripperXml(writers?)
-        }
+    let classifier = Classifier {
+        partitions,
+        outdir: opt.outdir,
+        compression: opt.compression,
+        converter: Converter::new(),
+        clustering,
     };
 
     //TODO: code duplication with Cres
-    let reader = CombinedReader::from_files(opt.infiles)?;
-    let expected_nevents = reader.size_hint().0;
-    let event_progress = if expected_nevents > 0 {
-        ProgressBar::new(expected_nevents as u64, "events read")
-    } else {
-        ProgressBar::default()
-    };
-
-    for event in reader {
-        let event = event?;
-        let cres_event = converter.try_convert(event.clone())?;
-        let region = partitions.region(&cres_event);
-        trace!("{event:#?} is in region {region}");
-        writers.write(region, event)?;
-        event_progress.inc(1);
+    for file in opt.infiles {
+        info!("Reading {file:?}");
+        let format = detect_event_file_format(&file).with_context(
+            || format!("Failed to detect event format for {file:?}")
+        )?;
+        match format {
+            FileFormat::HepMC2 => classifier.classify_byte_records(file, format)?,
+            #[cfg(feature = "lhef")]
+            FileFormat::Lhef => classifier.classify_byte_records(file, format)?,
+            #[cfg(feature = "stripper-xml")]
+            FileFormat::StripperXml => classifier.classify_byte_records(file, format)?,
+            #[cfg(feature = "ntuple")]
+            FileFormat::BlackHatNtuple => classifier.classify_ntuple_records(file, format)?,
+        }
     }
-
-    match writers {
-        Writers::HepMC(writers) => {
-            for writer in writers {
-                if let Err(err) = writer.finish() {
-                    error!("{err}")
-                }
-            }
-        }
-        #[cfg(feature = "lhef")]
-        Writers::Lhef(writers) => {
-            for writer in writers {
-                if let Err(err) = writer.finish() {
-                    error!("{err}")
-                }
-            }
-        }
-        #[cfg(feature = "stripper-xml")]
-        Writers::StripperXml(writers) => {
-            for writer in writers {
-                if let Err(err) = writer.finish() {
-                    error!("{err}")
-                }
-            }
-        }
-        #[cfg(feature = "ntuple")]
-        _ => {}
-    }
-
+    info!("done");
     Ok(())
 }
 
-enum Writers {
-    HepMC(Vec<cres::hepmc2::Writer<Box<dyn Write>>>),
-    #[cfg(feature = "lhef")]
-    Lhef(Vec<cres::lhef::Writer<Box<dyn Write>>>),
-    #[cfg(feature = "ntuple")]
-    NTuple(Vec<cres::ntuple::Writer>),
-    #[cfg(feature = "stripper-xml")]
-    StripperXml(Vec<cres::stripper_xml::Writer<Box<dyn Write>>>),
+struct Classifier {
+    partitions: VPTreePartition<Event, EuclWithScaledPt>,
+    outdir: PathBuf,
+    compression: Option<Compression>,
+    converter: Converter,
+    clustering: DefaultClustering,
 }
 
-impl Writers {
-    fn write(&mut self, idx: usize, event: avery::Event) -> Result<()> {
-        match self {
-            Writers::HepMC(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
-            #[cfg(feature = "lhef")]
-            Writers::Lhef(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
-            #[cfg(feature = "ntuple")]
-            Writers::NTuple(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
-            }
-            #[cfg(feature = "stripper-xml")]
-            Writers::StripperXml(writers) => {
-                writers[idx].write(event).map_err(|e| e.into())
+impl Classifier {
+    fn classify_byte_records(
+        &self,
+        file: PathBuf,
+        format: FileFormat,
+    ) -> Result<()> {
+        let Classifier {
+            partitions,
+            outdir,
+            compression,
+            converter,
+            clustering,
+        } = self;
+        let reader = FileReader::try_new(file.clone()).with_context(
+            || "Failed to read from {file:?}"
+        )?;
+        let mut writers = make_byte_writers(
+            partitions.len(),
+            outdir,
+            &file,
+            *compression,
+        ).with_context(
+            || format!("Failed to create writers for {file:?}")
+        )?;
+        for writer in &mut writers {
+            writer.write_all(reader.header())?;
+        }
+        let expected_nevents = reader.size_hint().0;
+        let event_progress = if expected_nevents > 0 {
+            ProgressBar::new(expected_nevents as u64, "events read")
+        } else {
+            ProgressBar::default()
+        };
+        for event in reader {
+            let event = event?;
+            let cres_event = converter.try_convert(event.clone())?;
+            let cres_event = clustering.cluster(cres_event)?;
+            let region = partitions.region(&cres_event);
+            trace!("{event:#?} is in region {region}");
+            let event = String::try_from(event).unwrap();
+            let event = &trim_footer(&event, format);
+            writers[region].write_all(event.as_bytes())?;
+            event_progress.inc(1);
+        }
+        for writer in writers {
+            if let Err(err) = write_footer(writer, format) {
+                error!("Failed to write event file footer: {err}");
             }
         }
+        Ok(())
     }
+
+    #[cfg(feature = "ntuple")]
+    fn classify_ntuple_records(&self, file: PathBuf) -> Result<()> {
+        use cres::{
+            ntuple::FileReader,
+            storage::EventRecord,
+        };
+        use anyhow::anyhow;
+        use ntuple::Writer;
+        use log::warn;
+
+        let Classifier {
+            partitions,
+            outdir,
+            compression,
+            converter,
+            clustering,
+        } = self;
+        if let Some(compression) = compression {
+            warn!("Ignoring {compression:?} compression")
+        }
+        let reader = FileReader::try_new(file.clone()).with_context(
+            || "Failed to read from {file:?}"
+        )?;
+
+        // TODO: code duplication with `make_byte_writers`
+        let file = file.to_str().unwrap();
+        let (prefix, suffix) = file
+            .split_once('.')
+            .unwrap_or((file, ""));
+
+        let make_outname = |i| PathBuf::from_iter(
+            [outdir, PathBuf::from(format!("{prefix}.{i}.{suffix}")).as_path()]
+        );
+
+        let writers: Option<Vec<_>> = (0..partitions.len())
+            .map(|i| Writer::new(make_outname(i), ""))
+            .collect();
+        let mut writers = writers
+            .ok_or_else(|| anyhow!("Failed to create ntuple writers"))?;
+
+        let expected_nevents = reader.size_hint().0;
+        let event_progress = ProgressBar::new(expected_nevents as u64, "events read");
+        for event in reader {
+            let event = event?;
+            let cres_event = converter.try_convert(event.clone())?;
+            let cres_event = clustering.cluster(cres_event)?;
+            let region = partitions.region(&cres_event);
+            trace!("{event:#?} is in region {region}");
+            let EventRecord::NTuple(event) = event else {
+                unreachable!("Event record is not a BlackHatNtuple")
+            };
+            writers[region].write(&event)?;
+            event_progress.inc(1);
+        }
+        Ok(())
+    }
+}
+
+fn write_footer(
+    mut writer: impl Write,
+    format: FileFormat
+) -> std::io::Result<()> {
+    writer.write_all(get_footer(format).as_bytes())?;
+    writer.write_all(b"\n")
+}
+
+fn trim_footer(event: &str, format: FileFormat) -> &str {
+    let footer = get_footer(format);
+    if let Some(event) = event.trim_end().strip_suffix(footer) {
+        event
+    } else {
+        event
+    }
+}
+
+fn get_footer(format: FileFormat) -> &'static str {
+    match format {
+        FileFormat::HepMC2 => "HepMC::IO_GenEvent-END_EVENT_LISTING",
+        #[cfg(feature = "lhef")]
+        FileFormat::Lhef => "</LesHouchesEvents>",
+        #[cfg(feature = "stripper-xml")]
+        FileFormat::StripperXml => "</Eventrecord>",
+        #[cfg(feature = "ntuple")]
+        FileFormat::BlackHatNtuple => "",
+    }
+}
+
+fn make_byte_writers(
+    n: usize,
+    outdir: &Path,
+    file: &Path,
+    compression: Option<Compression>,
+) -> Result<Vec<Box<dyn Write>>> {
+    let filename = file.file_name().ok_or_else(
+        || anyhow!("Failed to extract filename from {file:?}")
+    )?;
+    let file = filename.to_str().ok_or_else(
+        || anyhow!("Failed to convert {filename:?} to a string")
+    )?;
+    let (prefix, suffix) = file
+        .split_once('.')
+        .unwrap_or((file, ""));
+
+    let make_outname = |i| PathBuf::from_iter(
+        [outdir, PathBuf::from(format!("{prefix}.{i}.{suffix}")).as_path()]
+    );
+
+    let mut res = Vec::with_capacity(n);
+    for i in 0..n {
+        let outname = make_outname(i);
+        debug!("Events in region {i} will be written to {outname:?}");
+        let outfile = File::create(&outname).with_context(
+            || format!("Failed to create {outname:?}")
+        )?;
+        let out = BufWriter::new(outfile);
+        let out = compress_writer(out, compression).with_context(
+            || format!("Failed to compress {outname:?}")
+        )?;
+        res.push(out)
+    }
+    Ok(res)
 }

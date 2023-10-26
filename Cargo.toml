@@ -67,6 +67,10 @@ name = "cres-partition"
 path = "src/bin/partition.rs"
 
 [[bin]]
+name = "cres-find-region"
+path = "src/bin/find-region.rs"
+
+[[bin]]
 name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 
