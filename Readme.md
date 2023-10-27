@@ -135,7 +135,7 @@ following work flow is recommended:
 
 1. Run
 
-        cres-partition @partitionargs -o partition --regions N --SUBSAMPLE.HEPMC2
+        cres-partition @partitionargs -o partition --regions N SUBSAMPLE.HEPMC2
 
    on a a single subsample, e.g. 10^6 events. `N` is the number of
    nodes on which `cres` should be later run in
