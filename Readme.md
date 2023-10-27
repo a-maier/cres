@@ -142,7 +142,7 @@ following work flow is recommended:
    parallel. `cres-partition` should be fast and memory-efficient
    enough to be run on a single node.
 
-2. Run
+2. Using the `partition` file created in step 1., run
 
         cres-classify @classifyargs -p partition SUBSAMPLE.HEPMC2
 
