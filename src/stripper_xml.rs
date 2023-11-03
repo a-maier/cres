@@ -106,7 +106,7 @@ pub struct FileStorage {
     reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
-    weight_names: Vec<String>,
+    weights_to_resample: Vec<String>,
     weight_scale: f64,
     weight_entries: Vec<String>,
 }
@@ -121,7 +121,7 @@ impl FileStorage {
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
-        weight_names: Vec<String>,
+        weights_to_resample: Vec<String>,
         scaling: &HashMap<String, EventTypeInfo>,
     ) -> Result<Self, CreateError> {
         use CreateError::*;
@@ -147,7 +147,7 @@ impl FileStorage {
             reader,
             sink_path,
             sink,
-            weight_names,
+            weights_to_resample,
             weight_scale,
             weight_entries,
         })
@@ -232,7 +232,7 @@ impl FileStorage {
                 let Some(end) = rest.find(|c: char| !c.is_ascii_digit()) else {
                     return Err(parse_err("reweight entry", rest))
                 };
-                start = if self.weight_names.contains(entry) {
+                start = if self.weights_to_resample.contains(entry) {
                     let wt_str = weights.next().unwrap().to_string();
                     record.replace_range(start..end, &wt_str);
                     start + wt_str.len()
