@@ -12,8 +12,10 @@ use log::{debug, trace};
 use noisy_float::prelude::*;
 use nom::{
     bytes::complete::tag,
-    character::complete::{char, i32, multispace0, space0, space1, u64},
-    combinator::all_consuming,
+    character::complete::{
+        char, i32, multispace0, multispace1, space0, space1, u64,
+    },
+    combinator::{all_consuming, opt, recognize},
     sequence::{preceded, tuple},
     IResult,
 };
@@ -28,7 +30,7 @@ use crate::{
     four_vector::FourVector,
     io::{
         Converter, CreateError, ErrorKind, EventFileReader, EventRecord,
-        FileIOError, ReadError, Utf8Error, WriteError,
+        EventTypeInfo, FileIOError, ReadError, Utf8Error, WriteError,
     },
     traits::{Rewind, UpdateWeights},
     util::{take_chars, trim_ascii_start},
@@ -121,7 +123,12 @@ impl Iterator for FileReader {
     type Item = Result<EventRecord, ReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_raw().map(|r| r.map(EventRecord::StripperXml))
+        self.read_raw().map(|r| {
+            r.map(|record| EventRecord::StripperXml {
+                record,
+                weight_names: Vec::new(),
+            })
+        })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -134,8 +141,9 @@ pub struct FileIO {
     reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
-    _weight_names: Vec<String>,
+    weight_names: Vec<String>,
     weight_scale: f64,
+    weight_entries: Vec<String>,
 }
 
 impl FileIO {
@@ -149,8 +157,8 @@ impl FileIO {
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
-        _weight_names: Vec<String>,
-        scaling: &HashMap<String, f64>,
+        weight_names: Vec<String>,
+        scaling: &HashMap<String, EventTypeInfo>,
     ) -> Result<Self, CreateError> {
         use CreateError::*;
 
@@ -165,16 +173,20 @@ impl FileIO {
             return Err(XMLError(Error::BadTag(header_info.to_string())));
         };
 
-        let Some(weight_scale) = scaling.get(&name).copied() else {
+        let Some(info) = scaling.get(&name) else {
             return Err(XMLError(Error::MissingScaling(name)));
         };
+
+        let weight_scale = info.scale;
+        let weight_entries = info.weight_names.clone();
 
         Ok(FileIO {
             reader,
             sink_path,
             sink,
-            _weight_names,
+            weight_names,
             weight_scale,
+            weight_entries,
         })
     }
 
@@ -220,7 +232,7 @@ impl FileIO {
         weights: &Weights,
     ) -> Result<bool, ErrorKind> {
         use ErrorKind::*;
-        use ReadError::ParseEntry;
+        use ReadError::{FindEntry, ParseEntry};
         use WriteError::IO;
 
         let parse_err = |what, record: &str| {
@@ -243,12 +255,39 @@ impl FileIO {
 
             let start = start.len();
             let end = record.len() - rest.len();
-            record.replace_range(start..end, &weight.to_string());
+            let wt_str = weight.to_string();
+            record.replace_range(start..end, &wt_str);
             trace!("replaced weight: {old_weight} -> {weight}");
 
             #[cfg(feature = "multiweight")]
             if weights.len() > 1 {
-                unimplemented!("Multiple weights in STRIPPER XML format")
+                let start = start + wt_str.len();
+                let rest = &record[start..];
+                let mut weights = weights.iter().skip(1);
+                let Some(start) = record.find("<rw ") else {
+                    return Err(Read(FindEntry("reweight entry", record)));
+                };
+                let (_rest, rwtag) = reweight_start(rest)
+                    .map_err(|_| parse_err("reweight entry", rest))?;
+                let mut start = start + rwtag.len();
+                for entry in &self.weight_entries {
+                    let rest = &record[start..];
+                    let Some(s) = rest.find(|c: char| c.is_ascii_digit()) else {
+                        return Err(parse_err("reweight entry", rest));
+                    };
+                    start = s;
+                    let rest = &record[start..];
+                    let Some(end) = rest.find(|c: char| !c.is_ascii_digit()) else {
+                        return Err(parse_err("reweight entry", rest));
+                    };
+                    start = if self.weight_names.contains(entry) {
+                        let wt_str = weights.next().unwrap().to_string();
+                        record.replace_range(start..end, &wt_str);
+                        start + wt_str.len()
+                    } else {
+                        start + end
+                    };
+                }
             }
         }
         self.sink.write_all(record.as_bytes()).map_err(IO)?;
@@ -273,8 +312,12 @@ impl Iterator for FileIO {
             Ok(mut record) => {
                 // TODO: might be better to do this in the Converter, but it
                 // doesn't have the information
-                self.rescale_weight(&mut record)
-                    .map(|_| EventRecord::StripperXml(record))
+                self.rescale_weight(&mut record).map(|_| {
+                    EventRecord::StripperXml {
+                        record,
+                        weight_names: self.weight_entries.clone(),
+                    }
+                })
             }
             Err(err) => Err(err),
         });
@@ -288,7 +331,7 @@ impl Iterator for FileIO {
 
 pub(crate) fn extract_info<I, P, Q>(
     paths: I,
-) -> Result<(Vec<(PathBuf, Q)>, HashMap<String, f64>), CreateError>
+) -> Result<(Vec<(PathBuf, Q)>, HashMap<String, EventTypeInfo>), CreateError>
 where
     I: IntoIterator<Item = (P, Q)>,
     P: AsRef<Path>,
@@ -296,8 +339,29 @@ where
 {
     use CreateError::*;
 
+    #[derive(Debug, Default)]
+    struct RawInfo {
+        raw_scale: (f64, u64),
+        weight_names: Vec<String>,
+    }
+
+    impl From<RawInfo> for EventTypeInfo {
+        fn from(source: RawInfo) -> Self {
+            let RawInfo {
+                raw_scale,
+                weight_names,
+            } = source;
+            let (raw_scale, nevents) = raw_scale;
+            let scale = raw_scale / (nevents as f64);
+            Self {
+                scale,
+                weight_names,
+            }
+        }
+    }
+
     let mut event_files = Vec::new();
-    let mut rescale: HashMap<_, (f64, u64)> = HashMap::new();
+    let mut rescale: HashMap<_, RawInfo> = HashMap::new();
     for (path, out) in paths {
         let path = path.as_ref();
         let file = File::open(path).map_err(OpenInput)?;
@@ -308,14 +372,19 @@ where
                 debug!("extracting scaling information from {path:?}");
                 let tag = extract_xml_info(r)?;
                 match tag {
-                    XMLTag::Normalization { name, scale } => {
+                    XMLTag::Normalization {
+                        name,
+                        scale,
+                        weight_names,
+                    } => {
                         let entry = rescale.entry(name).or_default();
-                        entry.0 = scale;
+                        entry.raw_scale.0 = scale;
+                        entry.weight_names = weight_names;
                         // don't add to vec of event files
                     }
                     XMLTag::Eventrecord { name, nevents, .. } => {
-                        let entry = rescale.entry(name).or_insert((-1., 0));
-                        entry.1 += nevents;
+                        let entry = rescale.entry(name).or_default();
+                        entry.raw_scale.1 += nevents;
                         event_files.push((path.to_owned(), out))
                     }
                 }
@@ -329,7 +398,7 @@ where
     }
     let rescale = rescale
         .into_iter()
-        .map(|(name, (scale, nevents))| (name, scale / (nevents as f64)))
+        .map(|(name, raw_info)| (name, raw_info.into()))
         .collect();
     Ok((event_files, rescale))
 }
@@ -357,6 +426,7 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
                         return Ok(XMLTag::Normalization {
                             name: norm.contribution.name,
                             scale: norm.contribution.xsection.0[0],
+                            weight_names: norm.contribution.rw.rwentry,
                         });
                     }
                     b"Eventrecord" => {
@@ -444,6 +514,7 @@ pub(crate) enum XMLTag {
     Normalization {
         name: String,
         scale: f64,
+        weight_names: Vec<String>,
     },
     Eventrecord {
         alpha_s_power: u64,
@@ -456,9 +527,11 @@ pub(crate) enum XMLTag {
 impl Display for XMLTag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            XMLTag::Normalization { name, scale } => {
-                write!(f, r#"<Normalization name="{name}" scale="{scale}">"#)
-            }
+            XMLTag::Normalization {
+                name,
+                scale,
+                weight_names: _,
+            } => write!(f, r#"<Normalization name="{name}" scale="{scale}">"#),
             XMLTag::Eventrecord {
                 alpha_s_power,
                 name,
@@ -540,13 +613,24 @@ pub trait StripperXmlParser {
     type Error;
 
     /// Parse STRIPPER XML event record
-    fn parse_stripper_xml(&self, record: &str) -> Result<Event, Self::Error>;
+    fn parse_stripper_xml(
+        &self,
+        record: &str,
+        weight_names: &[String],
+    ) -> Result<Event, Self::Error>;
 }
+
+pub(crate) const PID_X1: ParticleID = ParticleID::new(99);
+pub(crate) const PID_X2: ParticleID = ParticleID::new(100);
 
 impl StripperXmlParser for Converter {
     type Error = ReadError;
 
-    fn parse_stripper_xml(&self, record: &str) -> Result<Event, Self::Error> {
+    fn parse_stripper_xml(
+        &self,
+        record: &str,
+        weight_names: &[String],
+    ) -> Result<Event, Self::Error> {
         use ReadError::*;
 
         let parse_err =
@@ -603,8 +687,38 @@ impl StripperXmlParser for Converter {
             })?;
         }
 
-        // TODO: multiple weights
+        let (mut rest, _) = reweight_start(rest)
+            .map_err(|_| parse_err("reweight entry", rest))?;
 
+        // TODO: command line option for including x1, x2?
+        let mut x1 = None;
+        let mut x2 = None;
+        for name in weight_names {
+            let (r, wt) = preceded(opt(char(',')), double)(rest)
+                .map_err(|_| parse_err("reweight entry", rest))?;
+            rest = r;
+            if self.weight_names().contains(name) {
+                event.add_weight(n64(wt));
+            }
+            match name.as_str() {
+                "x1" => x1 = Some(wt),
+                "x2" => x2 = Some(wt),
+                _ => {}
+            }
+        }
+        let Some(x1) = x1 else {
+            return Err(FindEntry("x1", record.to_string()));
+        };
+        let Some(x2) = x2 else {
+            return Err(FindEntry("x2", record.to_string()));
+        };
+        let total_energy: N64 =
+            event.outgoing_by_pid().iter().map(|(_, p)| p[0]).sum();
+        let beam_energy = total_energy / (x1 + x2);
+        let e1 = beam_energy * x1;
+        let e2 = beam_energy * x2;
+        event.add_outgoing(PID_X1, [e1, n64(0.0), n64(0.0), e1].into());
+        event.add_outgoing(PID_X2, [e2, n64(0.0), n64(0.0), -e2].into());
         Ok(event.build())
     }
 }
@@ -642,6 +756,20 @@ fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
         space0,
     ))(line)?;
     Ok((rest, [n64(p.1), n64(p.3), n64(p.5), n64(p.7)].into()))
+}
+
+fn reweight_start(line: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        multispace0,
+        tag("<rw"),
+        multispace1,
+        tag("ch=\""),
+        i32,
+        char('"'),
+        multispace0,
+        char('>'),
+        multispace0,
+    )))(line)
 }
 
 impl UpdateWeights for FileIO {
