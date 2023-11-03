@@ -271,29 +271,28 @@ impl FileIO {
                 let start = start + wt_str.len();
                 let rest = &record[start..];
                 let mut weights = weights.iter().skip(1);
-                let Some(start) = record.find("<rw ") else {
+                let Some(s) = rest.find("<rw ") else {
                     return Err(Read(FindEntry("reweight entry", record)));
                 };
+                let start = start + s;
+                let rest = &record[start..];
                 let (_rest, rwtag) = reweight_start(rest)
                     .map_err(|_| parse_err("reweight entry", rest))?;
                 let mut start = start + rwtag.len();
                 for entry in &self.weight_entries {
                     let rest = &record[start..];
-                    let Some(s) = rest.find(|c: char| c.is_ascii_digit()) else {
-                        return Err(parse_err("reweight entry", rest));
-                    };
-                    start = s;
-                    let rest = &record[start..];
-                    let Some(end) = rest.find(|c: char| !c.is_ascii_digit()) else {
-                        return Err(parse_err("reweight entry", rest));
-                    };
-                    start = if self.weights_to_resample.contains(entry) {
+                    let (_rest, old) = recognize(double)(rest)
+                        .map_err(|_| parse_err("reweight entry", rest))?;
+                    start += if self.weights_to_resample.contains(entry) {
                         let wt_str = weights.next().unwrap().to_string();
-                        record.replace_range(start..end, &wt_str);
-                        start + wt_str.len()
+                        record.replace_range(start..(start + old.len()), &wt_str);
+                        wt_str.len()
                     } else {
-                        start + end
+                        old.len()
                     };
+                    let rest = &record[start..];
+                    let (_rest, sep) = ws_comma(rest).unwrap();
+                    start += sep.len();
                 }
             }
         }
@@ -807,4 +806,8 @@ impl UpdateWeights for FileIO {
 
 fn double(input: &str) -> IResult<&str, f64> {
     nom::number::complete::double(input)
+}
+
+fn ws_comma(input: &str) -> IResult<&str, &str> {
+    recognize(opt(tuple((multispace0, char(','), multispace0))))(input)
 }
