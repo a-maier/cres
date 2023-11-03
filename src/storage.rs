@@ -114,10 +114,16 @@ impl Iterator for FileStorage {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+pub struct EventTypeInfo {
+    pub scale: f64,
+    pub weight_names: Vec<String>,
+}
+
 /// Builder for event storages
 #[derive(Clone, Debug, Default)]
 pub struct StorageBuilder {
-    scaling: HashMap<String, f64>,
+    scaling: HashMap<String, EventTypeInfo>,
     compression: Option<Compression>,
     weight_names: Vec<String>,
 }
@@ -600,7 +606,10 @@ pub enum EventRecord {
     NTuple(Box<ntuple::Event>),
     #[cfg(feature = "stripper-xml")]
     /// STRIPPER XML event record
-    StripperXml(String),
+    StripperXml{
+        record: String,
+        weight_names: Vec<String>,
+    },
 }
 
 impl TryFrom<EventRecord> for String {
@@ -615,7 +624,7 @@ impl TryFrom<EventRecord> for String {
             #[cfg(feature = "ntuple")]
             ev @ NTuple(_) => Err(ev),
             #[cfg(feature = "stripper-xml")]
-            StripperXml(s) => Ok(s),
+            StripperXml{record, weight_names: _} => Ok(record),
         }
     }
 }
@@ -658,7 +667,10 @@ impl TryConvert<EventRecord, Event> for Converter {
             #[cfg(feature = "ntuple")]
             EventRecord::NTuple(record) => self.convert_ntuple(*record)?,
             #[cfg(feature = "stripper-xml")]
-            EventRecord::StripperXml(record) => self.parse_stripper_xml(&record)?,
+            EventRecord::StripperXml{record, weight_names} => self.parse_stripper_xml(
+                &record,
+                &weight_names
+            )?,
         };
         Ok(event)
     }
