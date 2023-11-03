@@ -73,7 +73,7 @@ name = "cres-generate-shell-completions"
 path = "src/bin/shell_completion.rs"
 
 [features]
-default = ["lhef", "multiweight", "hardware-lock-elision"]
+default = ["lhef", "multiweight", "hardware-lock-elision", "stripper-xml"]
 multiweight = []
 hardware-lock-elision = ["parking_lot/hardware-lock-elision"]
 lhef = []
