@@ -89,6 +89,11 @@ impl EventBuilder {
             outgoing_by_pid,
         }
     }
+
+    /// Get (particle ID, momentum) of outgoing particles
+    pub fn outgoing_by_pid(&self) -> &[(ParticleID, FourVector)] {
+        self.outgoing_by_pid.as_ref()
+    }
 }
 
 impl From<EventBuilder> for Event {
