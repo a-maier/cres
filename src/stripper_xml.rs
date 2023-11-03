@@ -242,7 +242,7 @@ impl Iterator for FileStorage {
     }
 }
 
-pub(crate) fn extract_scaling<I, P, Q>(
+pub(crate) fn extract_info<I, P, Q>(
     paths: I,
 ) -> Result<(Vec<(PathBuf, Q)>, HashMap<String, f64>), CreateError>
 where
