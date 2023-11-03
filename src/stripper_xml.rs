@@ -94,7 +94,7 @@ impl FileReader {
 
         trace!("Read STRIPPER XML record:\n{record}");
 
-        self.rem_subevents -= 1;
+        self.rem_subevents = self.rem_subevents.saturating_sub(1);
         Some(Ok(record))
     }
 }
