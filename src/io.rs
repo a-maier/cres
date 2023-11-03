@@ -218,7 +218,7 @@ impl IOBuilder {
     {
         #[cfg(feature = "stripper-xml")]
         {
-            let (files, scaling) = crate::stripper_xml::extract_scaling(files)?;
+            let (files, scaling) = crate::stripper_xml::extract_info(files)?;
 
             let mut builder = self;
             builder.scaling = scaling;
