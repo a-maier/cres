@@ -1,8 +1,9 @@
-use crate::event::Event;
+use crate::event::{Event, Weights};
 use crate::traits::NeighbourSearch;
 
 use log::{debug, trace};
 use noisy_float::prelude::*;
+use parking_lot::RwLockWriteGuard;
 
 /// A cell
 ///
@@ -68,9 +69,7 @@ impl<'a> Cell<'a> {
         use std::ops::{Deref, DerefMut};
 
         self.members.sort_unstable(); // sort to prevent deadlocks
-        let mut member_weights = Vec::from_iter(
-            self.members.iter().map(|i| self.events[*i].weights.write()),
-        );
+        let mut member_weights = self.write_lock_weights();
         let (first, rest) = member_weights.split_first_mut().unwrap();
 
         let mut avg_wts = std::mem::take(first.deref_mut());
@@ -96,11 +95,15 @@ impl<'a> Cell<'a> {
     /// over the cell.
     #[cfg(not(feature = "multiweight"))]
     pub fn resample(&mut self) {
-        use crate::event::Weights;
+        use std::ops::Deref;
 
-        let avg_wt = self.weight_sum() / (self.nmembers() as f64);
-        for &idx in &self.members {
-            *self.events[idx].weights.write() = Weights::new_single(avg_wt);
+        self.members.sort_unstable(); // sort to prevent deadlocks
+        let member_weights = self.write_lock_weights();
+
+        let total_wt: N64 = member_weights.iter().map(|w| w.deref().central()).sum();
+        let avg_wt = total_wt / (self.nmembers() as f64);
+        for mut wt in member_weights {
+            *wt = Weights::new_single(avg_wt);
         }
     }
 
@@ -132,5 +135,11 @@ impl<'a> Cell<'a> {
     /// Iterator over cell members
     pub fn iter(&'a self) -> impl std::iter::Iterator<Item = &'a Event> + 'a {
         self.members.iter().map(move |idx| &self.events[*idx])
+    }
+
+    fn write_lock_weights(&self) -> Vec<RwLockWriteGuard<'_, Weights>> {
+        self.members.iter()
+            .map(|i| self.events[*i].weights.write())
+            .collect()
     }
 }
