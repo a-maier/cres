@@ -176,45 +176,7 @@ where
     > {
         use CresError::*;
 
-        let expected_nevents = self.event_storage.size_hint().0;
-        let event_progress = if expected_nevents > 0 {
-            ProgressBar::new(expected_nevents as u64, "events read")
-        } else {
-            info!("Reading events");
-            ProgressBar::default()
-        };
-        let events = Mutex::new(Vec::with_capacity(expected_nevents));
-        {
-            let converter = &self.converter;
-            let clustering = &self.clustering;
-            let events = &events;
-            let progress = &event_progress;
-            rayon::in_place_scope_fifo(|s| {
-                for (id, record) in (&mut self.event_storage).enumerate() {
-                    let record = record.map_err(StorageErr)?;
-                    s.spawn_fifo(move |_| {
-                        let ev = match converter.try_convert(record) {
-                            Ok(ev) => match clustering.cluster(ev) {
-                                Ok(mut ev) => if ev.id != 0 {
-                                    Err(IdErr(ev.id))
-                                } else {
-                                    ev.id = id;
-                                    Ok(ev)
-                                }
-                                Err(err) => Err(ClusterErr(err)),
-                            }
-                            Err(err) => Err(ConversionErr(err)),
-                        };
-                        events.lock().push(ev);
-                        progress.inc(1)
-                    });
-                }
-                Ok(())
-            })?;
-        }
-        event_progress.finish();
-        let events: Result<Vec<_>, _> = events.into_inner().into_iter().collect();
-        let events = events?;
+        let events = self.read_events()?;
         let nevents = events.len();
         info!("Read {nevents} events");
 
@@ -249,4 +211,76 @@ where
         self.event_storage.update_all_weights(&weights).map_err(StorageErr)?;
         Ok(())
     }
+
+    fn read_events(
+        &mut self,
+    ) -> Result<
+        Vec<Event>,
+        CresError<
+            <R as UpdateWeights>::Error,
+            C::Error,
+            Cl::Error,
+            S::Error,
+            U::Error,
+        >,
+    > {
+        use CresError::*;
+
+        let expected_nevents = self.event_storage.size_hint().0;
+        let event_progress = if expected_nevents > 0 {
+            ProgressBar::new(expected_nevents as u64, "events read")
+        } else {
+            info!("Reading events");
+            ProgressBar::default()
+        };
+        let events = Mutex::new(Vec::with_capacity(expected_nevents));
+        {
+            let converter = &self.converter;
+            let clustering = &self.clustering;
+            let events = &events;
+            let progress = &event_progress;
+            rayon::in_place_scope_fifo(|s| {
+                for (id, record) in (&mut self.event_storage).enumerate() {
+                    let record = record.map_err(StorageErr)?;
+                    match record {
+                        #[cfg(feature = "ntuple")]
+                        EventRecord::NTuple(_) => {
+                            // sequential conversion is faster than
+                            // parallel for this format
+                            let ev = converter.try_convert(record)
+                                .map_err(ConversionErr)?;
+                            let mut ev = clustering.cluster(ev)
+                                .map_err(ClusterErr)?;
+                            if ev.id != 0 {
+                                return Err(IdErr(ev.id));
+                            }
+                            ev.id = id;
+                            events.lock().push(Ok(ev));
+                            progress.inc(1)
+                        }
+                        _ => s.spawn_fifo(move |_| {
+                            let ev = match converter.try_convert(record) {
+                                Ok(ev) => match clustering.cluster(ev) {
+                                    Ok(mut ev) => if ev.id != 0 {
+                                        Err(IdErr(ev.id))
+                                    } else {
+                                        ev.id = id;
+                                        Ok(ev)
+                                    }
+                                    Err(err) => Err(ClusterErr(err)),
+                                }
+                                Err(err) => Err(ConversionErr(err)),
+                            };
+                            events.lock().push(ev);
+                            progress.inc(1)
+                        })
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        event_progress.finish();
+        events.into_inner().into_iter().collect()
+    }
+
 }
