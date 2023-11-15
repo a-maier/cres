@@ -20,23 +20,40 @@ impl Progress for logbar::ProgressBar {
     }
 }
 
+/// Dummy progress indicator
+pub struct NoProgress {}
+impl Progress for NoProgress {
+    fn inc(&self, _i: u64) {}
+
+    fn finish(&self) {}
+}
+
+/// Don't show any progress indicator
+pub const NO_PROGRESS: NoProgress = NoProgress {};
+
 /// The default progress bar
 ///
-/// The exact format is decided a run time depending on whether we are
+/// The exact format is decided at run time depending on whether we are
 /// writing to an interactive terminal or a non-interactive output.
-#[derive(Default)]
 pub struct ProgressBar {
-    bar: Option<Box<dyn Progress + Send + Sync>>,
+    bar: Box<dyn Progress + Send + Sync>,
+    logging_disabled: bool,
+}
+
+impl Default for ProgressBar {
+    fn default() -> Self {
+        Self { bar: Box::new(NO_PROGRESS), logging_disabled: false }
+    }
 }
 
 impl Progress for ProgressBar {
     fn inc(&self, i: u64) {
-        self.bar.as_ref().map(|b| b.inc(i));
+        self.bar.inc(i);
     }
 
     fn finish(&self) {
-        self.bar.as_ref().map(|p| p.finish());
-        if self.bar.is_some() {
+        self.bar.finish();
+        if self.logging_disabled {
             // restore logging
             log::set_max_level(log::LevelFilter::Info);
         }
@@ -66,7 +83,8 @@ impl ProgressBar {
         // temporarily disable logging to not overwrite the bar
         log::set_max_level(log::LevelFilter::Off);
         ProgressBar {
-            bar: Some(Box::new(bar)),
+            bar: Box::new(bar),
+            logging_disabled: true,
         }
     }
 
@@ -77,7 +95,8 @@ impl ProgressBar {
         // temporarily disable logging to not overwrite the bar
         log::set_max_level(log::LevelFilter::Off);
         ProgressBar {
-            bar: Some(Box::new(bar)),
+            bar: Box::new(bar),
+            logging_disabled: true,
         }
     }
 }
