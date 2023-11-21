@@ -691,6 +691,7 @@ pub enum EventRecord {
     StripperXml {
         record: String,
         weight_names: Vec<String>,
+        weight_scale: f64,
     },
 }
 
@@ -709,6 +710,7 @@ impl TryFrom<EventRecord> for String {
             StripperXml {
                 record,
                 weight_names: _,
+                weight_scale: _,
             } => Ok(record),
         }
     }
@@ -765,7 +767,10 @@ impl TryConvert<EventRecord, Event> for Converter {
             EventRecord::StripperXml {
                 record,
                 weight_names,
-            } => self.parse_stripper_xml(&record, &weight_names)?,
+                weight_scale,
+            } => {
+                self.parse_stripper_xml(&record, weight_scale, &weight_names)?
+            }
         };
         Ok(event)
     }
