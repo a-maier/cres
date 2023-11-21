@@ -127,6 +127,7 @@ impl Iterator for FileReader {
             r.map(|record| EventRecord::StripperXml {
                 record,
                 weight_names: Vec::new(),
+                weight_scale: 1.0,
             })
         })
     }
@@ -204,29 +205,6 @@ impl FileIO {
         })
     }
 
-    fn rescale_weight(&self, record: &mut String) -> Result<(), ReadError> {
-        use ReadError::*;
-
-        let parse_err =
-            |what, record: &str| ParseEntry(what, take_chars(record, 100));
-
-        let (rest, start) = weight_start(record.as_str())
-            .map_err(|_| parse_err("start of event record", record))?;
-        let (rest, weight) =
-            double(rest).map_err(|_| parse_err("weight entry", rest))?;
-        let start = start.len();
-        let end = record.len() - rest.len();
-        record.replace_range(
-            start..end,
-            &(self.weight_scale * weight).to_string(),
-        );
-        trace!(
-            "rescaled weight: {weight} -> {}",
-            self.weight_scale * weight
-        );
-        Ok(())
-    }
-
     fn update_next_weights_helper(
         &mut self,
         weights: &Weights,
@@ -263,7 +241,8 @@ impl FileIO {
             if weights.len() > 1 {
                 let start = start + wt_str.len();
                 let rest = &record[start..];
-                let mut weights = weights.iter().skip(1);
+                let mut weights =
+                    weights.iter().skip(1).map(|&wt| wt / self.weight_scale);
                 let Some(s) = rest.find("<rw ") else {
                     return Err(Read(FindEntry("reweight entry", record)));
                 };
@@ -307,18 +286,12 @@ impl Iterator for FileIO {
     type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let res = self.reader.read_raw().map(|r| match r {
-            Ok(mut record) => {
-                // TODO: might be better to do this in the Converter, but it
-                // doesn't have the information
-                self.rescale_weight(&mut record).map(|_| {
-                    EventRecord::StripperXml {
-                        record,
-                        weight_names: self.weight_entries.clone(),
-                    }
-                })
-            }
-            Err(err) => Err(err),
+        let res = self.reader.read_raw().map(|r| {
+            r.map(|record| EventRecord::StripperXml {
+                record,
+                weight_names: self.weight_entries.clone(),
+                weight_scale: self.weight_scale,
+            })
         });
         res.map(|n| self.into_io_error(n))
     }
@@ -615,6 +588,7 @@ pub trait StripperXmlParser {
     fn parse_stripper_xml(
         &self,
         record: &str,
+        weight_scale: f64,
         weight_names: &[String],
     ) -> Result<Event, Self::Error>;
 }
@@ -628,6 +602,7 @@ impl StripperXmlParser for Converter {
     fn parse_stripper_xml(
         &self,
         record: &str,
+        weight_scale: f64,
         weight_names: &[String],
     ) -> Result<Event, Self::Error> {
         use ReadError::*;
@@ -645,9 +620,7 @@ impl StripperXmlParser for Converter {
         let (rest, weight) =
             double(rest).map_err(|_| parse_err("weight entry", rest))?;
 
-        // TODO: it might be best to do the weight rescaling here, but
-        // the Converter doesn't have that information
-        event.add_weight(n64(weight));
+        event.add_weight(n64(weight * weight_scale));
 
         let Some(tag_end) = rest.find('>') else {
             return Err(
@@ -697,7 +670,7 @@ impl StripperXmlParser for Converter {
                 .map_err(|_| parse_err("reweight entry", rest))?;
             rest = r;
             if self.weight_names().contains(name) {
-                event.add_weight(n64(wt));
+                event.add_weight(n64(wt * weight_scale));
             }
             match name.as_str() {
                 "x1" => x1 = Some(wt),
