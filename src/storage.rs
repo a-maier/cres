@@ -609,6 +609,7 @@ pub enum EventRecord {
     StripperXml{
         record: String,
         weight_names: Vec<String>,
+        weight_scale: f64,
     },
 }
 
@@ -624,7 +625,7 @@ impl TryFrom<EventRecord> for String {
             #[cfg(feature = "ntuple")]
             ev @ NTuple(_) => Err(ev),
             #[cfg(feature = "stripper-xml")]
-            StripperXml{record, weight_names: _} => Ok(record),
+            StripperXml{record, weight_names: _, weight_scale: _ } => Ok(record),
         }
     }
 }
@@ -667,8 +668,13 @@ impl TryConvert<EventRecord, Event> for Converter {
             #[cfg(feature = "ntuple")]
             EventRecord::NTuple(record) => self.convert_ntuple(*record)?,
             #[cfg(feature = "stripper-xml")]
-            EventRecord::StripperXml{record, weight_names} => self.parse_stripper_xml(
+            EventRecord::StripperXml{
+                record,
+                weight_names,
+                weight_scale,
+            } => self.parse_stripper_xml(
                 &record,
+                weight_scale,
                 &weight_names
             )?,
         };
