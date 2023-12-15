@@ -197,7 +197,7 @@ impl StorageBuilder {
     pub fn build_from_files_iter<I, P, Q>(
         self,
         files: I
-    ) -> Result<CombinedStorage<FileStorage>, CombinedBuildError>
+    ) -> Result<CombinedFileStorage, CombinedBuildError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
@@ -220,21 +220,22 @@ impl StorageBuilder {
     fn build_from_files_iter_known_scaling<I, P, Q>(
         self,
         files: I
-    ) -> Result<CombinedStorage<FileStorage>, FileStorageError>
+    ) -> Result<CombinedFileStorage, FileStorageError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
         Q: AsRef<Path>
     {
-        let storage: Result<_, _> = files
-            .into_iter()
-            .map(|(source, sink)| {
-                let infile = source.as_ref().to_path_buf();
-                let outfile = sink.as_ref().to_path_buf();
-                self.clone().build_from_files(infile.clone(), outfile.clone())
-                    .map_err(|err| FileStorageError { infile, outfile, source: err.into() })
-            }).collect();
-        Ok(CombinedStorage::new(storage?))
+        let files = Vec::from_iter(
+            files
+                .into_iter()
+                .map(|(source, sink)| {
+                    let infile = source.as_ref().to_path_buf();
+                    let outfile = sink.as_ref().to_path_buf();
+                    StorageFiles{ infile, outfile }
+                })
+        );
+        CombinedFileStorage::new(files, self)
     }
 }
 
@@ -455,81 +456,144 @@ pub enum WriteError {
     IO(#[from] std::io::Error),
 }
 
-/// Combined storage from several sources (e.g. files)
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct CombinedStorage<R> {
-    storage: Vec<R>,
-    current: usize,
+struct StorageFiles {
+    infile: PathBuf,
+    outfile: PathBuf,
 }
 
-impl<R> CombinedStorage<R> {
-    /// Combine multiple event storages into a single one
-    pub fn new(storage: Vec<R>) -> Self {
-        Self {
-            storage,
-            current: 0,
-        }
+/// Combined storage from several pairs of files
+pub struct CombinedFileStorage {
+    files: Vec<StorageFiles>,
+    current: Option<FileStorage>,
+    current_file_idx: usize,
+    builder: StorageBuilder,
+    nevents_read: usize,
+    total_size_hint: (usize, Option<usize>),
+}
+
+impl CombinedFileStorage {
+    fn new(
+        files: Vec<StorageFiles>,
+        builder: StorageBuilder,
+    ) -> Result<CombinedFileStorage, FileStorageError> {
+        let mut res = Self {
+            files,
+            current: None,
+            current_file_idx: 0,
+            builder,
+            nevents_read: 0,
+            total_size_hint: (0, Some(0)),
+        };
+        res.init()?;
+        Ok(res)
     }
-}
 
-impl<R: Rewind> Rewind for CombinedStorage<R> {
-    type Error = <R as Rewind>::Error;
+    fn open(&mut self, idx: usize) -> Result<(), FileStorageError> {
+        let StorageFiles { infile, outfile } = self.files[idx].clone();
+        self.current = Some(
+            self.builder.clone().build_from_files(infile, outfile).map_err(|source| {
+                let StorageFiles { infile, outfile } = self.files[idx].clone();
+                FileStorageError{ infile, outfile, source: source.into() }
+            })?
+        );
+        self.current_file_idx = idx;
+        Ok(())
+    }
 
-    fn rewind(&mut self) -> Result<(), Self::Error> {
-        for storage in &mut self.storage[..=self.current] {
-            storage.rewind()?;
+    fn init(&mut self) -> Result<(), FileStorageError> {
+        if self.files.is_empty() {
+            return Ok(());
         }
-        self.current = 0;
+        for idx in 0..self.files.len() {
+            self.open(idx)?;
+            self.total_size_hint = combine_size_hints(
+                self.total_size_hint,
+                self.current.as_ref().unwrap().size_hint()
+            );
+        }
+        self.open(0)?;
         Ok(())
     }
 }
 
-impl<R: Iterator> Iterator for CombinedStorage<R> {
-    type Item = <R as Iterator>::Item;
+fn combine_size_hints(
+    mut h: (usize, Option<usize>),
+    g: (usize, Option<usize>),
+) -> (usize, Option<usize>) {
+    h.0 += g.0;
+    h.1 = match (h.1, g.1) {
+        (None, _) | (_, None) => None,
+        (Some(h), Some(g)) => Some(h + g),
+    };
+    h
+}
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let next = self.storage[self.current].next();
-        if next.is_some() {
-            return next;
-        }
-        if self.current + 1 == self.storage.len() {
-            return None;
-        }
-        self.current += 1;
-        self.next()
-    }
+impl Rewind for CombinedFileStorage {
+    type Error = FileStorageError;
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.storage[self.current..]
-            .iter()
-            .map(|r| r.size_hint())
-            .reduce(|(accmin, accmax), (min, max)| {
-                let accmax = match (accmax, max) {
-                    (Some(accmax), Some(max)) => Some(accmax + max),
-                    _ => None,
-                };
-                (accmin + min, accmax)
-            })
-            .unwrap_or_default()
+    fn rewind(&mut self) -> Result<(), Self::Error> {
+        self.current = None;
+        self.nevents_read = 0;
+        Ok(())
     }
 }
 
-impl UpdateWeights for CombinedStorage<FileStorage> {
+impl Iterator for CombinedFileStorage {
+    type Item = <FileStorage as Iterator>::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.current.as_mut() {
+            let next = current.next();
+            if next.is_some() {
+                self.nevents_read += 1;
+                return next;
+            }
+            if self.current_file_idx + 1 == self.files.len() {
+                return None;
+            }
+            if let Err(err) = self.open(self.current_file_idx + 1) {
+                Some(Err(err))
+            } else {
+                self.next()
+            }
+        } else if self.files.is_empty() {
+            None
+        } else {
+            if let Err(err) = self.open(0) {
+                Some(Err(err))
+            } else {
+                self.next()
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let min = self.total_size_hint.0.saturating_sub(self.nevents_read);
+        let max = self.total_size_hint.1
+            .map(|max| max.saturating_sub(self.nevents_read));
+        (min, max)
+    }
+}
+
+impl UpdateWeights for CombinedFileStorage {
     type Error = FileStorageError;
 
     fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
         self.rewind()?;
         let mut nevent = 0;
         let progress = ProgressBar::new(weights.len() as u64, "events written:");
-        for source in &mut self.storage {
+        for idx in 0..self.files.len() {
+            self.open(idx)?;
+            let current = self.current.as_mut().unwrap();
             while nevent < weights.len() {
-                if !source.update_next_weights(&weights[nevent])? {
+                if !current.update_next_weights(&weights[nevent])? {
                     break;
                 }
                 progress.inc(1);
                 nevent += 1;
             }
-            source.finish_weight_update()?;
+            current.finish_weight_update()?;
         }
         progress.finish();
         Ok(nevent)
@@ -539,13 +603,14 @@ impl UpdateWeights for CombinedStorage<FileStorage> {
         &mut self,
         weights: &Weights,
     ) -> Result<bool, Self::Error> {
-        while self.current < self.storage.len() {
-            let res = self.storage[self.current].update_next_weights(weights)?;
+        while self.current_file_idx < self.files.len() {
+            let current = self.current.as_mut().unwrap();
+            let res = current.update_next_weights(weights)?;
             if res {
                 return Ok(true);
             }
-            self.storage[self.current].finish_weight_update()?;
-            self.current += 1;
+            current.finish_weight_update()?;
+            self.open(self.current_file_idx + 1)?;
         }
         Ok(false)
     }
