@@ -17,8 +17,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let outfile = args.next().unwrap().into();
 
     // How to access (read & write) events
-    let event_storage = StorageBuilder::default();
-    let event_storage = event_storage.build_from_files(infile, outfile)?;
+    let event_io = IOBuilder::default();
+    let event_io = event_io.build_from_files(infile, outfile)?;
 
     // How to convert into internal event format
     let converter = Converter::new();
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let resampler = ResamplerBuilder::default().build();
 
     let mut cres = CresBuilder {
-        event_storage,
+        event_io,
         converter,
         clustering,
         resampler,

@@ -24,7 +24,7 @@
 //!
 //! // Define `event_storage`, `converter`, `clustering`, `resampler`, `unweighter`
 //!# let filename = std::path::PathBuf::from("");
-//!# let event_storage = StorageBuilder::default().build_from_files(filename.clone(), filename)?;
+//!# let event_io = IOBuilder::default().build_from_files(filename.clone(), filename)?;
 //!# let converter = Converter::new();
 //!# let clustering = NO_CLUSTERING;
 //!# let resampler = cres::resampler::ResamplerBuilder::default().build();
@@ -32,7 +32,7 @@
 //!
 //! // Build the resampler
 //! let mut cres = CresBuilder {
-//!     event_storage,
+//!     event_io,
 //!     converter,
 //!     clustering,
 //!     resampler,
@@ -56,14 +56,14 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::progress_bar::ProgressBar;
-use crate::storage::EventRecord;
+use crate::io::EventRecord;
 use crate::traits::*;
 
 /// Build a new [Cres] object
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct CresBuilder<R, C, Cl, S, U> {
     /// External event storage, e.g. backed by an event file
-    pub event_storage: R,
+    pub event_io: R,
     /// Convert events into the internal format
     pub converter: C,
     /// Cluster outgoing particles into IRC safe objects
@@ -78,7 +78,7 @@ impl<R, C, Cl, S, U> CresBuilder<R, C, Cl, S, U> {
     /// Construct a [Cres] object
     pub fn build(self) -> Cres<R, C, Cl, S, U> {
         Cres {
-            event_storage: self.event_storage,
+            event_io: self.event_io,
             converter: self.converter,
             clustering: self.clustering,
             resampler: self.resampler,
@@ -90,7 +90,7 @@ impl<R, C, Cl, S, U> CresBuilder<R, C, Cl, S, U> {
 impl<R, C, Cl, S, U> From<Cres<R, C, Cl, S, U>> for CresBuilder<R, C, Cl, S, U> {
     fn from(b: Cres<R, C, Cl, S, U>) -> Self {
         CresBuilder {
-            event_storage: b.event_storage,
+            event_io: b.event_io,
             converter: b.converter,
             clustering: b.clustering,
             resampler: b.resampler,
@@ -102,7 +102,7 @@ impl<R, C, Cl, S, U> From<Cres<R, C, Cl, S, U>> for CresBuilder<R, C, Cl, S, U> 
 /// Main cell resampler
 #[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Cres<R, C, Cl, S, U> {
-    event_storage: R,
+    event_io: R,
     converter: C,
     clustering: Cl,
     resampler: S,
@@ -208,7 +208,7 @@ where
             weights[event.id] = event.weights.into_inner();
         }
 
-        self.event_storage.update_all_weights(&weights).map_err(StorageErr)?;
+        self.event_io.update_all_weights(&weights).map_err(StorageErr)?;
         Ok(())
     }
 
@@ -226,7 +226,7 @@ where
     > {
         use CresError::*;
 
-        let expected_nevents = self.event_storage.size_hint().0;
+        let expected_nevents = self.event_io.size_hint().0;
         let event_progress = if expected_nevents > 0 {
             ProgressBar::new(expected_nevents as u64, "events read")
         } else {
@@ -240,7 +240,7 @@ where
             let events = &events;
             let progress = &event_progress;
             rayon::in_place_scope_fifo(|s| {
-                for (id, record) in (&mut self.event_storage).enumerate() {
+                for (id, record) in (&mut self.event_io).enumerate() {
                     let record = record.map_err(StorageErr)?;
                     match record {
                         #[cfg(feature = "ntuple")]

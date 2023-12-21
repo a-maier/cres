@@ -5,7 +5,7 @@ use noisy_float::prelude::*;
 use particle_id::ParticleID;
 
 use crate::event::{Weights, Event, EventBuilder};
-use crate::storage::{EventFileReader, EventRecord, FileStorageError, Converter, ReadError, ErrorKind, CreateError};
+use crate::io::{EventFileReader, EventRecord, FileIOError, Converter, ReadError, ErrorKind, CreateError};
 use crate::traits::{Rewind, UpdateWeights};
 
 /// Reader from a BlackHat ntuple file
@@ -64,17 +64,17 @@ impl Iterator for FileReader {
     }
 }
 
-/// Reader for a single ROOT ntuple event file
+/// Event I/O using a single pair of input and output file
 #[derive(Debug)]
-pub struct FileStorage{
+pub struct FileIO{
     reader: FileReader,
     writer: ntuple::Writer,
     sink_path: PathBuf,
     _weight_names: Vec<String>,
 }
 
-impl FileStorage {
-    /// Storage backed by ROOT ntuple files with the given names
+impl FileIO {
+    /// I/O using ROOT ntuple files with the given names
     pub fn try_new(
         source_path: PathBuf,
         sink_path: PathBuf,
@@ -88,11 +88,11 @@ impl FileStorage {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn into_storage_error<T, E: Into<ErrorKind>>(
+    fn into_io_error<T, E: Into<ErrorKind>>(
         &self,
         res: Result<T, E>
-    ) -> Result<T, FileStorageError> {
-        res.map_err(|err| FileStorageError::new(
+    ) -> Result<T, FileIOError> {
+        res.map_err(|err| FileIOError::new(
             self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
@@ -100,22 +100,22 @@ impl FileStorage {
     }
 }
 
-impl Rewind for FileStorage {
-    type Error = FileStorageError;
+impl Rewind for FileIO {
+    type Error = FileIOError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         let res = self.reader.rewind();
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 }
 
-impl Iterator for FileStorage {
-    type Item = Result<EventRecord, FileStorageError>;
+impl Iterator for FileIO {
+    type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
        self.reader
             .next()
-            .map(|r| self.into_storage_error(r))
+            .map(|r| self.into_io_error(r))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -164,8 +164,8 @@ impl NTupleConverter for Converter {
     }
 }
 
-impl UpdateWeights for FileStorage {
-    type Error = FileStorageError;
+impl UpdateWeights for FileIO {
+    type Error = FileIOError;
 
     fn update_all_weights(
         &mut self,
@@ -186,7 +186,7 @@ impl UpdateWeights for FileStorage {
         let Some(record) = self.reader.read_raw() else {
             return Ok(false)
         };
-        let mut record = self.into_storage_error(record)?;
+        let mut record = self.into_io_error(record)?;
 
         let mut weights = weights.iter().copied();
         record.weight = weights.next().unwrap().into();

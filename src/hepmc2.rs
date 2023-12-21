@@ -7,7 +7,7 @@ use nom::{multi::count, IResult};
 use particle_id::ParticleID;
 
 use crate::{
-    storage::{FileStorageError, EventRecord, Converter, CreateError, ReadError, WriteError, ErrorKind, EventFileReader},
+    io::{FileIOError, EventRecord, Converter, CreateError, ReadError, WriteError, ErrorKind, EventFileReader},
     traits::{Rewind, UpdateWeights}, event::{Event, EventBuilder, Weights}, compression::{Compression, compress_writer}, parsing::{any_entry, u32_entry, i32_entry, double_entry}, util::take_chars,
 };
 
@@ -95,16 +95,16 @@ fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), 
     Ok((header, buf))
 }
 
-/// Storage backed by (potentially compressed) HepMC2 event files
-pub struct FileStorage {
+/// I/O from and to (potentially compressed) HepMC2 event files
+pub struct FileIO {
     reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
 }
 
-impl FileStorage {
-    /// Construct a storage backed by the given (potentially compressed) HepMC2 event files
+impl FileIO {
+    /// Construct a I/O object from the given (potentially compressed) HepMC2 event files
     pub fn try_new(
         source_path: PathBuf,
         sink_path: PathBuf,
@@ -119,7 +119,7 @@ impl FileStorage {
             .map_err(CompressTarget)?;
         sink.write_all(reader.header()).map_err(Write)?;
 
-        Ok(FileStorage {
+        Ok(FileIO {
             reader,
             sink_path,
             sink,
@@ -128,11 +128,11 @@ impl FileStorage {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn into_storage_error<T, E: Into<ErrorKind>>(
+    fn into_io_error<T, E: Into<ErrorKind>>(
         &self,
         res: Result<T, E>
-    ) -> Result<T, FileStorageError> {
-        res.map_err(|err| FileStorageError::new(
+    ) -> Result<T, FileIOError> {
+        res.map_err(|err| FileIOError::new(
             self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
@@ -176,27 +176,27 @@ impl FileStorage {
 }
 
 
-impl Rewind for FileStorage {
-    type Error = FileStorageError;
+impl Rewind for FileIO {
+    type Error = FileIOError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         let res = self.reader.rewind();
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 }
 
-impl Iterator for FileStorage {
-    type Item = Result<EventRecord, FileStorageError>;
+impl Iterator for FileIO {
+    type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.reader
             .next()
-            .map(|r| self.into_storage_error(r))
+            .map(|r| self.into_io_error(r))
     }
 }
 
-impl UpdateWeights for FileStorage {
-    type Error = FileStorageError;
+impl UpdateWeights for FileIO {
+    type Error = FileIOError;
 
     fn update_all_weights(
         &mut self,
@@ -216,7 +216,7 @@ impl UpdateWeights for FileStorage {
         weights: &Weights
     ) -> Result<bool, Self::Error> {
         let res = self.update_next_weights_helper(weights);
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 
 }

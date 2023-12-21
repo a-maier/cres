@@ -7,7 +7,7 @@ use crate::distance::{Distance, EuclWithScaledPt};
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::{NoObserver, ResamplerBuilder};
 use crate::seeds::StrategicSelector;
-use crate::storage::{StorageBuilder, Converter};
+use crate::io::{IOBuilder, Converter};
 use crate::traits::Resample;
 
 use crate::neighbour_search::{
@@ -184,7 +184,7 @@ where
         });
 
     // TODO: multiple weights, output compression
-    let event_storage = StorageBuilder::default()
+    let event_io = IOBuilder::default()
         .build_from_files_iter(files)?;
 
     let converter = Converter::new();
@@ -201,7 +201,7 @@ where
         .build();
 
     let mut cres = CresBuilder {
-        event_storage,
+        event_io,
         converter,
         clustering,
         resampler,

@@ -6,7 +6,7 @@ use noisy_float::prelude::*;
 use nom::{sequence::preceded, character::complete::{i32, space0, u32}, IResult, multi::count};
 use particle_id::ParticleID;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{FileStorageError, EventRecord, Converter, CreateError, ErrorKind, ReadError, WriteError, EventFileReader}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight, util::take_chars};
+use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, io::{FileIOError, EventRecord, Converter, CreateError, ErrorKind, ReadError, WriteError, EventFileReader}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight, util::take_chars};
 
 /// Reader from a (potentially compressed) Les Houches Event File
 pub struct FileReader {
@@ -66,16 +66,16 @@ impl Iterator for FileReader {
     }
 }
 
-/// Storage backed by (potentially compressed) Les Houches Event Files
-pub struct FileStorage {
+/// I/O from and to (potentially compressed) Les Houches Event Files
+pub struct FileIO {
     reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
 }
 
-impl FileStorage {
-    /// Construct a storage backed by the given (potentially compressed) Les Houches Event Files
+impl FileIO {
+    /// Construct an I/O object from the given (potentially compressed) Les Houches Event Files
     pub fn try_new( // TODO: use builder pattern instead?
         source_path: PathBuf,
         sink_path: PathBuf,
@@ -91,7 +91,7 @@ impl FileStorage {
             .map_err(CompressTarget)?;
         sink.write_all(reader.header()).map_err(Write)?;
 
-        Ok(FileStorage {
+        Ok(FileIO {
             reader,
             sink_path,
             sink,
@@ -100,11 +100,11 @@ impl FileStorage {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn into_storage_error<T, E: Into<ErrorKind>>(
+    fn into_io_error<T, E: Into<ErrorKind>>(
         &self,
         res: Result<T, E>
-    ) -> Result<T, FileStorageError> {
-        res.map_err(|err| FileStorageError::new(
+    ) -> Result<T, FileIOError> {
+        res.map_err(|err| FileIOError::new(
             self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
@@ -140,22 +140,22 @@ impl FileStorage {
     }
 }
 
-impl Rewind for FileStorage {
-    type Error = FileStorageError;
+impl Rewind for FileIO {
+    type Error = FileIOError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         let res = self.reader.rewind();
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 }
 
-impl Iterator for FileStorage {
-    type Item = Result<EventRecord, FileStorageError>;
+impl Iterator for FileIO {
+    type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
        self.reader
             .next()
-            .map(|r| self.into_storage_error(r))
+            .map(|r| self.into_io_error(r))
      }
 }
 
@@ -236,8 +236,8 @@ impl LHEFParser for Converter {
     }
 }
 
-impl UpdateWeights for FileStorage {
-    type Error = FileStorageError;
+impl UpdateWeights for FileIO {
+    type Error = FileIOError;
 
     fn update_all_weights(
         &mut self,
@@ -258,12 +258,12 @@ impl UpdateWeights for FileStorage {
         weights: &Weights
     ) -> Result<bool, Self::Error> {
         let res = self.update_next_weights_helper(weights);
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 
     fn finish_weight_update(&mut self) -> Result<(), Self::Error> {
         let res = self.sink.write_all(b"\n</LesHouchesEvents>\n");
-        self.into_storage_error(res.map_err(WriteError::IO))?;
+        self.into_io_error(res.map_err(WriteError::IO))?;
         Ok(())
     }
 }

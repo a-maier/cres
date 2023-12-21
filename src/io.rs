@@ -87,23 +87,23 @@ impl Iterator for FileReader {
     }
 }
 
-/// Event storage backed by one input and one output event file
+/// Event I/O from one input to one output event file
 ///
 /// The format is determined automatically. If you know the format
 /// beforehand, you can use
-/// e.g. [hepmc2::FileStorage](crate::hepmc2::FileStorage) instead.
-pub struct FileStorage(Box<dyn EventFileStorage>);
+/// e.g. [hepmc2::FileIO](crate::hepmc2::FileIO) instead.
+pub struct FileIO(Box<dyn EventFileIO>);
 
-impl Rewind for FileStorage {
-    type Error = FileStorageError;
+impl Rewind for FileIO {
+    type Error = FileIOError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         self.0.rewind()
     }
 }
 
-impl Iterator for FileStorage {
-    type Item = Result<EventRecord, FileStorageError>;
+impl Iterator for FileIO {
+    type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next()
@@ -114,15 +114,15 @@ impl Iterator for FileStorage {
     }
 }
 
-/// Builder for event storages
+/// Builder for event I/O objects
 #[derive(Clone, Debug, Default)]
-pub struct StorageBuilder {
+pub struct IOBuilder {
     scaling: HashMap<String, f64>,
     compression: Option<Compression>,
     weight_names: Vec<String>,
 }
 
-impl StorageBuilder {
+impl IOBuilder {
     /// Set compression of event output files
     pub fn compression(&mut self, compression: Option<Compression>) -> &mut Self {
         self.compression = compression;
@@ -135,22 +135,22 @@ impl StorageBuilder {
         self
     }
 
-    /// Build an event storage from the given input and output files
+    /// Build an event I/O object from the given input and output files
     pub fn build_from_files(
         self,
         infile: PathBuf,
         outfile: PathBuf
-    ) -> Result<FileStorage, CreateError> {
-        let StorageBuilder { scaling, compression, weight_names } = self;
+    ) -> Result<FileIO, CreateError> {
+        let IOBuilder { scaling, compression, weight_names } = self;
         let _scaling = scaling;
 
         let format = detect_event_file_format(&infile)?;
         debug!("Read {infile:?} as {format:?} file");
 
-        let storage: Box<dyn EventFileStorage> = match format {
+        let io: Box<dyn EventFileIO> = match format {
             FileFormat::HepMC2 => {
-                use crate::hepmc2::FileStorage as HepMCStorage;
-                Box::new(HepMCStorage::try_new(
+                use crate::hepmc2::FileIO as HepMCIO;
+                Box::new(HepMCIO::try_new(
                     infile,
                     outfile,
                     compression,
@@ -159,8 +159,8 @@ impl StorageBuilder {
             },
             #[cfg(feature = "lhef")]
             FileFormat::Lhef => {
-                use crate::lhef::FileStorage as LHEFStorage;
-                Box::new(LHEFStorage::try_new(
+                use crate::lhef::FileIO as LHEFIO;
+                Box::new(LHEFIO::try_new(
                     infile,
                     outfile,
                     compression,
@@ -169,8 +169,8 @@ impl StorageBuilder {
             },
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => {
-                use crate::ntuple::FileStorage as NTupleStorage;
-                Box::new(NTupleStorage::try_new(
+                use crate::ntuple::FileIO as NTupleIO;
+                Box::new(NTupleIO::try_new(
                     infile,
                     outfile,
                     weight_names,
@@ -178,8 +178,8 @@ impl StorageBuilder {
             },
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => {
-                use crate::stripper_xml::FileStorage as XMLStorage;
-                Box::new(XMLStorage::try_new(
+                use crate::stripper_xml::FileIO as XMLIO;
+                Box::new(XMLIO::try_new(
                     infile,
                     outfile,
                     compression,
@@ -188,16 +188,16 @@ impl StorageBuilder {
                 )?)
             },
         };
-        Ok(FileStorage(storage))
+        Ok(FileIO(io))
     }
 
-    /// Construct a new storage backed by the files with the given names
+    /// Construct a new I/O object using the files with the given names
     ///
     /// Each item in `files` should have the form `(sourcefile, sinkfile)`.
     pub fn build_from_files_iter<I, P, Q>(
         self,
         files: I
-    ) -> Result<CombinedFileStorage, CombinedBuildError>
+    ) -> Result<CombinedFileIO, CombinedBuildError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
@@ -220,7 +220,7 @@ impl StorageBuilder {
     fn build_from_files_iter_known_scaling<I, P, Q>(
         self,
         files: I
-    ) -> Result<CombinedFileStorage, FileStorageError>
+    ) -> Result<CombinedFileIO, FileIOError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
@@ -232,10 +232,10 @@ impl StorageBuilder {
                 .map(|(source, sink)| {
                     let infile = source.as_ref().to_path_buf();
                     let outfile = sink.as_ref().to_path_buf();
-                    StorageFiles{ infile, outfile }
+                    IOFiles{ infile, outfile }
                 })
         );
-        CombinedFileStorage::new(files, self)
+        CombinedFileIO::new(files, self)
     }
 }
 
@@ -270,8 +270,8 @@ pub fn detect_event_file_format(infile: &Path) -> Result<FileFormat, CreateError
     Ok(HepMC2)
 }
 
-impl UpdateWeights for FileStorage {
-    type Error = FileStorageError;
+impl UpdateWeights for FileIO {
+    type Error = FileIOError;
 
     fn update_all_weights(
         &mut self,
@@ -292,12 +292,12 @@ impl UpdateWeights for FileStorage {
     }
 }
 
-/// Error building a combined event storage
+/// Error building a combined event I/O object
 #[derive(Debug, Error)]
 pub enum CombinedBuildError {
-    /// Error building a file-based event storage
-    #[error("Failed to build file-based event storage")]
-    FileStorage(#[from] FileStorageError),
+    /// Error building a file-based event I/O
+    #[error("Failed to build file-based event I/O object")]
+    FileIO(#[from] FileIOError),
 
     #[cfg(feature = "stripper-xml")]
     /// Error extracting weight scaling
@@ -305,17 +305,17 @@ pub enum CombinedBuildError {
     WeightScaling(#[from] CreateError),
 }
 
-/// Error from event storage operations
+/// Error from event I/O operations
 #[derive(Debug, Error)]
-#[error("Error in event storage reading from {infile} and writing to {outfile}")]
-pub struct FileStorageError {
+#[error("Error in event I/O reading from {infile} and writing to {outfile}")]
+pub struct FileIOError {
     infile: PathBuf,
     outfile: PathBuf,
     source: ErrorKind
 }
 
-impl FileStorageError {
-    /// New error for storage associated with the given input and output files
+impl FileIOError {
+    /// New error for I/O associated with the given input and output files
     pub fn new(
         infile: PathBuf,
         outfile: PathBuf,
@@ -339,11 +339,11 @@ impl FileStorageError {
     }
 }
 
-/// Error from event storage operations
+/// Error from event I/O operations
 #[derive(Debug, Error)]
 pub enum ErrorKind {
-    /// Error creating an event storage
-    #[error("Failed to create event storage")]
+    /// Error creating an event I/O object
+    #[error("Failed to create event I/O object")]
     Create(#[from] CreateError),
     /// Error reading in or parsing an event record
     #[error("Failed to read event")]
@@ -353,7 +353,7 @@ pub enum ErrorKind {
     Write(#[from] WriteError),
 }
 
-/// Error creating an event storage
+/// Error creating an event I/O object
 #[derive(Debug, Error)]
 pub enum CreateError {
     /// Failed to open input file
@@ -457,26 +457,26 @@ pub enum WriteError {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-struct StorageFiles {
+struct IOFiles {
     infile: PathBuf,
     outfile: PathBuf,
 }
 
-/// Combined storage from several pairs of files
-pub struct CombinedFileStorage {
-    files: Vec<StorageFiles>,
-    current: Option<FileStorage>,
+/// Combined I/O from several pairs of input and output files
+pub struct CombinedFileIO {
+    files: Vec<IOFiles>,
+    current: Option<FileIO>,
     current_file_idx: usize,
-    builder: StorageBuilder,
+    builder: IOBuilder,
     nevents_read: usize,
     total_size_hint: (usize, Option<usize>),
 }
 
-impl CombinedFileStorage {
+impl CombinedFileIO {
     fn new(
-        files: Vec<StorageFiles>,
-        builder: StorageBuilder,
-    ) -> Result<CombinedFileStorage, FileStorageError> {
+        files: Vec<IOFiles>,
+        builder: IOBuilder,
+    ) -> Result<Self, FileIOError> {
         let mut res = Self {
             files,
             current: None,
@@ -489,19 +489,19 @@ impl CombinedFileStorage {
         Ok(res)
     }
 
-    fn open(&mut self, idx: usize) -> Result<(), FileStorageError> {
-        let StorageFiles { infile, outfile } = self.files[idx].clone();
+    fn open(&mut self, idx: usize) -> Result<(), FileIOError> {
+        let IOFiles { infile, outfile } = self.files[idx].clone();
         self.current = Some(
             self.builder.clone().build_from_files(infile, outfile).map_err(|source| {
-                let StorageFiles { infile, outfile } = self.files[idx].clone();
-                FileStorageError{ infile, outfile, source: source.into() }
+                let IOFiles { infile, outfile } = self.files[idx].clone();
+                FileIOError{ infile, outfile, source: source.into() }
             })?
         );
         self.current_file_idx = idx;
         Ok(())
     }
 
-    fn init(&mut self) -> Result<(), FileStorageError> {
+    fn init(&mut self) -> Result<(), FileIOError> {
         if self.files.is_empty() {
             return Ok(());
         }
@@ -529,8 +529,8 @@ fn combine_size_hints(
     h
 }
 
-impl Rewind for CombinedFileStorage {
-    type Error = FileStorageError;
+impl Rewind for CombinedFileIO {
+    type Error = FileIOError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         self.current = None;
@@ -539,8 +539,8 @@ impl Rewind for CombinedFileStorage {
     }
 }
 
-impl Iterator for CombinedFileStorage {
-    type Item = <FileStorage as Iterator>::Item;
+impl Iterator for CombinedFileIO {
+    type Item = <FileIO as Iterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current.as_mut() {
@@ -576,8 +576,8 @@ impl Iterator for CombinedFileStorage {
     }
 }
 
-impl UpdateWeights for CombinedFileStorage {
-    type Error = FileStorageError;
+impl UpdateWeights for CombinedFileIO {
+    type Error = FileIOError;
 
     fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
         self.rewind()?;
@@ -628,24 +628,24 @@ pub trait EventFileReader:
     fn header(&self) -> &[u8];
 }
 
-/// Event storage backed by files
-pub trait EventFileStorage:
-    Iterator<Item = Result<EventRecord, FileStorageError>>
-    + Rewind<Error = FileStorageError>
-    + UpdateWeights<Error = FileStorageError>
+/// Event I/O backed by files
+pub trait EventFileIO:
+    Iterator<Item = Result<EventRecord, FileIOError>>
+    + Rewind<Error = FileIOError>
+    + UpdateWeights<Error = FileIOError>
 {
 }
 
-impl EventFileStorage for crate::hepmc2::FileStorage {}
+impl EventFileIO for crate::hepmc2::FileIO {}
 
 #[cfg(feature = "lhef")]
-impl EventFileStorage for crate::lhef::FileStorage {}
+impl EventFileIO for crate::lhef::FileIO {}
 
 #[cfg(feature = "ntuple")]
-impl EventFileStorage for crate::ntuple::FileStorage {}
+impl EventFileIO for crate::ntuple::FileIO {}
 
 #[cfg(feature = "stripper-xml")]
-impl EventFileStorage for crate::stripper_xml::FileStorage {}
+impl EventFileIO for crate::stripper_xml::FileIO {}
 
 /// A bare-bones event record
 ///

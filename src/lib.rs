@@ -17,7 +17,7 @@
 //!
 //! - [prelude] exports a list of the most relevant classes and objects
 //! - [cres] contains the main class and lists the steps that are performed
-//! - [storage] defines event storage backed by event files
+//! - [io] input and output of event (from and to files)
 //! - [event] for the internal event format
 //! - [distance] for user-defined distance functions
 //! - [seeds] and [resampler] for the resampling
@@ -60,8 +60,8 @@ pub mod partition;
 pub mod prelude;
 /// Progress bar
 pub mod progress_bar;
-/// Event storage
-pub mod storage;
+/// Event input/output
+pub mod io;
 /// Cell resampling
 pub mod resampler;
 /// Cell seed selection

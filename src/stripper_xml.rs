@@ -9,7 +9,7 @@ use quick_xml::events::attributes::Attribute;
 use stripper_xml::normalization::Normalization;
 use thiserror::Error;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, storage::{EventRecord, CreateError, Converter, EventFileReader, FileStorageError, ErrorKind, ReadError, Utf8Error, WriteError}, util::{trim_ascii_start, take_chars}, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
+use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, io::{EventRecord, CreateError, Converter, EventFileReader, FileIOError, ErrorKind, ReadError, Utf8Error, WriteError}, util::{trim_ascii_start, take_chars}, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
 
 /// Reader from a (potentially compressed) Les Houches Event File
 pub struct FileReader {
@@ -98,8 +98,8 @@ impl Iterator for FileReader {
     }
 }
 
-/// Storage backed by (potentially compressed) STRIPPER XML files
-pub struct FileStorage {
+/// I/O using (potentially compressed) STRIPPER XML files
+pub struct FileIO {
     reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
@@ -107,10 +107,10 @@ pub struct FileStorage {
     weight_scale: f64,
 }
 
-impl FileStorage {
-    /// Construct STRIPPER XML event storage
+impl FileIO {
+    /// Construct a STRIPPER XML event I/O object
     ///
-    /// Construct a storage backed by the given (potentially compressed)
+    /// Construct an I/O object using the given (potentially compressed)
     /// STRIPPER XMLs file with the given information for
     /// channel-specific scale factors
     pub fn try_new( // TODO: use builder pattern instead?
@@ -136,7 +136,7 @@ impl FileStorage {
             return Err(XMLError(Error::MissingScaling(name)))
         };
 
-        Ok(FileStorage {
+        Ok(FileIO {
             reader,
             sink_path,
             sink,
@@ -146,11 +146,11 @@ impl FileStorage {
     }
 
     #[allow(clippy::wrong_self_convention)]
-    fn into_storage_error<T, E: Into<ErrorKind>>(
+    fn into_io_error<T, E: Into<ErrorKind>>(
         &self,
         res: Result<T, E>
-    ) -> Result<T, FileStorageError> {
-        res.map_err(|err| FileStorageError::new(
+    ) -> Result<T, FileIOError> {
+        res.map_err(|err| FileIOError::new(
             self.reader.path().to_path_buf(),
             self.sink_path.clone(),
             err.into()
@@ -211,17 +211,17 @@ impl FileStorage {
     }
 }
 
-impl Rewind for FileStorage {
-    type Error = FileStorageError;
+impl Rewind for FileIO {
+    type Error = FileIOError;
 
     fn rewind(&mut self) -> Result<(), Self::Error> {
         let res = self.reader.rewind();
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 }
 
-impl Iterator for FileStorage {
-    type Item = Result<EventRecord, FileStorageError>;
+impl Iterator for FileIO {
+    type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let res = self.reader.read_raw()
@@ -234,7 +234,7 @@ impl Iterator for FileStorage {
                 },
                 Err(err) => Err(err),
             });
-        res.map(|n| self.into_storage_error(n))
+        res.map(|n| self.into_io_error(n))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -573,8 +573,8 @@ fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
     Ok((rest, [n64(p.1), n64(p.3), n64(p.5), n64(p.7)].into()))
 }
 
-impl UpdateWeights for FileStorage {
-    type Error = FileStorageError;
+impl UpdateWeights for FileIO {
+    type Error = FileIOError;
 
     fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
         self.rewind()?;
@@ -591,7 +591,7 @@ impl UpdateWeights for FileStorage {
         weights: &Weights
     ) -> Result<bool, Self::Error> {
         let res = self.update_next_weights_helper(weights);
-        self.into_storage_error(res)
+        self.into_io_error(res)
     }
 }
 

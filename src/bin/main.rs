@@ -12,7 +12,7 @@ use crate::opt_cres_validate::validate;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::cluster::DefaultClustering;
-use cres::storage::{Converter, StorageBuilder};
+use cres::io::{Converter, IOBuilder};
 use cres::resampler::DefaultResampler;
 use cres::traits::Resample;
 use cres::{
@@ -66,10 +66,10 @@ where
 
     debug!("settings: {:#?}", opt);
 
-    let mut event_storage = StorageBuilder::default();
+    let mut event_io = IOBuilder::default();
     #[cfg(feature = "multiweight")]
-    event_storage.weight_names(opt.weights.clone());
-    event_storage.compression(opt.compression);
+    event_io.weight_names(opt.weights.clone());
+    event_io.compression(opt.compression);
 
     create_dir_all(&opt.outdir)?;
     let files = opt.infiles.into_iter()
@@ -77,7 +77,7 @@ where
             let out = PathBuf::from_iter([opt.outdir.as_os_str(), f.file_name().unwrap()]);
             (f, out)
         });
-    let event_storage = event_storage.build_from_files_iter(files)?;
+    let event_io = event_io.build_from_files_iter(files)?;
 
     let cell_collector = None;
     // let cell_collector = if opt.dumpcells {
@@ -110,7 +110,7 @@ where
     let converter = Converter::new();
 
     let mut cres = CresBuilder {
-        event_storage,
+        event_io,
         converter,
         clustering,
         resampler,

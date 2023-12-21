@@ -5,7 +5,7 @@ use std::{path::{PathBuf, Path}, fs::{File, create_dir_all}, io::{Write, BufWrit
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use cres::{GIT_REV, GIT_BRANCH, VERSION, progress_bar::ProgressBar, compression::{Compression, compress_writer}, prelude::{Converter, DefaultClustering}, partition::VPTreePartition, event::Event, distance::EuclWithScaledPt, traits::{TryConvert, Progress, Clustering}, storage::{EventFileReader, detect_event_file_format, FileReader}, formats::FileFormat};
+use cres::{GIT_REV, GIT_BRANCH, VERSION, progress_bar::ProgressBar, compression::{Compression, compress_writer}, prelude::{Converter, DefaultClustering}, partition::VPTreePartition, event::Event, distance::EuclWithScaledPt, traits::{TryConvert, Progress, Clustering}, io::{EventFileReader, detect_event_file_format, FileReader}, formats::FileFormat};
 use env_logger::Env;
 use log::{debug, trace, info, error};
 
@@ -137,7 +137,7 @@ impl Classifier {
     fn classify_ntuple_records(&self, file: PathBuf) -> Result<()> {
         use cres::{
             ntuple::FileReader,
-            storage::EventRecord,
+            io::EventRecord,
         };
         use ntuple::Writer;
         use log::warn;

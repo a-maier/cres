@@ -7,7 +7,7 @@ use crate::opt_partition::Opt;
 
 use anyhow::{Result, Context, bail};
 use clap::Parser;
-use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, storage::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::compress_writer, prelude::DefaultClustering, storage::Converter, traits::{TryConvert, Clustering}};
+use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, io::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::compress_writer, prelude::DefaultClustering, io::Converter, traits::{TryConvert, Clustering}};
 use env_logger::Env;
 use log::{info, debug, trace};
 use noisy_float::prelude::*;
