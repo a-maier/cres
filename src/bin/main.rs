@@ -164,6 +164,7 @@ mod tests {
             search: Default::default(),
             strategy: Default::default(),
             threads: Default::default(),
+            #[cfg(feature = "multiweight")]
             weights: Default::default(),
         };
         cres(opt).unwrap();
