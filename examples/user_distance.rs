@@ -47,8 +47,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let infile = args.next().unwrap().into();
     let outfile = args.next().unwrap().into();
 
-    let event_storage = IOBuilder::default();
-    let event_storage = event_storage.build_from_files(infile, outfile)?;
+    let event_io = IOBuilder::default();
+    let event_io = event_io.build_from_files(infile, outfile)?;
 
     let converter = Converter::new();
 
@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build();
 
     let mut cres = CresBuilder {
-        event_io: event_storage,
+        event_io,
         converter,
         clustering: NO_CLUSTERING, // disable jet clustering
         resampler,

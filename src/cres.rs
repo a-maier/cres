@@ -4,10 +4,10 @@
 //! [CresBuilder].
 //!
 //! This requires
-//! 1. A storage for reading and writing events
-//!    (e.g. [CombinedStorage](crate::storage::CombinedStorage)).
+//! 1. An object for event input and output
+//!    (e.g. [CombinedFileIO](crate::io::CombinedFileIO)).
 //! 2. A converter to the internal format
-//!    (e.g. [Converter](crate::storage::Converter))
+//!    (e.g. [Converter](crate::io::Converter))
 //! 3. A clustering of outgoing particles into IRC safe objects
 //!    (e.g. [DefaultClustering](crate::cluster::DefaultClustering))
 //! 4. A [Resampler](crate::traits::Resample).
@@ -22,7 +22,7 @@
 //!# fn cres_doc() -> Result<(), Box<dyn std::error::Error>> {
 //! use cres::prelude::*;
 //!
-//! // Define `event_storage`, `converter`, `clustering`, `resampler`, `unweighter`
+//! // Define `event_io`, `converter`, `clustering`, `resampler`, `unweighter`
 //!# let filename = std::path::PathBuf::from("");
 //!# let event_io = IOBuilder::default().build_from_files(filename.clone(), filename)?;
 //!# let converter = Converter::new();
@@ -62,7 +62,7 @@ use crate::traits::*;
 /// Build a new [Cres] object
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct CresBuilder<R, C, Cl, S, U> {
-    /// External event storage, e.g. backed by an event file
+    /// External event I/O, e.g. backed by an event file
     pub event_io: R,
     /// Convert events into the internal format
     pub converter: C,
@@ -118,9 +118,9 @@ impl<R, C, Cl, S, U> From<CresBuilder<R, C, Cl, S, U>> for Cres<R, C, Cl, S, U> 
 /// A cell resampling error
 #[derive(Debug, Error)]
 pub enum CresError<E1, E2, E3, E4, E5> {
-    /// Error accessing event storage
-    #[error("Event storage error")]
-    StorageErr(#[source] E1),
+    /// Error in event I/O
+    #[error("Event I/O error")]
+    IOErr(#[source] E1),
     /// Error converting event record
     #[error("Failed to convert event record")]
     ConversionErr(#[source] E2),
@@ -157,11 +157,11 @@ where
     ///
     /// This goes through the following steps
     ///
-    /// 1. Read in events from storage
+    /// 1. Read in events
     /// 2. Convert events into internal format
     /// 3. Apply cell resampling
     /// 4. Unweight
-    /// 5. Update event weights in storage
+    /// 5. Update event weights, rereading the original records
     pub fn run(
         &mut self,
     ) -> Result<
@@ -208,7 +208,7 @@ where
             weights[event.id] = event.weights.into_inner();
         }
 
-        self.event_io.update_all_weights(&weights).map_err(StorageErr)?;
+        self.event_io.update_all_weights(&weights).map_err(IOErr)?;
         Ok(())
     }
 
@@ -241,7 +241,7 @@ where
             let progress = &event_progress;
             rayon::in_place_scope_fifo(|s| {
                 for (id, record) in (&mut self.event_io).enumerate() {
-                    let record = record.map_err(StorageErr)?;
+                    let record = record.map_err(IOErr)?;
                     match record {
                         #[cfg(feature = "ntuple")]
                         EventRecord::NTuple(_) => {
