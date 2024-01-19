@@ -17,7 +17,7 @@
 //!
 //! - [prelude] exports a list of the most relevant classes and objects
 //! - [cres] contains the main class and lists the steps that are performed
-//! - [io] input and output of event (from and to files)
+//! - [io] event input and output (from and to files)
 //! - [event] for the internal event format
 //! - [distance] for user-defined distance functions
 //! - [seeds] and [resampler] for the resampling
