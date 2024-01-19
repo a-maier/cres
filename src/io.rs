@@ -241,7 +241,8 @@ impl IOBuilder {
 
 /// Detect format of an event file
 ///
-/// Defaults to [HepMC2] if not other format can be identified.
+/// Defaults to [HepMC2](FileFormat::HepMC2) if not other format can
+/// be identified.
 pub fn detect_event_file_format(infile: &Path) -> Result<FileFormat, CreateError> {
     use CreateError::*;
     use FileFormat::*;
