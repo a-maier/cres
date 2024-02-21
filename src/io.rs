@@ -560,12 +560,10 @@ impl Iterator for CombinedFileIO {
             }
         } else if self.files.is_empty() {
             None
+        } else if let Err(err) = self.open(0) {
+            Some(Err(err))
         } else {
-            if let Err(err) = self.open(0) {
-                Some(Err(err))
-            } else {
-                self.next()
-            }
+            self.next()
         }
     }
 
