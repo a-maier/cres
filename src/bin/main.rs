@@ -98,7 +98,6 @@ where
     // };
     let resampler = DefaultResamplerBuilder::default()
         .max_cell_size(opt.max_cell_size)
-        .ptweight(opt.ptweight)
         .strategy(opt.strategy)
         .cell_collector(cell_collector.clone())
         .neighbour_search::<N>()
