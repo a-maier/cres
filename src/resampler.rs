@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
-use crate::distance::{DistWrapper, Distance, EuclWithScaledPt};
+use crate::distance::{Distance, MaxRelWithDeltaR, DistWrapper};
 use crate::event::Event;
 use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
@@ -204,7 +204,7 @@ impl<D, O, S, N> ResamplerBuilder<D, O, S, N> {
 
 impl Default
     for ResamplerBuilder<
-        EuclWithScaledPt,
+        MaxRelWithDeltaR,
         NoObserver,
         StrategicSelector,
         TreeSearch,
@@ -223,15 +223,13 @@ impl Default
 
 /// Default implementation of cell resampling
 pub struct DefaultResampler<N> {
-    ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
     neighbour_search: PhantomData<N>,
 }
 
-type ResampleHelper<N> =
-    Resampler<EuclWithScaledPt, N, Observer, StrategicSelector>;
+type ResampleHelper<N> = Resampler<MaxRelWithDeltaR, N, Observer, StrategicSelector>;
 
 impl<N> Resample for DefaultResampler<N>
 where
@@ -258,7 +256,7 @@ where
 
         let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
-            .distance(EuclWithScaledPt::new(n64(self.ptweight)))
+            .distance(MaxRelWithDeltaR::default())
             .max_cell_size(self.max_cell_size)
             .observer(observer)
             .neighbour_search::<N>()
@@ -281,7 +279,6 @@ impl<N> DefaultResampler<N> {
 
 /// Build a [DefaultResampler]
 pub struct DefaultResamplerBuilder<N> {
-    ptweight: f64,
     strategy: Strategy,
     max_cell_size: Option<f64>,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
@@ -291,7 +288,6 @@ pub struct DefaultResamplerBuilder<N> {
 impl Default for DefaultResamplerBuilder<TreeSearch> {
     fn default() -> Self {
         Self {
-            ptweight: 0.,
             strategy: Strategy::default(),
             max_cell_size: None,
             cell_collector: None,
@@ -301,12 +297,6 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
 }
 
 impl<N> DefaultResamplerBuilder<N> {
-    /// Set the τ factor in the distance measure
-    pub fn ptweight(mut self, value: f64) -> Self {
-        self.ptweight = value;
-        self
-    }
-
     /// Set the strategy for selecting cell seeds
     pub fn strategy(mut self, value: Strategy) -> Self {
         self.strategy = value;
@@ -331,7 +321,6 @@ impl<N> DefaultResamplerBuilder<N> {
     /// Set the nearest neighbour search algorithm
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN> {
         DefaultResamplerBuilder {
-            ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
             cell_collector: self.cell_collector,
@@ -342,7 +331,6 @@ impl<N> DefaultResamplerBuilder<N> {
     /// Build a [DefaultResampler]
     pub fn build(self) -> DefaultResampler<N> {
         DefaultResampler {
-            ptweight: self.ptweight,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
             cell_collector: self.cell_collector,
