@@ -1,7 +1,10 @@
 /// Distance based on spatial momentum components
 pub mod eucl;
+/// Distance based on relative momentum differences
+pub mod rel;
 
 pub use eucl::EuclWithScaledPt;
+pub use rel::MaxRelWithDeltaR;
 
 use crate::event::Event;
 
