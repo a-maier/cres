@@ -105,9 +105,13 @@ fn paired_distance(p_scale: N64, delta_r_scale: N64, p1: &[FourVector], p2: &[Fo
 }
 
 fn momentum_distance(p_scale: N64, delta_r_scale: N64, p1: FourVector, p2: FourVector) -> N64 {
-    let delta_p_sq = (p1 - p2).spatial_norm_sq();
-    let min_p_sq = std::cmp::min(p1.spatial_norm_sq(), p2.spatial_norm_sq());
-    let rel_p_diff = (delta_p_sq / min_p_sq).sqrt();
+    let abs_p1 = p1.spatial_norm();
+    let abs_p2 = p2.spatial_norm();
+    let rel_p_diff = if abs_p1 < abs_p2 {
+        (abs_p2 - abs_p1) / abs_p1
+    } else {
+        (abs_p1 - abs_p2) / abs_p2
+    };
     let delta_r = PseudoJet::from(p1).delta_r(&p2.into());
     std::cmp::max(p_scale * rel_p_diff, delta_r_scale * delta_r)
 }
