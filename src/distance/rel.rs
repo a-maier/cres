@@ -1,4 +1,4 @@
-use std::{collections::HashMap, cmp::Ordering};
+use std::collections::HashMap;
 
 use jetty::PseudoJet;
 use noisy_float::prelude::*;
@@ -7,7 +7,7 @@ use permutohedron::LexicalPermutation;
 
 use crate::{event::Event, four_vector::FourVector};
 
-use super::Distance;
+use super::{Distance, EuclWithScaledPt};
 
 /// Distance based on the maximum relative spatial momentum differences and ΔR
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,29 +45,18 @@ impl Default for MaxRelWithDeltaR {
 
 impl Distance for MaxRelWithDeltaR {
     fn distance(&self, ev1: &Event, ev2: &Event) -> N64 {
-        let mut dist = n64(0.);
-        let mut out1 = ev1.outgoing().iter().peekable();
-        let mut out2 = ev2.outgoing().iter().peekable();
-        loop {
-            match (out1.peek(), out2.peek()) {
-                (None, None) => break,
-                (Some(_), None) | (None, Some(_)) => {
-                    todo!("Relative distance for mismatched particle types");
-                },
-                (Some((t1, p1)), Some((t2, p2))) => match t1.cmp(t2) {
-                    Ordering::Less | Ordering::Greater => {
-                        todo!("Relative distance for mismatched particle types");
-                    },
-                    Ordering::Equal => {
-                        let d = self.set_distance(*t1, p1, p2);
-                        dist = std::cmp::max(d, dist);
-                        out1.next();
-                        out2.next();
-                    }
-                }
-            }
+        if same_particle_types_and_multiplicities(ev1, ev2) {
+            ev1.outgoing().iter()
+                .zip(ev2.outgoing())
+                .map(|((t1, p1), (t2, p2))| {
+                    debug_assert_eq!(t1, t2);
+                    self.set_distance(*t1, p1, p2)
+                })
+                .max()
+                .unwrap_or(n64(0.))
+        } else {
+            EuclWithScaledPt::new(n64(0.)).distance(ev1, ev2)
         }
-        dist
     }
 }
 
@@ -85,6 +74,7 @@ impl MaxRelWithDeltaR {
     pub const DEFAULT_DELTA_R_SCALE: f64 = 1.;
 
     fn set_distance(&self, t: ParticleID, p1: &[FourVector], p2: &[FourVector]) -> N64 {
+        debug_assert_eq!(p1.len(), p2.len());
         let p_scale = self.momentum_scale.get(&t)
             .copied()
             .unwrap_or(n64(Self::DEFAULT_MOMENTUM_SCALE));
@@ -97,11 +87,8 @@ impl MaxRelWithDeltaR {
 }
 
 fn min_paired_distance(p_scale: N64, delta_r_scale: N64, p1: &[FourVector], p2: &[FourVector]) -> N64 {
-    if p1.len() != p2.len() {
-        todo!("Relative distance for mismatched number of particles");
-    }
+    debug_assert_eq!(p1.len(), p2.len());
     let mut p1 = p1.to_vec();
-
     let mut min_dist = paired_distance(p_scale, delta_r_scale, &p1, p2);
     while p1.next_permutation() {
         min_dist = std::cmp::min(min_dist, paired_distance(p_scale, delta_r_scale, &p1, p2));
@@ -110,6 +97,7 @@ fn min_paired_distance(p_scale: N64, delta_r_scale: N64, p1: &[FourVector], p2: 
 }
 
 fn paired_distance(p_scale: N64, delta_r_scale: N64, p1: &[FourVector], p2: &[FourVector]) -> N64 {
+    debug_assert_eq!(p1.len(), p2.len());
     p1.iter().zip(p2)
         .map(|(p1, p2)| momentum_distance(p_scale, delta_r_scale, *p1, *p2))
         .max()
@@ -122,4 +110,11 @@ fn momentum_distance(p_scale: N64, delta_r_scale: N64, p1: FourVector, p2: FourV
     let rel_p_diff = (delta_p_sq / min_p_sq).sqrt();
     let delta_r = PseudoJet::from(p1).delta_r(&p2.into());
     std::cmp::max(p_scale * rel_p_diff, delta_r_scale * delta_r)
+}
+
+fn same_particle_types_and_multiplicities(ev1: &Event, ev2: &Event) -> bool {
+    ev1.outgoing().len() == ev2.outgoing().len()
+        && ev1.outgoing().iter()
+        .zip(ev2.outgoing())
+        .all(|((t1, out1), (t2, out2))| t1 == t2 && out1.len() == out2.len())
 }
