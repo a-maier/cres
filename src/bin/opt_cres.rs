@@ -78,11 +78,10 @@ pub(crate) struct Opt {
     #[clap(long, default_value = "0.")]
     pub(crate) ptweight: f64,
 
-    // TODO: make this option work again
-    // this will require some update to the `UpdateWeights` implementations
-    // /// Whether to dump selected cells of interest.
-    // #[clap(short = 'd', long)]
-    // pub(crate) dumpcells: bool,
+    /// Whether to dump selected cells of interest.
+    #[clap(short = 'd', long)]
+    pub(crate) dumpcells: bool,
+
     #[clap(long, value_parser = parse_compr,
                 help = "Compress output file.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
