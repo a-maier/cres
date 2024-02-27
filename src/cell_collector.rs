@@ -134,8 +134,7 @@ impl CellCollector {
     /// The keys in the returned HashMap are the cell numbers,
     /// the corresponding values the event ids.
     pub fn event_cells(&self) -> HashMap<usize, Vec<usize>> {
-        let mut result: HashMap<usize, Vec<_>> = HashMap::new();
-        let all_cells = self
+        self
             .first
             .iter()
             .map(|(id, events)| (*id, events))
@@ -154,13 +153,8 @@ impl CellCollector {
                 self.largest_by_weight
                     .iter()
                     .map(|((_w, id), events)| (*id, events)),
-            );
-        for (cell, event_ids) in all_cells {
-            for event_id in event_ids {
-                result.entry(*event_id).or_default().push(cell)
-            }
-        }
-        result
+            ).map(|(id, events)| (id, events.to_vec()))
+            .collect()
     }
 
     /// Combine two cell collectors into a single one
