@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::default::Default;
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
@@ -225,7 +224,7 @@ impl Default
 pub struct DefaultResampler<N> {
     strategy: Strategy,
     max_cell_size: Option<f64>,
-    cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    cell_collector: Option<CellCollector>,
     neighbour_search: PhantomData<N>,
 }
 
@@ -240,10 +239,7 @@ where
 
     fn resample(&mut self, events: &[Event]) -> Result<(), Self::Error> {
         let observer_data = ObserverData {
-            cell_collector: self
-                .cell_collector
-                .clone()
-                .map(|c| c.borrow().clone()),
+            cell_collector: std::mem::take(&mut self.cell_collector),
             ..Default::default()
         };
         let observer = Observer {
@@ -260,17 +256,15 @@ where
             .build();
         crate::traits::Resample::resample(&mut resampler, events)?;
 
-        if let Some(c) = self.cell_collector.as_mut() {
-            c.replace(resampler.observer.central.cell_collector.unwrap());
-        }
+        self.cell_collector = resampler.observer.central.cell_collector;
         Ok(())
     }
 }
 
 impl<N> DefaultResampler<N> {
     /// Get the callback upon cell construction
-    pub fn cell_collector(&self) -> Option<Rc<RefCell<CellCollector>>> {
-        self.cell_collector.as_ref().cloned()
+    pub fn cell_collector(&self) -> Option<&CellCollector> {
+        self.cell_collector.as_ref()
     }
 }
 
@@ -278,7 +272,7 @@ impl<N> DefaultResampler<N> {
 pub struct DefaultResamplerBuilder<N> {
     strategy: Strategy,
     max_cell_size: Option<f64>,
-    cell_collector: Option<Rc<RefCell<CellCollector>>>,
+    cell_collector: Option<CellCollector>,
     neighbour_search: PhantomData<N>,
 }
 
@@ -309,7 +303,7 @@ impl<N> DefaultResamplerBuilder<N> {
     /// Set a callback after cell construction
     pub fn cell_collector(
         mut self,
-        value: Option<Rc<RefCell<CellCollector>>>,
+        value: Option<CellCollector>,
     ) -> Self {
         self.cell_collector = value;
         self
@@ -404,8 +398,11 @@ impl ObserveCell for Observer {
                 "Median radius: {:.3}",
                 median_radius(res.cell_radii.as_mut_slice())
             );
-            if let Some(c) = res.cell_collector.as_ref() {
-                c.dump_info();
+            if let Some(collector) = res.cell_collector.as_ref() {
+                collector.dump_info();
+                for (cell_nr, event_ids) in collector.event_cells() {
+                    info!("Cell {cell_nr} contained events {event_ids:?}");
+                }
             }
             self.central = res;
         }

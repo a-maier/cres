@@ -12,6 +12,7 @@ use crate::opt_cres_validate::validate;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use cres::cell_collector::CellCollector;
 use cres::cluster::DefaultClustering;
 use cres::io::{Converter, IOBuilder};
 use cres::resampler::DefaultResampler;
@@ -90,12 +91,11 @@ where
     });
     let event_io = event_io.build_from_files_iter(files)?;
 
-    let cell_collector = None;
-    // let cell_collector = if opt.dumpcells {
-    //     Some(Rc::new(RefCell::new(CellCollector::new())))
-    // } else {
-    //     None
-    // };
+    let cell_collector = if opt.dumpcells {
+        Some(CellCollector::new())
+    } else {
+        None
+    };
     let resampler = DefaultResamplerBuilder::default()
         .max_cell_size(opt.max_cell_size)
         .strategy(opt.strategy)
