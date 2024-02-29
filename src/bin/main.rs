@@ -149,6 +149,7 @@ mod tests {
 
         let tempdir = tempdir().unwrap();
         let opt = Opt {
+            dumpcells: false,
             outdir: tempdir.path().to_path_buf(),
             particle_def: ParticleDefinitions {
                 jet_def: JetDefinition {
