@@ -148,6 +148,7 @@ mod tests {
 
         let tempdir = tempdir().unwrap();
         let opt = Opt {
+            dumpcells: false,
             outdir: tempdir.path().to_path_buf(),
             jet_def: JetDefinition {
                 jetalgorithm: JetAlgorithm::AntiKt,
