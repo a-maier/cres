@@ -45,12 +45,15 @@
 //!# }
 //! ```
 //!
+use std::collections::HashMap;
 use std::convert::From;
 use std::iter::Iterator;
 
-use log::info;
+use itertools::Itertools;
+use log::{info, log_enabled, warn};
 use noisy_float::prelude::*;
 use parking_lot::Mutex;
+use particle_id::ParticleID;
 use rayon::prelude::*;
 use thiserror::Error;
 
@@ -179,6 +182,7 @@ where
         let events = self.read_events()?;
         let nevents = events.len();
         info!("Read {nevents} events");
+        log_multiplicities(&events);
 
         let events = self.resampler.resample(events).map_err(ResamplingErr)?;
 
@@ -283,4 +287,47 @@ where
         events.into_inner().into_iter().collect()
     }
 
+}
+
+fn log_multiplicities(events: &[Event]) {
+    const MAX_MULT_SHOWN: usize = 50;
+    if log_enabled!(log::Level::Warn) {
+        let mut multiplicities: HashMap<_, usize> = HashMap::new();
+        for event in events {
+            let out_multiplicities = Vec::from_iter(
+                event.outgoing().iter().map(|(id, p)| (*id, p.len()))
+            );
+            *multiplicities.entry(out_multiplicities).or_default() += 1;
+        }
+        let mut multiplicites = Vec::from_iter(multiplicities);
+        multiplicites.sort_unstable();
+        for (types, nevents) in multiplicites.iter().take(MAX_MULT_SHOWN) {
+            if types.is_empty() {
+                info!("{nevents} events without identified particles");
+            } else {
+                info!(
+                    "{nevents} events with {}",
+                    types.iter().map(|(t, n)| format!("{n} {}", name(*t))).join(", ")
+                );
+            }
+        }
+        if multiplicites.len() > MAX_MULT_SHOWN {
+            warn!(
+                "Found more than {MAX_MULT_SHOWN} event categories ({})",
+                multiplicites.len()
+            );
+        }
+    }
+}
+
+fn name(t: ParticleID) -> String {
+    use crate::cluster;
+    t.name()
+        .map(|n| format!("{n}s"))
+        .unwrap_or_else(|| match t {
+            cluster::PID_JET => "jets".to_string(),
+            cluster::PID_DRESSED_LEPTON => "dressed leptons".to_string(),
+            cluster::PID_ISOLATED_PHOTON => "isolated photons".to_string(),
+            _ => format!("particles with id {}", t.id())
+        })
 }
