@@ -2,7 +2,7 @@ use crate::cell::Cell;
 use crate::event::{Event, Weights};
 
 pub use crate::distance::Distance;
-pub use crate::neighbour_search::{NeighbourSearchAlgo, NeighbourSearch};
+pub use crate::neighbour_search::{NeighbourSearch, NeighbourSearchAlgo};
 pub use crate::seeds::SelectSeeds;
 
 /// Update event weights
@@ -11,10 +11,16 @@ pub trait UpdateWeights {
     type Error;
 
     /// Update all event weights
-    fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error>;
+    fn update_all_weights(
+        &mut self,
+        weights: &[Weights],
+    ) -> Result<usize, Self::Error>;
 
     /// Update the weights for the next event
-    fn update_next_weights(&mut self, weights: &Weights) -> Result<bool, Self::Error>;
+    fn update_next_weights(
+        &mut self,
+        weights: &Weights,
+    ) -> Result<bool, Self::Error>;
 
     /// Finish updating weights
     fn finish_weight_update(&mut self) -> Result<(), Self::Error> {
@@ -46,7 +52,7 @@ pub trait Clustering {
 /// internal state.
 pub trait TryConvert<From, To> {
     /// Conversion error
-     type Error;
+    type Error;
 
     /// Convert between two types
     fn try_convert(&self, f: From) -> Result<To, Self::Error>;
@@ -66,7 +72,7 @@ pub trait Unweight {
     /// Unweighting error
     type Error;
 
-/// Unweight events
+    /// Unweight events
     fn unweight(&mut self, e: Vec<Event>) -> Result<Vec<Event>, Self::Error>;
 }
 

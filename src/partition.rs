@@ -6,8 +6,18 @@ use serde::{Deserialize, Serialize};
 use crate::traits::Distance;
 
 /// A space partitioning based on a vantage-point tree
-#[derive(Deserialize, Serialize)]
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+)]
 pub struct VPTreePartition<P, DF> {
     vp: Vec<VPBisection<P>>,
     dist: DF,
@@ -42,7 +52,7 @@ impl<P, DF: Distance<P>> VPTreePartition<P, DF> {
         while idx < vp.len() {
             let r = vp[idx].r;
             match self.dist.distance(&vp[idx].pt, point).cmp(&r) {
-                Ordering::Less | Ordering::Equal=> idx = 2 * idx + 1,
+                Ordering::Less | Ordering::Equal => idx = 2 * idx + 1,
                 Ordering::Greater => idx = 2 * idx + 2,
             }
         }
@@ -64,8 +74,19 @@ impl<P, DF: Distance<P>> VPTreePartition<P, DF> {
 }
 
 /// A bisection of space defined by a vantage point
-#[derive(Deserialize, Serialize)]
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+)]
 pub struct VPBisection<P> {
     /// The vantage point (centre of a hypersphere)
     pub pt: P,

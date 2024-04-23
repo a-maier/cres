@@ -46,6 +46,8 @@ pub mod formats;
 pub mod four_vector;
 /// HepMC2 interface
 pub mod hepmc2;
+/// Event input/output
+pub mod io;
 /// LesHouches Event File interface
 #[cfg(feature = "lhef")]
 pub mod lhef;
@@ -60,8 +62,6 @@ pub mod partition;
 pub mod prelude;
 /// Progress bar
 pub mod progress_bar;
-/// Event input/output
-pub mod io;
 /// Cell resampling
 pub mod resampler;
 /// Cell seed selection

@@ -42,7 +42,10 @@ pub struct ProgressBar {
 
 impl Default for ProgressBar {
     fn default() -> Self {
-        Self { bar: Box::new(NO_PROGRESS), logging_disabled: false }
+        Self {
+            bar: Box::new(NO_PROGRESS),
+            logging_disabled: false,
+        }
     }
 }
 

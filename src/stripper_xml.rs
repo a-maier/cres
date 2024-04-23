@@ -1,15 +1,38 @@
-use std::{path::{PathBuf, Path}, io::{BufRead, Read, Write, BufWriter, BufReader}, collections::HashMap, fs::File, borrow::Cow, fmt::{Display, self}};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    fmt::{self, Display},
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Read, Write},
+    path::{Path, PathBuf},
+};
 
 use audec::auto_decompress;
 use log::{debug, trace};
 use noisy_float::prelude::*;
-use nom::{sequence::{tuple, preceded}, character::complete::{char, i32, space0, space1, multispace0, u64}, IResult, bytes::complete::tag, combinator::all_consuming};
+use nom::{
+    bytes::complete::tag,
+    character::complete::{char, i32, multispace0, space0, space1, u64},
+    combinator::all_consuming,
+    sequence::{preceded, tuple},
+    IResult,
+};
 use particle_id::ParticleID;
 use quick_xml::events::attributes::Attribute;
 use stripper_xml::normalization::Normalization;
 use thiserror::Error;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, io::{EventRecord, CreateError, Converter, EventFileReader, FileIOError, ErrorKind, ReadError, Utf8Error, WriteError}, util::{trim_ascii_start, take_chars}, event::{Event, EventBuilder, Weights}, four_vector::FourVector};
+use crate::{
+    compression::{compress_writer, Compression},
+    event::{Event, EventBuilder, Weights},
+    four_vector::FourVector,
+    io::{
+        Converter, CreateError, ErrorKind, EventFileReader, EventRecord,
+        FileIOError, ReadError, Utf8Error, WriteError,
+    },
+    traits::{Rewind, UpdateWeights},
+    util::{take_chars, trim_ascii_start},
+};
 
 /// Reader from a (potentially compressed) Les Houches Event File
 pub struct FileReader {
@@ -26,27 +49,36 @@ impl FileReader {
 
         let (header, source) = init_source(&source_path)?;
         let header_info = extract_xml_info(header.as_slice())?;
-        let XMLTag::Eventrecord {nsubevents, ..} = header_info else {
-            return Err(XMLError(Error::BadTag(header_info.to_string())))
+        let XMLTag::Eventrecord { nsubevents, .. } = header_info else {
+            return Err(XMLError(Error::BadTag(header_info.to_string())));
         };
 
         let rem_subevents = nsubevents as usize;
-        Ok(Self{ source_path, source, rem_subevents, header })
+        Ok(Self {
+            source_path,
+            source,
+            rem_subevents,
+            header,
+        })
     }
 
     fn read_raw(&mut self) -> Option<Result<String, ReadError>> {
         let mut record = b"<se".to_vec();
         loop {
             match self.source.read_until(b'e', &mut record) {
-                Ok(0) => if record.len() > 3 {
-                    break;
-                } else {
-                    return None;
-                },
-                Ok(_) => if record.ends_with(b"<se") {
-                    record.truncate(record.len() - 3);
-                    break;
-                },
+                Ok(0) => {
+                    if record.len() > 3 {
+                        break;
+                    } else {
+                        return None;
+                    }
+                }
+                Ok(_) => {
+                    if record.ends_with(b"<se") {
+                        record.truncate(record.len() - 3);
+                        break;
+                    }
+                }
                 Err(err) => return Some(Err(err.into())),
             }
         }
@@ -89,8 +121,7 @@ impl Iterator for FileReader {
     type Item = Result<EventRecord, ReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_raw()
-            .map(|r| r.map(EventRecord::StripperXml))
+        self.read_raw().map(|r| r.map(EventRecord::StripperXml))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -113,7 +144,8 @@ impl FileIO {
     /// Construct an I/O object using the given (potentially compressed)
     /// STRIPPER XMLs file with the given information for
     /// channel-specific scale factors
-    pub fn try_new( // TODO: use builder pattern instead?
+    pub fn try_new(
+        // TODO: use builder pattern instead?
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
@@ -125,15 +157,16 @@ impl FileIO {
         let reader = FileReader::try_new(source_path)?;
         let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression).map_err(CompressTarget)?;
+        let mut sink =
+            compress_writer(sink, compression).map_err(CompressTarget)?;
         sink.write_all(reader.header()).map_err(Write)?;
         let header_info = extract_xml_info(reader.header())?;
-        let XMLTag::Eventrecord {name, ..} = header_info else {
-            return Err(XMLError(Error::BadTag(header_info.to_string())))
+        let XMLTag::Eventrecord { name, .. } = header_info else {
+            return Err(XMLError(Error::BadTag(header_info.to_string())));
         };
 
         let Some(weight_scale) = scaling.get(&name).copied() else {
-            return Err(XMLError(Error::MissingScaling(name)))
+            return Err(XMLError(Error::MissingScaling(name)));
         };
 
         Ok(FileIO {
@@ -148,34 +181,44 @@ impl FileIO {
     #[allow(clippy::wrong_self_convention)]
     fn into_io_error<T, E: Into<ErrorKind>>(
         &self,
-        res: Result<T, E>
+        res: Result<T, E>,
     ) -> Result<T, FileIOError> {
-        res.map_err(|err| FileIOError::new(
-            self.reader.path().to_path_buf(),
-            self.sink_path.clone(),
-            err.into()
-        ))
+        res.map_err(|err| {
+            FileIOError::new(
+                self.reader.path().to_path_buf(),
+                self.sink_path.clone(),
+                err.into(),
+            )
+        })
     }
 
     fn rescale_weight(&self, record: &mut String) -> Result<(), ReadError> {
         use ReadError::*;
 
-        let parse_err = |what, record: &str| {
-            ParseEntry(what, take_chars(record, 100))
-        };
+        let parse_err =
+            |what, record: &str| ParseEntry(what, take_chars(record, 100));
 
         let (rest, start) = weight_start(record.as_str())
             .map_err(|_| parse_err("start of event record", record))?;
-        let (rest, weight) = double(rest)
-            .map_err(|_| parse_err("weight entry", rest))?;
+        let (rest, weight) =
+            double(rest).map_err(|_| parse_err("weight entry", rest))?;
         let start = start.len();
         let end = record.len() - rest.len();
-        record.replace_range(start..end, &(self.weight_scale * weight).to_string());
-        trace!("rescaled weight: {weight} -> {}", self.weight_scale * weight);
+        record.replace_range(
+            start..end,
+            &(self.weight_scale * weight).to_string(),
+        );
+        trace!(
+            "rescaled weight: {weight} -> {}",
+            self.weight_scale * weight
+        );
         Ok(())
     }
 
-    fn update_next_weights_helper(&mut self, weights: &Weights) -> Result<bool, ErrorKind> {
+    fn update_next_weights_helper(
+        &mut self,
+        weights: &Weights,
+    ) -> Result<bool, ErrorKind> {
         use ErrorKind::*;
         use ReadError::ParseEntry;
         use WriteError::IO;
@@ -185,7 +228,7 @@ impl FileIO {
         };
 
         let Some(record) = self.reader.read_raw() else {
-            return Ok(false)
+            return Ok(false);
         };
         let mut record = record?;
 
@@ -194,8 +237,8 @@ impl FileIO {
         // TODO: code duplication with `rescale_weight`
         let (rest, start) = weight_start(record.as_str())
             .map_err(|_| parse_err("start of event record", &record))?;
-        let (rest, old_weight) = double(rest)
-            .map_err(|_| parse_err("weight entry", rest))?;
+        let (rest, old_weight) =
+            double(rest).map_err(|_| parse_err("weight entry", rest))?;
 
         let start = start.len();
         let end = record.len() - rest.len();
@@ -224,16 +267,15 @@ impl Iterator for FileIO {
     type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let res = self.reader.read_raw()
-            .map(|r| match r {
-                Ok(mut record) => {
-                    // TODO: might be better to do this in the Converter, but it
-                    // doesn't have the information
-                    self.rescale_weight(&mut record)
-                        .map(|_| EventRecord::StripperXml(record))
-                },
-                Err(err) => Err(err),
-            });
+        let res = self.reader.read_raw().map(|r| match r {
+            Ok(mut record) => {
+                // TODO: might be better to do this in the Converter, but it
+                // doesn't have the information
+                self.rescale_weight(&mut record)
+                    .map(|_| EventRecord::StripperXml(record))
+            }
+            Err(err) => Err(err),
+        });
         res.map(|n| self.into_io_error(n))
     }
 
@@ -308,7 +350,8 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
                         let rest = reader.into_inner();
                         let all = buf.chain(rest);
                         let norm: Normalization =
-                            quick_xml::de::from_reader(all).map_err(NormalizationDeser)?;
+                            quick_xml::de::from_reader(all)
+                                .map_err(NormalizationDeser)?;
                         return Ok(XMLTag::Normalization {
                             name: norm.contribution.name,
                             scale: norm.contribution.xsection.0[0],
@@ -329,24 +372,29 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
                                 let val: &[u8] = val.value.as_ref();
                                 Error::AttrType {
                                     attr,
-                                    val: String::from_utf8_lossy(val).to_string(),
+                                    val: String::from_utf8_lossy(val)
+                                        .to_string(),
                                     wanted: "64bit floating-point number",
                                 }
                             };
                             match attr.key.0 {
                                 b"nevents" => {
-                                    let (_, val)  = parse_u64(&attr)
-                                        .map_err(|_| attr_err("nevents", &attr))?;
+                                    let (_, val) =
+                                        parse_u64(&attr).map_err(|_| {
+                                            attr_err("nevents", &attr)
+                                        })?;
                                     nevents = Some(val);
                                 }
                                 b"nsubevents" => {
-                                    let (_, val)  = parse_u64(&attr)
-                                        .map_err(|_| attr_err("nsubevents", &attr))?;
+                                    let (_, val) =
+                                        parse_u64(&attr).map_err(|_| {
+                                            attr_err("nsubevents", &attr)
+                                        })?;
                                     nsubevents = Some(val);
                                 }
                                 b"name" => name = Some(to_string(attr.value)?),
                                 b"as" => {
-                                    let (_, val)  = parse_u64(&attr)
+                                    let (_, val) = parse_u64(&attr)
                                         .map_err(|_| attr_err("as", &attr))?;
                                     alpha_s_power = Some(val);
                                 }
@@ -373,7 +421,8 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
                         });
                     }
                     name => {
-                        let name = std::str::from_utf8(name).map_err(Utf8Error::Utf8)?;
+                        let name = std::str::from_utf8(name)
+                            .map_err(Utf8Error::Utf8)?;
                         return Err(BadTag(name.to_owned()).into());
                     }
                 }
@@ -384,9 +433,7 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
     }
 }
 
-fn parse_u64<'a, 'b: 'a>(
-    attr: &'a Attribute<'b>
-) -> IResult<&'a [u8], u64> {
+fn parse_u64<'a, 'b: 'a>(attr: &'a Attribute<'b>) -> IResult<&'a [u8], u64> {
     all_consuming(u64)(attr.value.as_ref())
 }
 
@@ -407,11 +454,17 @@ pub(crate) enum XMLTag {
 impl Display for XMLTag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            XMLTag::Normalization { name, scale } => write!(
-                f, r#"<Normalization name="{name}" scale="{scale}">"#
-            ),
-            XMLTag::Eventrecord { alpha_s_power, name, nevents, nsubevents } => write!(
-                f, r#"<Eventrecord nevents="{nevents}" nsubevents="{nsubevents}" as="{alpha_s_power}" name="{name}"">"#
+            XMLTag::Normalization { name, scale } => {
+                write!(f, r#"<Normalization name="{name}" scale="{scale}">"#)
+            }
+            XMLTag::Eventrecord {
+                alpha_s_power,
+                name,
+                nevents,
+                nsubevents,
+            } => write!(
+                f,
+                r#"<Eventrecord nevents="{nevents}" nsubevents="{nsubevents}" as="{alpha_s_power}" name="{name}"">"#
             ),
         }
     }
@@ -441,7 +494,7 @@ pub enum Error {
     NoEventrecordAttr(&'static str),
     /// Wrong attribute type
     #[error("Value {val} of attribute `{attr}` is not a `{wanted}`")]
-    AttrType{
+    AttrType {
         /// Attribute name
         attr: &'static str,
         /// Attribute value
@@ -460,7 +513,9 @@ pub enum Error {
     IncompleteTag(&'static str, String),
 }
 
-fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
+fn init_source(
+    source: impl AsRef<Path>,
+) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
     use CreateError::*;
 
     let source = File::open(source).map_err(OpenInput)?;
@@ -492,9 +547,8 @@ impl StripperXmlParser for Converter {
     fn parse_stripper_xml(&self, record: &str) -> Result<Event, Self::Error> {
         use ReadError::*;
 
-        let parse_err = |what, record: &str| {
-            ParseEntry(what, take_chars(record, 100))
-        };
+        let parse_err =
+            |what, record: &str| ParseEntry(what, take_chars(record, 100));
 
         const STATUS_OUTGOING: i32 = 0;
 
@@ -503,15 +557,17 @@ impl StripperXmlParser for Converter {
         let (rest, _start) = weight_start(record)
             .map_err(|_| parse_err("start of event record", record))?;
 
-        let (rest, weight) = double(rest)
-            .map_err(|_| parse_err("weight entry", rest))?;
+        let (rest, weight) =
+            double(rest).map_err(|_| parse_err("weight entry", rest))?;
 
         // TODO: it might be best to do the weight rescaling here, but
         // the Converter doesn't have that information
         event.add_weight(n64(weight));
 
         let Some(tag_end) = rest.find('>') else {
-            return Err(Error::IncompleteTag("<se>", take_chars(record, 100)).into());
+            return Err(
+                Error::IncompleteTag("<se>", take_chars(record, 100)).into()
+            );
         };
         let mut rest = &rest[(tag_end + 1)..];
 
@@ -521,7 +577,11 @@ impl StripperXmlParser for Converter {
 
             if status != STATUS_OUTGOING {
                 let Some(particle_end) = r.find("</p>") else {
-                    return Err(Error::UnclosedTag("<p".to_string(), take_chars(rest, 100)).into())
+                    return Err(Error::UnclosedTag(
+                        "<p".to_string(),
+                        take_chars(rest, 100),
+                    )
+                    .into());
                 };
                 rest = &r[(particle_end + "</p>".len())..];
                 continue;
@@ -530,14 +590,15 @@ impl StripperXmlParser for Converter {
             type NomErr<'a> = nom::Err<nom::error::Error<&'a str>>;
             let (r, pid) = particle_id(r)
                 .map_err(|_| parse_err("particle id entry", r))?;
-            let (r, _) = tag("\">")(r)
-                .map_err(|_err: NomErr<'_>| Error::IncompleteTag("<p>", take_chars(r, 100)))?;
+            let (r, _) = tag("\">")(r).map_err(|_err: NomErr<'_>| {
+                Error::IncompleteTag("<p>", take_chars(r, 100))
+            })?;
             let (r, p) = particle_momentum(&r[1..])
                 .map_err(|_| parse_err("particle momentum entry", r))?;
             event.add_outgoing(pid, p);
-            (rest, _) = tag("</p>")(r).map_err(
-                |_err: NomErr<'_>| Error::UnclosedTag("<p".to_string(), take_chars(r, 100))
-            )?;
+            (rest, _) = tag("</p>")(r).map_err(|_err: NomErr<'_>| {
+                Error::UnclosedTag("<p".to_string(), take_chars(r, 100))
+            })?;
         }
 
         // TODO: multiple weights
@@ -546,7 +607,7 @@ impl StripperXmlParser for Converter {
     }
 }
 
-fn weight_start(line: &str)-> IResult<&str, &str> {
+fn weight_start(line: &str) -> IResult<&str, &str> {
     let (rest, _) = tuple((tag("<se"), space1, tag("w=\"")))(line)?;
     let (start, rest) = line.split_at(line.len() - rest.len());
     Ok((rest, start))
@@ -568,7 +629,15 @@ fn particle_id(line: &str) -> IResult<&str, ParticleID> {
 
 fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
     let (rest, p) = tuple((
-        space0, double, char(','), double, char(','), double, char(','), double, space0
+        space0,
+        double,
+        char(','),
+        double,
+        char(','),
+        double,
+        char(','),
+        double,
+        space0,
     ))(line)?;
     Ok((rest, [n64(p.1), n64(p.3), n64(p.5), n64(p.7)].into()))
 }
@@ -576,11 +645,14 @@ fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
 impl UpdateWeights for FileIO {
     type Error = FileIOError;
 
-    fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
+    fn update_all_weights(
+        &mut self,
+        weights: &[Weights],
+    ) -> Result<usize, Self::Error> {
         self.rewind()?;
         for (n, weight) in weights.iter().enumerate() {
             if !self.update_next_weights(weight)? {
-                return Ok(n)
+                return Ok(n);
             }
         }
         Ok(weights.len())
@@ -588,7 +660,7 @@ impl UpdateWeights for FileIO {
 
     fn update_next_weights(
         &mut self,
-        weights: &Weights
+        weights: &Weights,
     ) -> Result<bool, Self::Error> {
         let res = self.update_next_weights_helper(weights);
         self.into_io_error(res)

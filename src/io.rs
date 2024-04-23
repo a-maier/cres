@@ -1,7 +1,9 @@
 use std::{
     collections::HashMap,
+    fs::File,
     io::{BufRead, BufReader},
-    path::{Path, PathBuf}, fs::File, string::FromUtf8Error,
+    path::{Path, PathBuf},
+    string::FromUtf8Error,
 };
 
 use audec::auto_decompress;
@@ -9,7 +11,15 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{hepmc2::HepMCParser, traits::{Rewind, TryConvert, UpdateWeights}, util::trim_ascii_start, event::{Event, Weights}, progress_bar::{ProgressBar, Progress}, compression::Compression, formats::FileFormat};
+use crate::{
+    compression::Compression,
+    event::{Event, Weights},
+    formats::FileFormat,
+    hepmc2::HepMCParser,
+    progress_bar::{Progress, ProgressBar},
+    traits::{Rewind, TryConvert, UpdateWeights},
+    util::trim_ascii_start,
+};
 
 #[cfg(feature = "lhef")]
 use crate::lhef::LHEFParser;
@@ -36,22 +46,22 @@ impl FileReader {
             FileFormat::HepMC2 => {
                 use crate::hepmc2::FileReader as HepMCReader;
                 Box::new(HepMCReader::try_new(infile)?)
-            },
+            }
             #[cfg(feature = "lhef")]
             FileFormat::Lhef => {
                 use crate::lhef::FileReader as LhefReader;
                 Box::new(LhefReader::try_new(infile)?)
-            },
+            }
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => {
                 use crate::ntuple::FileReader as NTupleReader;
                 Box::new(NTupleReader::try_new(infile)?)
-            },
+            }
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => {
                 use crate::stripper_xml::FileReader as XMLReader;
                 Box::new(XMLReader::try_new(infile)?)
-            },
+            }
         };
         Ok(Self(reader))
     }
@@ -124,13 +134,16 @@ pub struct IOBuilder {
 
 impl IOBuilder {
     /// Set compression of event output files
-    pub fn compression(&mut self, compression: Option<Compression>) -> &mut Self {
+    pub fn compression(
+        &mut self,
+        compression: Option<Compression>,
+    ) -> &mut Self {
         self.compression = compression;
         self
     }
 
     /// Specify names of weights that should be updated
-    pub fn weight_names(&mut self, weight_names: Vec<String> ) -> &mut Self {
+    pub fn weight_names(&mut self, weight_names: Vec<String>) -> &mut Self {
         self.weight_names = weight_names;
         self
     }
@@ -139,9 +152,13 @@ impl IOBuilder {
     pub fn build_from_files(
         self,
         infile: PathBuf,
-        outfile: PathBuf
+        outfile: PathBuf,
     ) -> Result<FileIO, CreateError> {
-        let IOBuilder { scaling, compression, weight_names } = self;
+        let IOBuilder {
+            scaling,
+            compression,
+            weight_names,
+        } = self;
         let _scaling = scaling;
 
         let format = detect_event_file_format(&infile)?;
@@ -156,7 +173,7 @@ impl IOBuilder {
                     compression,
                     weight_names,
                 )?)
-            },
+            }
             #[cfg(feature = "lhef")]
             FileFormat::Lhef => {
                 use crate::lhef::FileIO as LHEFIO;
@@ -166,16 +183,12 @@ impl IOBuilder {
                     compression,
                     weight_names,
                 )?)
-            },
+            }
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => {
                 use crate::ntuple::FileIO as NTupleIO;
-                Box::new(NTupleIO::try_new(
-                    infile,
-                    outfile,
-                    weight_names,
-                )?)
-            },
+                Box::new(NTupleIO::try_new(infile, outfile, weight_names)?)
+            }
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => {
                 use crate::stripper_xml::FileIO as XMLIO;
@@ -186,7 +199,7 @@ impl IOBuilder {
                     weight_names,
                     &_scaling,
                 )?)
-            },
+            }
         };
         Ok(FileIO(io))
     }
@@ -196,7 +209,7 @@ impl IOBuilder {
     /// Each item in `files` should have the form `(sourcefile, sinkfile)`.
     pub fn build_from_files_iter<I, P, Q>(
         self,
-        files: I
+        files: I,
     ) -> Result<CombinedFileIO, CombinedBuildError>
     where
         I: IntoIterator<Item = (P, Q)>,
@@ -205,8 +218,7 @@ impl IOBuilder {
     {
         #[cfg(feature = "stripper-xml")]
         {
-            let (files, scaling) =
-                crate::stripper_xml::extract_scaling(files)?;
+            let (files, scaling) = crate::stripper_xml::extract_scaling(files)?;
 
             let mut builder = self;
             builder.scaling = scaling;
@@ -219,22 +231,18 @@ impl IOBuilder {
 
     fn build_from_files_iter_known_scaling<I, P, Q>(
         self,
-        files: I
+        files: I,
     ) -> Result<CombinedFileIO, FileIOError>
     where
         I: IntoIterator<Item = (P, Q)>,
         P: AsRef<Path>,
-        Q: AsRef<Path>
+        Q: AsRef<Path>,
     {
-        let files = Vec::from_iter(
-            files
-                .into_iter()
-                .map(|(source, sink)| {
-                    let infile = source.as_ref().to_path_buf();
-                    let outfile = sink.as_ref().to_path_buf();
-                    IOFiles{ infile, outfile }
-                })
-        );
+        let files = Vec::from_iter(files.into_iter().map(|(source, sink)| {
+            let infile = source.as_ref().to_path_buf();
+            let outfile = sink.as_ref().to_path_buf();
+            IOFiles { infile, outfile }
+        }));
         CombinedFileIO::new(files, self)
     }
 }
@@ -243,14 +251,16 @@ impl IOBuilder {
 ///
 /// Defaults to [HepMC2](FileFormat::HepMC2) if not other format can
 /// be identified.
-pub fn detect_event_file_format(infile: &Path) -> Result<FileFormat, CreateError> {
+pub fn detect_event_file_format(
+    infile: &Path,
+) -> Result<FileFormat, CreateError> {
     use CreateError::*;
     use FileFormat::*;
 
     let file = File::open(infile).map_err(OpenInput)?;
     let mut r = auto_decompress(BufReader::new(file));
     let Ok(bytes) = r.fill_buf() else {
-        return Ok(HepMC2)
+        return Ok(HepMC2);
     };
     if bytes.starts_with(&ROOT_MAGIC_BYTES) {
         #[cfg(not(feature = "ntuple"))]
@@ -262,11 +272,11 @@ pub fn detect_event_file_format(infile: &Path) -> Result<FileFormat, CreateError
         #[cfg(not(feature = "stripper-xml"))]
         return Err(XMLUnsupported);
         #[cfg(feature = "stripper-xml")]
-        return Ok(StripperXml)
+        return Ok(StripperXml);
     }
     #[cfg(feature = "lhef")]
     if bytes.starts_with(b"<LesHouchesEvents") {
-        return Ok(Lhef)
+        return Ok(Lhef);
     }
     Ok(HepMC2)
 }
@@ -276,14 +286,14 @@ impl UpdateWeights for FileIO {
 
     fn update_all_weights(
         &mut self,
-        weights: &[Weights]
+        weights: &[Weights],
     ) -> Result<usize, Self::Error> {
         self.0.update_all_weights(weights)
     }
 
     fn update_next_weights(
         &mut self,
-        weights: &Weights
+        weights: &Weights,
     ) -> Result<bool, Self::Error> {
         self.0.update_next_weights(weights)
     }
@@ -312,16 +322,12 @@ pub enum CombinedBuildError {
 pub struct FileIOError {
     infile: PathBuf,
     outfile: PathBuf,
-    source: ErrorKind
+    source: ErrorKind,
 }
 
 impl FileIOError {
     /// New error for I/O associated with the given input and output files
-    pub fn new(
-        infile: PathBuf,
-        outfile: PathBuf,
-        source: ErrorKind,
-    ) -> Self {
+    pub fn new(infile: PathBuf, outfile: PathBuf, source: ErrorKind) -> Self {
         Self {
             infile,
             outfile,
@@ -421,7 +427,7 @@ pub enum ReadError {
     FindWeight(String, String),
     /// Invalid entry
     #[error("{value} is not a valid value for {entry} in {record}")]
-    InvalidEntry{
+    InvalidEntry {
         /// Invalid value of the entry
         value: String,
         /// Entry name
@@ -493,10 +499,17 @@ impl CombinedFileIO {
     fn open(&mut self, idx: usize) -> Result<(), FileIOError> {
         let IOFiles { infile, outfile } = self.files[idx].clone();
         self.current = Some(
-            self.builder.clone().build_from_files(infile, outfile).map_err(|source| {
-                let IOFiles { infile, outfile } = self.files[idx].clone();
-                FileIOError{ infile, outfile, source: source.into() }
-            })?
+            self.builder
+                .clone()
+                .build_from_files(infile, outfile)
+                .map_err(|source| {
+                    let IOFiles { infile, outfile } = self.files[idx].clone();
+                    FileIOError {
+                        infile,
+                        outfile,
+                        source: source.into(),
+                    }
+                })?,
         );
         self.current_file_idx = idx;
         Ok(())
@@ -510,7 +523,7 @@ impl CombinedFileIO {
             self.open(idx)?;
             self.total_size_hint = combine_size_hints(
                 self.total_size_hint,
-                self.current.as_ref().unwrap().size_hint()
+                self.current.as_ref().unwrap().size_hint(),
             );
         }
         self.open(0)?;
@@ -569,7 +582,9 @@ impl Iterator for CombinedFileIO {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let min = self.total_size_hint.0.saturating_sub(self.nevents_read);
-        let max = self.total_size_hint.1
+        let max = self
+            .total_size_hint
+            .1
             .map(|max| max.saturating_sub(self.nevents_read));
         (min, max)
     }
@@ -578,10 +593,14 @@ impl Iterator for CombinedFileIO {
 impl UpdateWeights for CombinedFileIO {
     type Error = FileIOError;
 
-    fn update_all_weights(&mut self, weights: &[Weights]) -> Result<usize, Self::Error> {
+    fn update_all_weights(
+        &mut self,
+        weights: &[Weights],
+    ) -> Result<usize, Self::Error> {
         self.rewind()?;
         let mut nevent = 0;
-        let progress = ProgressBar::new(weights.len() as u64, "events written:");
+        let progress =
+            ProgressBar::new(weights.len() as u64, "events written:");
         for idx in 0..self.files.len() {
             self.open(idx)?;
             let current = self.current.as_mut().unwrap();
@@ -617,8 +636,7 @@ impl UpdateWeights for CombinedFileIO {
 
 /// Reader from an event file
 pub trait EventFileReader:
-    Iterator<Item = Result<EventRecord, ReadError>>
-    + Rewind<Error = CreateError>
+    Iterator<Item = Result<EventRecord, ReadError>> + Rewind<Error = CreateError>
 {
     /// Path to the file we are reading from
     fn path(&self) -> &Path;
@@ -685,8 +703,18 @@ impl TryFrom<EventRecord> for String {
 }
 
 /// Converter from event records to internal event format
-#[derive(Deserialize, Serialize)]
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+)]
 pub struct Converter {
     #[cfg(feature = "multiweight")]
     weight_names: Vec<String>,
@@ -701,7 +729,7 @@ impl Converter {
     #[cfg(feature = "multiweight")]
     /// Construct converter including the given weights in the record
     pub fn with_weights(weight_names: Vec<String>) -> Self {
-        Self {weight_names}
+        Self { weight_names }
     }
 
     /// Access names of weights that should be converted
@@ -722,7 +750,9 @@ impl TryConvert<EventRecord, Event> for Converter {
             #[cfg(feature = "ntuple")]
             EventRecord::NTuple(record) => self.convert_ntuple(*record)?,
             #[cfg(feature = "stripper-xml")]
-            EventRecord::StripperXml(record) => self.parse_stripper_xml(&record)?,
+            EventRecord::StripperXml(record) => {
+                self.parse_stripper_xml(&record)?
+            }
         };
         Ok(event)
     }

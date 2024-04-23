@@ -5,11 +5,22 @@ use std::fs::File;
 
 use crate::opt_partition::Opt;
 
-use anyhow::{Result, Context, bail};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
-use cres::{FEATURES, GIT_REV, GIT_BRANCH, VERSION, io::FileReader, event::Event, distance::{EuclWithScaledPt, DistWrapper}, vptree::VPTree, partition::{VPTreePartition, VPBisection}, compression::compress_writer, prelude::DefaultClustering, io::Converter, traits::{TryConvert, Clustering}};
+use cres::{
+    compression::compress_writer,
+    distance::{DistWrapper, EuclWithScaledPt},
+    event::Event,
+    io::Converter,
+    io::FileReader,
+    partition::{VPBisection, VPTreePartition},
+    prelude::DefaultClustering,
+    traits::{Clustering, TryConvert},
+    vptree::VPTree,
+    FEATURES, GIT_BRANCH, GIT_REV, VERSION,
+};
 use env_logger::Env;
-use log::{info, debug, trace};
+use log::{debug, info, trace};
 use noisy_float::prelude::*;
 use rayon::prelude::IntoParallelIterator;
 
@@ -31,7 +42,9 @@ fn main() -> Result<()> {
         .build_global()?;
 
     if let (Some(rev), Some(branch)) = (GIT_REV, GIT_BRANCH) {
-        info!("cres-make-partition {VERSION} rev {rev} ({branch}) {FEATURES:?}");
+        info!(
+            "cres-make-partition {VERSION} rev {rev} ({branch}) {FEATURES:?}"
+        );
     } else {
         info!("cres-make-partition {VERSION} {FEATURES:?}");
     }
@@ -54,9 +67,9 @@ fn main() -> Result<()> {
     for file in opt.infiles {
         let reader = FileReader::try_new(file.clone())?;
         for event in reader {
-            let event = event.with_context(
-                || format!("Failed to read event from {file:?}")
-            )?;
+            let event = event.with_context(|| {
+                format!("Failed to read event from {file:?}")
+            })?;
             let event: Event = converter.try_convert(event)?;
             if event.weight() < 0.0 {
                 let event = clustering.cluster(event)?;
@@ -74,42 +87,38 @@ fn main() -> Result<()> {
     }
     let nevents = events.len();
 
-    info!("Constructing {} regions from {nevents} negative-weight events", opt.regions);
+    info!(
+        "Constructing {} regions from {nevents} negative-weight events",
+        opt.regions
+    );
     let depth = log2(opt.regions);
     let distance = EuclWithScaledPt::new(n64(opt.ptweight));
     let dist = DistWrapper::new(&distance, &events);
     let partition = VPTree::from_par_iter_with_dist_and_depth(
         (0..events.len()).into_par_iter(),
         dist,
-        depth as usize
+        depth as usize,
     );
     info!("Converting to output format");
     let partition = VPTreePartition::from(partition);
 
     let tree = partition.into_tree();
-    let tree = Vec::from_iter(
-        tree.into_iter()
-            .map(|VPBisection{pt, r}| {
-                let pt = std::mem::take(&mut events[pt]);
-                VPBisection{pt, r}
-            })
-    );
+    let tree = Vec::from_iter(tree.into_iter().map(|VPBisection { pt, r }| {
+        let pt = std::mem::take(&mut events[pt]);
+        VPBisection { pt, r }
+    }));
 
     // Safety: we have changed neither the structure of the tree nor
     // the distance function
-    let partition = unsafe {
-        VPTreePartition::from_vp(tree, distance)
-    };
+    let partition = unsafe { VPTreePartition::from_vp(tree, distance) };
     trace!("Partition: {partition:#?}");
 
     let outfile = opt.outfile;
     info!("Writing to {outfile:?}");
-    let out = File::create(&outfile).with_context(
-        || format!("Failed to open {outfile:?}")
-    )?;
-    let out = compress_writer(out, opt.compression).with_context(
-        || format!("Failed to compress output to {outfile:?}")
-    )?;
+    let out = File::create(&outfile)
+        .with_context(|| format!("Failed to open {outfile:?}"))?;
+    let out = compress_writer(out, opt.compression)
+        .with_context(|| format!("Failed to compress output to {outfile:?}"))?;
     serde_yaml::to_writer(out, &(clustering, partition))?;
     info!("Done");
     Ok(())

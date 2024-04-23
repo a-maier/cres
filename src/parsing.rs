@@ -1,4 +1,10 @@
-use nom::{sequence::preceded, character::complete::{i32, space1, u32}, number::complete::double, IResult, bytes::complete::take_while1};
+use nom::{
+    bytes::complete::take_while1,
+    character::complete::{i32, space1, u32},
+    number::complete::double,
+    sequence::preceded,
+    IResult,
+};
 
 pub(crate) fn double_entry(line: &str) -> IResult<&str, f64> {
     preceded(space1, double)(line)

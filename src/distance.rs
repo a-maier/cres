@@ -27,8 +27,19 @@ where
 }
 
 /// The distance function defined in [arXiv:2109.07851](https://arxiv.org/abs/2109.07851)
-#[derive(Deserialize, Serialize)]
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Debug,
+    Default,
+)]
 pub struct EuclWithScaledPt {
     pt_weight: N64,
 }

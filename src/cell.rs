@@ -100,7 +100,8 @@ impl<'a> Cell<'a> {
         self.members.sort_unstable(); // sort to prevent deadlocks
         let member_weights = self.write_lock_weights();
 
-        let total_wt: N64 = member_weights.iter().map(|w| w.deref().central()).sum();
+        let total_wt: N64 =
+            member_weights.iter().map(|w| w.deref().central()).sum();
         let avg_wt = total_wt / (self.nmembers() as f64);
         for mut wt in member_weights {
             *wt = Weights::new_single(avg_wt);
@@ -138,7 +139,8 @@ impl<'a> Cell<'a> {
     }
 
     fn write_lock_weights(&self) -> Vec<RwLockWriteGuard<'_, Weights>> {
-        self.members.iter()
+        self.members
+            .iter()
             .map(|i| self.events[*i].weights.write())
             .collect()
     }

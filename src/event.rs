@@ -72,7 +72,8 @@ impl EventBuilder {
     /// Rescale all energies and momenta
     pub fn rescale_energies(&mut self, scale: N64) {
         for (_, p) in &mut self.outgoing_by_pid {
-            *p = [scale * p[0], scale * p[1], scale * p[2], scale * p[3]].into();
+            *p =
+                [scale * p[0], scale * p[1], scale * p[2], scale * p[3]].into();
         }
     }
 
@@ -116,8 +117,7 @@ fn compress_outgoing(
 }
 
 /// A Monte Carlo scattering event
-#[derive(Deserialize, Serialize)]
-#[derive(Debug, Default, Derivative)]
+#[derive(Deserialize, Serialize, Debug, Default, Derivative)]
 #[derivative(PartialEq, Eq, Ord)]
 pub struct Event {
     /// Event id
@@ -191,38 +191,57 @@ impl Event {
 
 /// Event weights
 #[cfg(feature = "multiweight")]
-#[derive(Deserialize, Serialize)]
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+)]
 pub struct Weights(Box<[N64]>);
 /// Event weights
 #[cfg(not(feature = "multiweight"))]
-#[derive(Deserialize, Serialize)]
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Deserialize,
+    Serialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+)]
 pub struct Weights(N64);
 
 impl Weights {
     /// Get central weight
     pub fn new_single(w: N64) -> Self {
-         #[cfg(feature = "multiweight")]
+        #[cfg(feature = "multiweight")]
         return Self(vec![w].into_boxed_slice());
 
         #[cfg(not(feature = "multiweight"))]
         Self(w)
-   }
-
+    }
 
     /// Get central weight
     pub fn central(&self) -> N64 {
-         #[cfg(feature = "multiweight")]
+        #[cfg(feature = "multiweight")]
         return self.0[0];
 
         #[cfg(not(feature = "multiweight"))]
         self.0
-   }
+    }
 
     /// Get number of weights
     pub fn len(&self) -> usize {
-         #[cfg(feature = "multiweight")]
+        #[cfg(feature = "multiweight")]
         return self.0.len();
 
         #[cfg(not(feature = "multiweight"))]
@@ -236,16 +255,16 @@ impl Weights {
 
     /// Iterator over weights
     pub fn iter(&self) -> impl Iterator<Item = &N64> {
-         #[cfg(feature = "multiweight")]
+        #[cfg(feature = "multiweight")]
         return self.0.iter();
 
         #[cfg(not(feature = "multiweight"))]
         std::iter::once(&self.0)
-   }
+    }
 
     /// Mutating iterator over weights
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut N64> {
-         #[cfg(feature = "multiweight")]
+        #[cfg(feature = "multiweight")]
         return self.0.iter_mut();
 
         #[cfg(not(feature = "multiweight"))]

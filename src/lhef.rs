@@ -1,12 +1,32 @@
-use std::{path::{PathBuf, Path}, io::{BufRead, Write, BufWriter, BufReader}, fs::File};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Write},
+    path::{Path, PathBuf},
+};
 
 use audec::auto_decompress;
 use log::trace;
 use noisy_float::prelude::*;
-use nom::{sequence::preceded, character::complete::{i32, space0, u32}, IResult, multi::count};
+use nom::{
+    character::complete::{i32, space0, u32},
+    multi::count,
+    sequence::preceded,
+    IResult,
+};
 use particle_id::ParticleID;
 
-use crate::{compression::{Compression, compress_writer}, traits::{Rewind, UpdateWeights}, io::{FileIOError, EventRecord, Converter, CreateError, ErrorKind, ReadError, WriteError, EventFileReader}, event::{Weights, Event, EventBuilder}, parsing::{any_entry, double_entry, i32_entry, non_space}, hepmc2::update_central_weight, util::take_chars};
+use crate::{
+    compression::{compress_writer, Compression},
+    event::{Event, EventBuilder, Weights},
+    hepmc2::update_central_weight,
+    io::{
+        Converter, CreateError, ErrorKind, EventFileReader, EventRecord,
+        FileIOError, ReadError, WriteError,
+    },
+    parsing::{any_entry, double_entry, i32_entry, non_space},
+    traits::{Rewind, UpdateWeights},
+    util::take_chars,
+};
 
 /// Reader from a (potentially compressed) Les Houches Event File
 pub struct FileReader {
@@ -19,7 +39,11 @@ impl FileReader {
     /// Construct a reader from the given (potentially compressed) Les Houches Event File
     pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
         let (header, source) = init_source(&source_path)?;
-        Ok(Self{ source_path, source, header })
+        Ok(Self {
+            source_path,
+            source,
+            header,
+        })
     }
 
     fn read_raw(&mut self) -> Option<Result<String, ReadError>> {
@@ -27,7 +51,7 @@ impl FileReader {
         while !record.ends_with(b"</event>") {
             match self.source.read_until(b'>', &mut record) {
                 Ok(0) => return None, // TODO: check incomplete record
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => return Some(Err(err.into())),
             }
         }
@@ -61,8 +85,7 @@ impl Iterator for FileReader {
     type Item = Result<EventRecord, ReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_raw()
-            .map(|r| r.map(EventRecord::LHEF))
+        self.read_raw().map(|r| r.map(EventRecord::LHEF))
     }
 }
 
@@ -76,19 +99,20 @@ pub struct FileIO {
 
 impl FileIO {
     /// Construct an I/O object from the given (potentially compressed) Les Houches Event Files
-    pub fn try_new( // TODO: use builder pattern instead?
+    pub fn try_new(
+        // TODO: use builder pattern instead?
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
-        _weight_names: Vec<String>
+        _weight_names: Vec<String>,
     ) -> Result<Self, CreateError> {
         use CreateError::*;
 
         let reader = FileReader::try_new(source_path)?;
         let outfile = File::create(&sink_path).map_err(CreateTarget)?;
         let sink = BufWriter::new(outfile);
-        let mut sink = compress_writer(sink, compression)
-            .map_err(CompressTarget)?;
+        let mut sink =
+            compress_writer(sink, compression).map_err(CompressTarget)?;
         sink.write_all(reader.header()).map_err(Write)?;
 
         Ok(FileIO {
@@ -102,26 +126,31 @@ impl FileIO {
     #[allow(clippy::wrong_self_convention)]
     fn into_io_error<T, E: Into<ErrorKind>>(
         &self,
-        res: Result<T, E>
+        res: Result<T, E>,
     ) -> Result<T, FileIOError> {
-        res.map_err(|err| FileIOError::new(
-            self.reader.path().to_path_buf(),
-            self.sink_path.clone(),
-            err.into()
-        ))
+        res.map_err(|err| {
+            FileIOError::new(
+                self.reader.path().to_path_buf(),
+                self.sink_path.clone(),
+                err.into(),
+            )
+        })
     }
 
-    fn update_next_weights_helper(&mut self, weights: &Weights) -> Result<bool, ErrorKind> {
+    fn update_next_weights_helper(
+        &mut self,
+        weights: &Weights,
+    ) -> Result<bool, ErrorKind> {
         use ErrorKind::*;
         use ReadError::ParseEntry;
         use WriteError::IO;
 
-        let parse_err = |what, record: &str| Read(
-            ParseEntry(what, take_chars(record, 100))
-        );
+        let parse_err = |what, record: &str| {
+            Read(ParseEntry(what, take_chars(record, 100)))
+        };
 
         let Some(record) = self.reader.read_raw() else {
-            return Ok(false)
+            return Ok(false);
         };
         let mut record = record?;
 
@@ -153,13 +182,13 @@ impl Iterator for FileIO {
     type Item = Result<EventRecord, FileIOError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-       self.reader
-            .next()
-            .map(|r| self.into_io_error(r))
-     }
+        self.reader.next().map(|r| self.into_io_error(r))
+    }
 }
 
-fn init_source(source: impl AsRef<Path>) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
+fn init_source(
+    source: impl AsRef<Path>,
+) -> Result<(Vec<u8>, Box<dyn BufRead>), CreateError> {
     use CreateError::*;
 
     let source = File::open(source).map_err(OpenInput)?;
@@ -191,8 +220,8 @@ impl LHEFParser for Converter {
         use ReadError::*;
         const STATUS_OUTGOING: i32 = 1;
 
-        let parse_err = |entry, record: &str| ParseEntry(entry, take_chars(record, 100));
-
+        let parse_err =
+            |entry, record: &str| ParseEntry(entry, take_chars(record, 100));
 
         // TODO: multiple weights
         record = record.trim_start();
@@ -200,33 +229,34 @@ impl LHEFParser for Converter {
             return Err(FindEntry("line break", record.to_string()));
         };
         record = &record[(1 + line_end)..];
-        let (rest, nparticles): (_, u32) = u32_entry0(record)
-            .map_err(|_| parse_err("NUP entry", record))?;
+        let (rest, nparticles): (_, u32) =
+            u32_entry0(record).map_err(|_| parse_err("NUP entry", record))?;
         let nparticles = nparticles as usize;
         let mut event = EventBuilder::with_capacity(nparticles - 2);
-        let (rest, _idrup) = any_entry(rest)
-            .map_err(|_| parse_err("IDRUP entry", rest))?;
-        let (rest, wt) = double_entry(rest)
-            .map_err(|_| parse_err("XWGTUP entry", rest))?;
+        let (rest, _idrup) =
+            any_entry(rest).map_err(|_| parse_err("IDRUP entry", rest))?;
+        let (rest, wt) =
+            double_entry(rest).map_err(|_| parse_err("XWGTUP entry", rest))?;
         event.add_weight(n64(wt));
         for line in rest.lines().skip(1).take(nparticles) {
-            let (rest, id) = i32_entry0(line)
-                .map_err(|_| parse_err("IDUP entry", line))?;
+            let (rest, id) =
+                i32_entry0(line).map_err(|_| parse_err("IDUP entry", line))?;
             let id = ParticleID::new(id);
-            let (rest, status) = i32_entry(rest)
-                .map_err(|_| parse_err("ISTUP entry", rest))?;
+            let (rest, status) =
+                i32_entry(rest).map_err(|_| parse_err("ISTUP entry", rest))?;
             if status != STATUS_OUTGOING {
                 continue;
             }
             // ignore decay parents & colour
-            let (rest, _) = count(any_entry, 4)(rest)
-                .map_err(|_| parse_err("entries before particle momentum", rest))?;
-            let (rest, px) = double_entry(rest)
-                .map_err(|_| parse_err("px entry", rest))?;
-            let (rest, py) = double_entry(rest)
-                .map_err(|_| parse_err("py entry", rest))?;
-            let (rest, pz) = double_entry(rest)
-                .map_err(|_| parse_err("py entry", rest))?;
+            let (rest, _) = count(any_entry, 4)(rest).map_err(|_| {
+                parse_err("entries before particle momentum", rest)
+            })?;
+            let (rest, px) =
+                double_entry(rest).map_err(|_| parse_err("px entry", rest))?;
+            let (rest, py) =
+                double_entry(rest).map_err(|_| parse_err("py entry", rest))?;
+            let (rest, pz) =
+                double_entry(rest).map_err(|_| parse_err("py entry", rest))?;
             let (_, e) = double_entry(rest)
                 .map_err(|_| parse_err("energy entry", rest))?;
             event.add_outgoing(id, [n64(e), n64(px), n64(py), n64(pz)].into());
@@ -241,12 +271,12 @@ impl UpdateWeights for FileIO {
 
     fn update_all_weights(
         &mut self,
-        weights: &[Weights]
+        weights: &[Weights],
     ) -> Result<usize, Self::Error> {
         self.rewind()?;
         for (n, weight) in weights.iter().enumerate() {
             if !self.update_next_weights(weight)? {
-                return Ok(n)
+                return Ok(n);
             }
         }
         self.finish_weight_update()?;
@@ -255,7 +285,7 @@ impl UpdateWeights for FileIO {
 
     fn update_next_weights(
         &mut self,
-        weights: &Weights
+        weights: &Weights,
     ) -> Result<bool, Self::Error> {
         let res = self.update_next_weights_helper(weights);
         self.into_io_error(res)

@@ -16,7 +16,7 @@ pub trait NeighbourSearchAlgo {
     fn new_with_dist<D: Distance<usize> + Send + Sync>(
         npoints: usize,
         d: D,
-        max_dist: N64
+        max_dist: N64,
     ) -> Self::Output<D>;
 }
 
@@ -37,7 +37,7 @@ pub trait NeighbourSearch {
 
 /// Nearest-neighbour search using a vantage point tree
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct TreeSearch { }
+pub struct TreeSearch {}
 
 impl<'a, D> NeighbourSearch for &'a VPTree<usize, D>
 where
@@ -50,14 +50,14 @@ where
     }
 }
 
-impl NeighbourSearchAlgo for TreeSearch
-{
+impl NeighbourSearchAlgo for TreeSearch {
     type Output<D> = VPTree<usize, D>;
 
     fn new_with_dist<D: Distance<usize> + Send + Sync>(
-        npoints: usize, d: D, max_dist: N64
-    ) -> VPTree<usize, D>
-    {
+        npoints: usize,
+        d: D,
+        max_dist: N64,
+    ) -> VPTree<usize, D> {
         let range = (0..npoints).into_par_iter();
         VPTree::from_par_iter_with_dist(range, d).with_max_dist(max_dist)
     }
@@ -65,7 +65,7 @@ impl NeighbourSearchAlgo for TreeSearch
 
 /// Naive nearest neighbour search
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct NaiveNeighbourSearch { }
+pub struct NaiveNeighbourSearch {}
 
 /// Data required for naive nearest neighbour search
 #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Default)]
@@ -75,8 +75,7 @@ pub struct NaiveSearchData<D> {
     max_dist: N64,
 }
 
-impl<D: Distance<usize> + Send + Sync> NeighbourSearch for &NaiveSearchData<D>
-{
+impl<D: Distance<usize> + Send + Sync> NeighbourSearch for &NaiveSearchData<D> {
     type Iter = NaiveNeighbourIter;
 
     fn nearest(self, point: &usize) -> Self::Iter {
@@ -95,9 +94,8 @@ impl NeighbourSearchAlgo for NaiveNeighbourSearch {
     fn new_with_dist<D: Distance<usize> + Send + Sync>(
         npoints: usize,
         dist: D,
-        max_dist: N64
-    ) -> Self::Output<D>
-    {
+        max_dist: N64,
+    ) -> Self::Output<D> {
         NaiveSearchData {
             dist,
             cached_dist: Vec::from_iter((0..npoints).map(|id| (id, n64(0.)))),

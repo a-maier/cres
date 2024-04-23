@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use crate::{opt_common::{LeptonDefinition, PhotonDefinition}, opt_cres::Opt};
+use crate::{
+    opt_common::{LeptonDefinition, PhotonDefinition},
+    opt_cres::Opt,
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Error)]
 pub(crate) enum ValidationError {

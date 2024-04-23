@@ -28,7 +28,9 @@ impl Display for UnknownStrategy {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, ValueEnum,
+)]
 pub(crate) enum Search {
     #[default]
     Tree,
@@ -81,7 +83,6 @@ pub(crate) struct Opt {
     // /// Whether to dump selected cells of interest.
     // #[clap(short = 'd', long)]
     // pub(crate) dumpcells: bool,
-
     #[clap(long, value_parser = parse_compr,
                 help = "Compress output file.
 Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.

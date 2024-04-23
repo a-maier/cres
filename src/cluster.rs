@@ -14,12 +14,12 @@ use thiserror::Error;
 
 use crate::{
     event::{Event, EventBuilder},
-    four_vector::FourVector, traits::Clustering,
+    four_vector::FourVector,
+    traits::Clustering,
 };
 
 /// Default clustering of particles into infrared safe objects
-#[derive(Deserialize, Serialize)]
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct DefaultClustering {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
@@ -92,13 +92,15 @@ impl DefaultClustering {
         cone_mom -= p;
         // check photon is sufficiently hard compared to surrounding cone
         let e_fraction = n64(photon_def.min_e_fraction);
-        let cone_et = (cone_mom.e()*cone_mom.e() - cone_mom.pz()*cone_mom.pz()).sqrt();
+        let cone_et = (cone_mom.e() * cone_mom.e()
+            - cone_mom.pz() * cone_mom.pz())
+        .sqrt();
         photon_pt > e_fraction * cone_et
     }
 }
 
 impl Clustering for DefaultClustering {
-    type Error= std::convert::Infallible;
+    type Error = std::convert::Infallible;
 
     fn cluster(&self, mut orig_ev: Event) -> Result<Event, Self::Error> {
         let id = orig_ev.id;
@@ -111,7 +113,8 @@ impl Clustering for DefaultClustering {
 
         // treat photons
         // TODO: debug_assert!(outgoing.is_sorted())
-        if let Ok(photon_pos) = outgoing.binary_search_by(|p| p.0.cmp(&photon)) {
+        if let Ok(photon_pos) = outgoing.binary_search_by(|p| p.0.cmp(&photon))
+        {
             for p in outgoing[photon_pos].1.iter() {
                 if self.is_isolated(p, outgoing.as_slice()) {
                     ev.add_outgoing(PID_ISOLATED_PHOTON, *p);
@@ -162,10 +165,10 @@ impl Clustering for DefaultClustering {
 
 /// Perform no clustering into IRC safe objects
 #[derive(Clone, Debug)]
-pub struct NoClustering { }
+pub struct NoClustering {}
 
 /// Perform no clustering into IRC safe objects
-pub const NO_CLUSTERING: NoClustering = NoClustering{};
+pub const NO_CLUSTERING: NoClustering = NoClustering {};
 
 impl Clustering for NoClustering {
     type Error = std::convert::Infallible;
@@ -202,8 +205,7 @@ impl FromStr for JetAlgorithm {
 }
 
 /// Jet clustering algorithms
-#[derive(Deserialize, Serialize)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
 pub enum JetAlgorithm {
     /// The [anti-kt](https://arxiv.org/abs/0802.1189) algorithm
     AntiKt,
@@ -214,8 +216,7 @@ pub enum JetAlgorithm {
 }
 
 /// Definition of a jet
-#[derive(Deserialize, Serialize)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
 pub struct JetDefinition {
     /// Jet algorithm
     pub algorithm: JetAlgorithm,
@@ -226,8 +227,7 @@ pub struct JetDefinition {
 }
 
 /// Definition of an isolated object
-#[derive(Deserialize, Serialize)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Deserialize, Serialize, Debug, Copy, Clone)]
 pub struct PhotonDefinition {
     /// Minimum energy fraction
     pub min_e_fraction: f64,

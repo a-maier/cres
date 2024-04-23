@@ -8,7 +8,7 @@ use log::{debug, trace};
 use noisy_float::prelude::*;
 use rayon::prelude::*;
 
-use crate::partition::{VPTreePartition, VPBisection};
+use crate::partition::{VPBisection, VPTreePartition};
 use crate::traits::Distance;
 
 /// A vantage-point tree
@@ -59,7 +59,7 @@ impl<P: Copy + PartialEq + Eq, DF: Distance<P>> VPTree<P, DF> {
 impl<P, DF> VPTree<P, DF>
 where
     P: Copy + PartialEq + Eq + Send + Sync,
-    DF: Distance<P> + Send + Sync
+    DF: Distance<P> + Send + Sync,
 {
     /// Construct a vantage-point tree from the given nodes and distance
     pub fn new(nodes: Vec<P>, dist: DF) -> Self {
@@ -75,7 +75,7 @@ where
 impl<'x, P, DF> VPTree<P, DF>
 where
     P: Copy + PartialEq + 'x,
-    DF: Distance<P>
+    DF: Distance<P>,
 {
     /// Construct a vantage-point tree from the given nodes and distance
     pub fn from_iter_with_dist<I>(iter: I, dist: DF) -> Self
@@ -86,7 +86,11 @@ where
     }
 
     /// Construct the first `depth` layers of a vantage-point tree
-    pub fn from_iter_with_dist_and_depth<I>(iter: I, dist: DF, depth: usize) -> Self
+    pub fn from_iter_with_dist_and_depth<I>(
+        iter: I,
+        dist: DF,
+        depth: usize,
+    ) -> Self
     where
         I: IntoIterator<Item = P>,
     {
@@ -193,7 +197,11 @@ where
     }
 
     /// Construct the first `depth` layers of a vantage-point tree
-    pub fn from_par_iter_with_dist_and_depth<I>(iter: I, dist: DF, depth: usize) -> Self
+    pub fn from_par_iter_with_dist_and_depth<I>(
+        iter: I,
+        dist: DF,
+        depth: usize,
+    ) -> Self
     where
         I: ParallelIterator<Item = P>,
     {
@@ -276,10 +284,7 @@ where
 
 impl<'x, P: Copy + Hash + Eq + 'x, DF: Distance<P>> VPTree<P, DF> {
     /// Find the nearest neighbours for `pt`
-    pub fn nearest_in(
-        &self,
-        pt: &P,
-    ) -> NearestNeighbourIter<'_, P, DF>
+    pub fn nearest_in(&self, pt: &P) -> NearestNeighbourIter<'_, P, DF>
     where
         DF: Distance<P>,
     {
@@ -437,15 +442,19 @@ where
     }
 }
 
-impl<P: Default, DF: Distance<P>> From<VPTree<P, DF>> for VPTreePartition<P, DF> {
+impl<P: Default, DF: Distance<P>> From<VPTree<P, DF>>
+    for VPTreePartition<P, DF>
+{
     fn from(source: VPTree<P, DF>) -> Self {
-        let VPTree { mut nodes, dist, max_dist: _ } = source;
+        let VPTree {
+            mut nodes,
+            dist,
+            max_dist: _,
+        } = source;
         let mut vp = Vec::new();
         if nodes.is_empty() {
             // Safety: an empty partitioning is always safe
-            return unsafe {
-                Self::from_vp(vp, dist)
-            };
+            return unsafe { Self::from_vp(vp, dist) };
         }
         let mut node_queue = VecDeque::from([0]);
         while let Some(node_idx) = node_queue.pop_front() {
@@ -460,8 +469,6 @@ impl<P: Default, DF: Distance<P>> From<VPTree<P, DF>> for VPTreePartition<P, DF>
             }
         }
         // Safety: by construction of the vantage-point tree
-        unsafe {
-            Self::from_vp(vp, dist)
-        }
+        unsafe { Self::from_vp(vp, dist) }
     }
 }

@@ -6,8 +6,18 @@ use serde::{Deserialize, Serialize};
 ///
 /// The zero component is the energy/time component. The remainder are
 /// the spatial components
-#[derive(Deserialize, Serialize)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Default)]
+#[derive(
+    Deserialize,
+    Serialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+)]
 pub struct FourVector {
     pt: N64,
     p: [N64; 4],

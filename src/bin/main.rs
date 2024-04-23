@@ -72,11 +72,13 @@ where
     event_io.compression(opt.compression);
 
     create_dir_all(&opt.outdir)?;
-    let files = opt.infiles.into_iter()
-        .map(|f| {
-            let out = PathBuf::from_iter([opt.outdir.as_os_str(), f.file_name().unwrap()]);
-            (f, out)
-        });
+    let files = opt.infiles.into_iter().map(|f| {
+        let out = PathBuf::from_iter([
+            opt.outdir.as_os_str(),
+            f.file_name().unwrap(),
+        ]);
+        (f, out)
+    });
     let event_io = event_io.build_from_files_iter(files)?;
 
     let cell_collector = None;
@@ -133,7 +135,9 @@ mod tests {
         use cres::cluster::JetAlgorithm;
         use tempfile::tempdir;
 
-        use crate::opt_common::{JetDefinition, LeptonDefinition, PhotonDefinition};
+        use crate::opt_common::{
+            JetDefinition, LeptonDefinition, PhotonDefinition,
+        };
 
         let tempdir = tempdir().unwrap();
         let opt = Opt {

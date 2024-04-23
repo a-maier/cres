@@ -58,8 +58,8 @@ use rayon::prelude::*;
 use thiserror::Error;
 
 use crate::event::Event;
-use crate::progress_bar::ProgressBar;
 use crate::io::EventRecord;
+use crate::progress_bar::ProgressBar;
 use crate::traits::*;
 
 /// Build a new [Cres] object
@@ -90,7 +90,9 @@ impl<R, C, Cl, S, U> CresBuilder<R, C, Cl, S, U> {
     }
 }
 
-impl<R, C, Cl, S, U> From<Cres<R, C, Cl, S, U>> for CresBuilder<R, C, Cl, S, U> {
+impl<R, C, Cl, S, U> From<Cres<R, C, Cl, S, U>>
+    for CresBuilder<R, C, Cl, S, U>
+{
     fn from(b: Cres<R, C, Cl, S, U>) -> Self {
         CresBuilder {
             event_io: b.event_io,
@@ -112,7 +114,9 @@ pub struct Cres<R, C, Cl, S, U> {
     unweighter: U,
 }
 
-impl<R, C, Cl, S, U> From<CresBuilder<R, C, Cl, S, U>> for Cres<R, C, Cl, S, U> {
+impl<R, C, Cl, S, U> From<CresBuilder<R, C, Cl, S, U>>
+    for Cres<R, C, Cl, S, U>
+{
     fn from(b: CresBuilder<R, C, Cl, S, U>) -> Self {
         b.build()
     }
@@ -251,10 +255,11 @@ where
                         EventRecord::NTuple(_) => {
                             // sequential conversion is faster than
                             // parallel for this format
-                            let ev = converter.try_convert(record)
+                            let ev = converter
+                                .try_convert(record)
                                 .map_err(ConversionErr)?;
-                            let mut ev = clustering.cluster(ev)
-                                .map_err(ClusterErr)?;
+                            let mut ev =
+                                clustering.cluster(ev).map_err(ClusterErr)?;
                             if ev.id != 0 {
                                 return Err(IdErr(ev.id));
                             }
@@ -265,19 +270,21 @@ where
                         _ => s.spawn_fifo(move |_| {
                             let ev = match converter.try_convert(record) {
                                 Ok(ev) => match clustering.cluster(ev) {
-                                    Ok(mut ev) => if ev.id != 0 {
-                                        Err(IdErr(ev.id))
-                                    } else {
-                                        ev.id = id;
-                                        Ok(ev)
+                                    Ok(mut ev) => {
+                                        if ev.id != 0 {
+                                            Err(IdErr(ev.id))
+                                        } else {
+                                            ev.id = id;
+                                            Ok(ev)
+                                        }
                                     }
                                     Err(err) => Err(ClusterErr(err)),
-                                }
+                                },
                                 Err(err) => Err(ConversionErr(err)),
                             };
                             events.lock().push(ev);
                             progress.inc(1)
-                        })
+                        }),
                     }
                 }
                 Ok(())
@@ -286,7 +293,6 @@ where
         event_progress.finish();
         events.into_inner().into_iter().collect()
     }
-
 }
 
 fn log_multiplicities(events: &[Event]) {
@@ -295,7 +301,7 @@ fn log_multiplicities(events: &[Event]) {
         let mut multiplicities: HashMap<_, usize> = HashMap::new();
         for event in events {
             let out_multiplicities = Vec::from_iter(
-                event.outgoing().iter().map(|(id, p)| (*id, p.len()))
+                event.outgoing().iter().map(|(id, p)| (*id, p.len())),
             );
             *multiplicities.entry(out_multiplicities).or_default() += 1;
         }
@@ -307,7 +313,10 @@ fn log_multiplicities(events: &[Event]) {
             } else {
                 info!(
                     "{nevents} events with {}",
-                    types.iter().map(|(t, n)| format!("{n} {}", name(*t))).join(", ")
+                    types
+                        .iter()
+                        .map(|(t, n)| format!("{n} {}", name(*t)))
+                        .join(", ")
                 );
             }
         }
@@ -328,6 +337,6 @@ fn name(t: ParticleID) -> String {
             cluster::PID_JET => "jets".to_string(),
             cluster::PID_DRESSED_LEPTON => "dressed leptons".to_string(),
             cluster::PID_ISOLATED_PHOTON => "isolated photons".to_string(),
-            _ => format!("particles with id {}", t.id())
+            _ => format!("particles with id {}", t.id()),
         })
 }

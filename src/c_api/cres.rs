@@ -4,15 +4,13 @@ use crate::c_api::distance::DistanceFn;
 use crate::c_api::error::LAST_ERROR;
 use crate::cluster::{self, DefaultClustering};
 use crate::distance::{Distance, EuclWithScaledPt};
+use crate::io::{Converter, IOBuilder};
 use crate::prelude::{CresBuilder, NO_UNWEIGHTING};
 use crate::resampler::{NoObserver, ResamplerBuilder};
 use crate::seeds::StrategicSelector;
-use crate::io::{IOBuilder, Converter};
 use crate::traits::Resample;
 
-use crate::neighbour_search::{
-    NaiveNeighbourSearch, TreeSearch,
-};
+use crate::neighbour_search::{NaiveNeighbourSearch, TreeSearch};
 
 use std::convert::From;
 use std::ffi::{CStr, OsStr};
@@ -156,19 +154,24 @@ where
     }
 }
 
-type Resampler<D, N> = crate::resampler::Resampler<D, N, NoObserver, StrategicSelector>;
+type Resampler<D, N> =
+    crate::resampler::Resampler<D, N, NoObserver, StrategicSelector>;
 
 fn cres_run_with<D, N>(opt: &Opt, dist: D) -> Result<(), Error>
 where
     D: Distance + Send + Sync,
     Resampler<D, N>: Resample,
-    <Resampler<D, N> as Resample>::Error: std::error::Error + Send + Sync + 'static,
+    <Resampler<D, N> as Resample>::Error:
+        std::error::Error + Send + Sync + 'static,
 {
     debug!("Settings: {:#?}", opt);
 
     let infiles: Vec<_> = unsafe {
         let names = std::slice::from_raw_parts(opt.infiles, opt.n_infiles);
-        names.iter().map(|&p| OsStr::from_bytes(CStr::from_ptr(p).to_bytes())).collect()
+        names
+            .iter()
+            .map(|&p| OsStr::from_bytes(CStr::from_ptr(p).to_bytes()))
+            .collect()
     };
     debug!("Will read input from {:?}", infiles);
 
@@ -177,15 +180,14 @@ where
     debug!("Will write output to {:?}", outdir);
     create_dir_all(outdir)?;
 
-    let files = infiles.into_iter()
-        .map(|f| {
-            let out = PathBuf::from_iter([outdir, PathBuf::from(f).file_name().unwrap()]);
-            (f, out)
-        });
+    let files = infiles.into_iter().map(|f| {
+        let out =
+            PathBuf::from_iter([outdir, PathBuf::from(f).file_name().unwrap()]);
+        (f, out)
+    });
 
     // TODO: multiple weights, output compression
-    let event_io = IOBuilder::default()
-        .build_from_files_iter(files)?;
+    let event_io = IOBuilder::default().build_from_files_iter(files)?;
 
     let converter = Converter::new();
     let clustering = DefaultClustering::new(opt.jet_def.into());

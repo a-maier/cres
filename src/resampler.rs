@@ -5,13 +5,13 @@ use std::rc::Rc;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
-use crate::distance::{Distance, EuclWithScaledPt, DistWrapper};
+use crate::distance::{DistWrapper, Distance, EuclWithScaledPt};
 use crate::event::Event;
 use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
 use crate::seeds::{StrategicSelector, Strategy};
 use crate::traits::{
-    NeighbourSearchAlgo, NeighbourSearch, ObserveCell, Resample, SelectSeeds,
+    NeighbourSearch, NeighbourSearchAlgo, ObserveCell, Resample, SelectSeeds,
 };
 
 use log::{debug, info, trace};
@@ -230,7 +230,8 @@ pub struct DefaultResampler<N> {
     neighbour_search: PhantomData<N>,
 }
 
-type ResampleHelper<N> = Resampler<EuclWithScaledPt, N, Observer, StrategicSelector>;
+type ResampleHelper<N> =
+    Resampler<EuclWithScaledPt, N, Observer, StrategicSelector>;
 
 impl<N> Resample for DefaultResampler<N>
 where
@@ -328,8 +329,7 @@ impl<N> DefaultResamplerBuilder<N> {
     }
 
     /// Set the nearest neighbour search algorithm
-    pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN>
-    {
+    pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN> {
         DefaultResamplerBuilder {
             ptweight: self.ptweight,
             strategy: self.strategy,
