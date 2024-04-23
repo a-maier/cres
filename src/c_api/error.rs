@@ -4,7 +4,9 @@ use std::cell::RefCell;
 use std::os::raw::c_char;
 
 thread_local! {
-    pub(crate) static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);
+    pub(crate) static LAST_ERROR: RefCell<Option<Error>> = const {
+        RefCell::new(None)
+    };
 }
 
 /// Print the last `cres` error that occurred to the standard error output.
