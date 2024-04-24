@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Fixed
+
+- Isolated photons were never found
+
 ## 0.7.0
 
 ### Added
