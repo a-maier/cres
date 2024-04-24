@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: ncipollo/release-action@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -32,7 +32,7 @@ jobs:
           - i686-unknown-linux-gnu
           - i686-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -52,7 +52,7 @@ jobs:
     needs: create-release
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-apple-darwin
@@ -75,7 +75,7 @@ jobs:
           - x86_64-pc-windows-msvc
           - i686-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
