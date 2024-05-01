@@ -306,7 +306,7 @@ fn log_multiplicities(events: &[Event]) {
             *multiplicities.entry(out_multiplicities).or_default() += 1;
         }
         let mut multiplicites = Vec::from_iter(multiplicities);
-        multiplicites.sort_unstable();
+        multiplicites.sort_unstable_by(|a, b| (b.1, &a.0).cmp(&(a.1, &b.0)));
         for (types, nevents) in multiplicites.iter().take(MAX_MULT_SHOWN) {
             if types.is_empty() {
                 info!("{nevents} events without identified particles");
