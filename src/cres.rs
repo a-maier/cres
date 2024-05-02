@@ -296,7 +296,7 @@ where
 }
 
 fn log_multiplicities(events: &[Event]) {
-    const MAX_MULT_SHOWN: usize = 100;
+    const MAX_MULT_SHOWN: usize = 1000;
     if log_enabled!(log::Level::Warn) {
         let mut multiplicities: HashMap<_, usize> = HashMap::new();
         for event in events {
