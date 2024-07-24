@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use crate::cell::Cell;
 use crate::cell_collector::CellCollector;
-use crate::distance::{Distance, MaxRelWithDeltaR, DistWrapper};
+use crate::distance::{DistWrapper, Distance, EuclWithScaledPt, MaxRelWithDeltaR};
 use crate::event::Event;
 use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
@@ -221,19 +221,21 @@ impl Default
 }
 
 /// Default implementation of cell resampling
-pub struct DefaultResampler<N> {
+pub struct DefaultResampler<N, D> {
+    distance: D,
     strategy: Strategy,
     max_cell_size: Option<f64>,
     cell_collector: Option<CellCollector>,
     neighbour_search: PhantomData<N>,
 }
 
-type ResampleHelper<N> = Resampler<MaxRelWithDeltaR, N, Observer, StrategicSelector>;
+type ResampleHelper<N, D> = Resampler<D, N, Observer, StrategicSelector>;
 
-impl<N> Resample for DefaultResampler<N>
+impl<N, D> Resample for DefaultResampler<N, D>
 where
-    ResampleHelper<N>: Resample,
-    ResamplingError: From<<ResampleHelper<N> as Resample>::Error>,
+    ResampleHelper<N, D>: Resample,
+    ResamplingError: From<<ResampleHelper<N, D> as Resample>::Error>,
+    D: Clone + Distance + Send + Sync,
 {
     type Error = ResamplingError;
 
@@ -252,7 +254,7 @@ where
 
         let mut resampler = ResamplerBuilder::default()
             .seeds(StrategicSelector::new(self.strategy))
-            .distance(MaxRelWithDeltaR::default())
+            .distance(self.distance.clone())
             .max_cell_size(self.max_cell_size)
             .observer(observer)
             .neighbour_search::<N>()
@@ -264,7 +266,7 @@ where
     }
 }
 
-impl<N> DefaultResampler<N> {
+impl<N, D> DefaultResampler<N, D> {
     /// Get the callback upon cell construction
     pub fn cell_collector(&self) -> Option<&CellCollector> {
         self.cell_collector.as_ref()
@@ -272,16 +274,18 @@ impl<N> DefaultResampler<N> {
 }
 
 /// Build a [DefaultResampler]
-pub struct DefaultResamplerBuilder<N> {
+pub struct DefaultResamplerBuilder<N, D> {
+    distance: D,
     strategy: Strategy,
     max_cell_size: Option<f64>,
     cell_collector: Option<CellCollector>,
     neighbour_search: PhantomData<N>,
 }
 
-impl Default for DefaultResamplerBuilder<TreeSearch> {
+impl Default for DefaultResamplerBuilder<TreeSearch, EuclWithScaledPt> {
     fn default() -> Self {
         Self {
+            distance: EuclWithScaledPt::new(n64(0.)),
             strategy: Strategy::default(),
             max_cell_size: None,
             cell_collector: None,
@@ -290,7 +294,7 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
     }
 }
 
-impl<N> DefaultResamplerBuilder<N> {
+impl<N, D> DefaultResamplerBuilder<N, D> {
     /// Set the strategy for selecting cell seeds
     pub fn strategy(mut self, value: Strategy) -> Self {
         self.strategy = value;
@@ -313,8 +317,20 @@ impl<N> DefaultResamplerBuilder<N> {
     }
 
     /// Set the nearest neighbour search algorithm
-    pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN> {
+    pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN, D> {
         DefaultResamplerBuilder {
+            distance: self.distance,
+            strategy: self.strategy,
+            max_cell_size: self.max_cell_size,
+            cell_collector: self.cell_collector,
+            neighbour_search: PhantomData,
+        }
+    }
+
+    /// Set the distance function
+    pub fn distance<DD>(self, distance: DD) -> DefaultResamplerBuilder<N, DD> {
+        DefaultResamplerBuilder {
+            distance,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
             cell_collector: self.cell_collector,
@@ -323,8 +339,9 @@ impl<N> DefaultResamplerBuilder<N> {
     }
 
     /// Build a [DefaultResampler]
-    pub fn build(self) -> DefaultResampler<N> {
+    pub fn build(self) -> DefaultResampler<N, D> {
         DefaultResampler {
+            distance: self.distance,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
             cell_collector: self.cell_collector,

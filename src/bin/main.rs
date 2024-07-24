@@ -13,9 +13,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use cres::cell_collector::CellCollector;
 use cres::cluster::DefaultClustering;
+use cres::distance::{EuclWithScaledPt, MaxRelWithDeltaR};
 use cres::io::{Converter, IOBuilder};
 use cres::resampler::DefaultResampler;
-use cres::traits::Resample;
+use cres::traits::{NeighbourSearchAlgo, Resample};
 use cres::{
     neighbour_search::{NaiveNeighbourSearch, TreeSearch},
     prelude::*,
@@ -24,6 +25,7 @@ use cres::{
 };
 use env_logger::Env;
 use log::{debug, info};
+use opt_cres::DistanceType;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
@@ -49,8 +51,23 @@ fn cres(opt: Opt) -> Result<()> {
 
 fn cres_with_search<N>(opt: Opt) -> Result<()>
 where
-    DefaultResampler<N>: Resample,
-    <DefaultResampler<N> as Resample>::Error: Error + Send + Sync + 'static,
+    N: NeighbourSearchAlgo,
+    DefaultResampler<N, EuclWithScaledPt>: Resample,
+    <DefaultResampler<N, EuclWithScaledPt> as Resample>::Error: Error + Send + Sync + 'static,
+    DefaultResampler<N, MaxRelWithDeltaR>: Resample,
+    <DefaultResampler<N, MaxRelWithDeltaR> as Resample>::Error: Error + Send + Sync + 'static,
+{
+    match opt.distance {
+        DistanceType::Absolute => cres_with_search_and_dist::<N, EuclWithScaledPt>(opt),
+        DistanceType::Relative => cres_with_search_and_dist::<N, MaxRelWithDeltaR>(opt),
+    }
+}
+
+fn cres_with_search_and_dist<N, D: Default>(opt: Opt) -> Result<()>
+where
+    N: NeighbourSearchAlgo,
+    DefaultResampler<N, D>: Resample,
+    <DefaultResampler<N, D> as Resample>::Error: Error + Send + Sync + 'static,
 {
     let env = Env::default().filter_or("CRES_LOG", &opt.loglevel);
     env_logger::init_from_env(env);
@@ -88,6 +105,7 @@ where
         None
     };
     let resampler = DefaultResamplerBuilder::default()
+        .distance(D::default())
         .max_cell_size(opt.max_cell_size)
         .strategy(opt.strategy)
         .cell_collector(cell_collector.clone())
@@ -170,6 +188,7 @@ mod tests {
             threads: Default::default(),
             #[cfg(feature = "multiweight")]
             weights: Default::default(),
+            distance: Default::default(),
         };
         cres(opt).unwrap();
     }
