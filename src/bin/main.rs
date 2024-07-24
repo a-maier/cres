@@ -125,7 +125,9 @@ where
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
     let mut clustering = DefaultClustering::new(jet_def.into())
+        .reconstruct_W(opt.reconstruct_W)
         .include_neutrinos(include_neutrinos);
+
     if lepton_def.leptonalgorithm.is_some() {
         clustering = clustering.with_lepton_def(lepton_def.into())
     }
