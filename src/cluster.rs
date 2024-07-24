@@ -3,11 +3,11 @@ use std::{
     str::FromStr,
 };
 
+use itertools::Itertools;
 use jetty::{anti_kt_f, cambridge_aachen_f, kt_f, Cluster, PseudoJet};
 use noisy_float::prelude::*;
 use particle_id::{
-    sm_elementary_particles::{bottom, electron, gluon, muon, photon},
-    ParticleID,
+    gauge_bosons::W_plus, sm_elementary_particles::{bottom, electron, gluon, muon, photon, W_minus}, ParticleID
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -20,10 +20,12 @@ use crate::{
 
 /// Default clustering of particles into infrared safe objects
 #[derive(Deserialize, Serialize, Clone, Debug)]
+#[allow(non_snake_case)]
 pub struct DefaultClustering {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
     photon_def: Option<PhotonDefinition>,
+    reconstruct_W: bool,
     include_neutrinos: bool,
 }
 
@@ -35,6 +37,7 @@ impl DefaultClustering {
             lepton_def: None,
             photon_def: None,
             include_neutrinos: false,
+            reconstruct_W: false,
         }
     }
 
@@ -53,6 +56,13 @@ impl DefaultClustering {
     /// Whether to include neutrinos in final event record
     pub fn include_neutrinos(mut self, include: bool) -> Self {
         self.include_neutrinos = include;
+        self
+    }
+
+    /// Whether to reconstruct an intermediate W boson
+    #[allow(non_snake_case)]
+    pub fn reconstruct_W(mut self, reconstruct: bool) -> Self {
+        self.reconstruct_W = reconstruct;
         self
     }
 
@@ -97,6 +107,61 @@ impl DefaultClustering {
         .sqrt();
         photon_pt > e_fraction * cone_et
     }
+
+    // reconstruct intermediate W bosons
+    // 1. For each type of charged lepton find the corresponding
+    //    anti-neutrinos
+    // 2. Take all pairs of (charged lepton, anti-neutrino)
+    //    with a mass between `MW_MIN` and `MW_MAX`
+    // 3. Iteratively combine the pairs with mass closest to `MW`
+    //    into a W, removing all remaining pairs containing the
+    //    used charged lepton or antineutrino.
+    // Note that *both* the W and its decay products are included
+    // in the metric
+    #[allow(non_snake_case)]
+    fn add_reconstructed_Ws(
+        &self,
+        outgoing: &[(ParticleID, Box<[FourVector]>)],
+        ev: &mut EventBuilder
+    ) {
+        const MW_MIN: f64 = 60.;
+        const MW_MAX: f64 = 100.;
+        const MW: f64 = 80.377;
+        let charged_leptons = outgoing.iter()
+            .filter(|(kind, _)| kind.abs().is_charged_lepton());
+        for (l, pl) in charged_leptons {
+            let mut nu_l_bar = ParticleID::new(- l.id().abs() - 1);
+            if l.is_anti_particle() {
+                nu_l_bar = nu_l_bar.abs();
+            };
+            let nu_pos = outgoing
+                .binary_search_by_key(&nu_l_bar, |&(kind, _)| kind);
+            let Ok(nu_pos) = nu_pos else {
+                // no corresponding (anti-)neutrinos found
+                continue;
+            };
+            let pnu = outgoing[nu_pos].1.as_ref();
+            let w_id = if l.is_anti_particle() {
+                W_plus
+            } else {
+                W_minus
+            };
+
+            let pairs =
+                pl.iter().cartesian_product(pnu)
+                .filter(|&(&pl, &pnu)| {
+                    let mw = (pl + pnu).m();
+                    mw > MW_MIN && mw < MW_MAX
+                });
+            let mut pairs = Vec::from_iter(pairs);
+            pairs.sort_by_key(|&(&pl, &pnu)| (n64(MW) - (pl + pnu).m()).abs());
+            pairs.reverse();
+            while let Some((&pl, &pnu)) = pairs.pop() {
+                ev.add_outgoing(w_id, pl + pnu);
+                pairs.retain(|&(&ppl, &ppnu)| pl != ppl && pnu != ppnu);
+            }
+        }
+    }
 }
 
 impl Clustering for DefaultClustering {
@@ -110,6 +175,10 @@ impl Clustering for DefaultClustering {
 
         let mut clustered_to_leptons = Vec::new();
         let mut clustered_to_jets = Vec::new();
+
+        if self.reconstruct_W {
+            self.add_reconstructed_Ws(&outgoing, &mut ev);
+        }
 
         // treat photons
         debug_assert!(outgoing.windows(2).all(|p| p[0].0 >= p[1].0));

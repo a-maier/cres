@@ -60,6 +60,16 @@ impl FourVector {
     fn update_pt(&mut self) {
         self.pt = (self.p[1] * self.p[1] + self.p[2] * self.p[2]).sqrt();
     }
+
+    /// The invariant mass \sqrt{v_0^2 - \sum v_i^2} with i = 1,2,3
+    pub fn m(&self) -> N64 {
+        self.m_sq().sqrt()
+    }
+
+    /// The invariant mass square v_0^2 - \sum v_i^2 with i = 1,2,3
+    pub fn m_sq(&self) -> N64 {
+        self.p[0] * self.p[0] - self.spatial_norm()
+    }
 }
 
 impl std::convert::From<[N64; 4]> for FourVector {

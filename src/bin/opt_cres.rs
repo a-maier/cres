@@ -57,6 +57,7 @@ pub(crate) struct UnweightOpt {
 
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
+#[allow(non_snake_case)]
 pub(crate) struct Opt {
     /// Output directory.
     ///
@@ -144,6 +145,10 @@ variable."
     /// Whether to use an absolute or relative distance
     #[clap(long)]
     pub(crate) distance: DistanceType,
+
+    /// Reconstruct intermediate W bosons
+    #[clap(long)]
+    pub(crate) reconstruct_W: bool,
 
     /// Comma-separated list of weights to include in the resampling
     ///
