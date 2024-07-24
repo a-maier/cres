@@ -38,6 +38,13 @@ pub(crate) enum Search {
     Naive,
 }
 
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, ValueEnum)]
+pub(crate) enum DistanceType {
+    #[default]
+    Absolute,
+    Relative,
+}
+
 #[derive(Debug, Default, Copy, Clone, Parser)]
 pub(crate) struct UnweightOpt {
     /// Weight below which events are unweighted. '0' means no unweighting.
@@ -124,6 +131,10 @@ variable."
     /// The downside is that not all negative weights may be cancelled.
     #[clap(long)]
     pub(crate) max_cell_size: Option<f64>,
+
+    /// Whether to use an absolute or relative distance
+    #[clap(long)]
+    pub(crate) distance: DistanceType,
 
     /// Comma-separated list of weights to include in the resampling
     ///
