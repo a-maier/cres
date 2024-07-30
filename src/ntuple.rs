@@ -209,21 +209,23 @@ impl UpdateWeights for FileIO {
         };
         let mut record = self.into_io_error(record)?;
 
-        let mut weights = weights.iter().copied();
-        record.weight = weights.next().unwrap().into();
+        if !weights.is_empty() {
+            let mut weights = weights.iter().copied();
+            record.weight = weights.next().unwrap().into();
 
-        #[cfg(feature = "multiweight")]
-        {
-            // beware: order here has to match `convert_ntuple`
-            // TODO: user weights
-            if self._weight_names.iter().any(|w| w == "2") {
-                record.weight2 = weights.next().unwrap().into();
-            }
-            if self._weight_names.iter().any(|w| w == "ME") {
-                record.me_weight = weights.next().unwrap().into()
-            }
-            if self._weight_names.iter().any(|w| w == "ME2") {
-                record.me_weight2 = weights.next().unwrap().into()
+            #[cfg(feature = "multiweight")]
+            {
+                // beware: order here has to match `convert_ntuple`
+                // TODO: user weights
+                if self._weight_names.iter().any(|w| w == "2") {
+                    record.weight2 = weights.next().unwrap().into();
+                }
+                if self._weight_names.iter().any(|w| w == "ME") {
+                    record.me_weight = weights.next().unwrap().into()
+                }
+                if self._weight_names.iter().any(|w| w == "ME2") {
+                    record.me_weight2 = weights.next().unwrap().into()
+                }
             }
         }
         self.writer.write(&record).unwrap();

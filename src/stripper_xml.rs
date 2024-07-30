@@ -232,22 +232,24 @@ impl FileIO {
         };
         let mut record = record?;
 
-        let weight = weights.central() / self.weight_scale;
+        if !weights.is_empty() {
+            let weight = weights.central() / self.weight_scale;
 
-        // TODO: code duplication with `rescale_weight`
-        let (rest, start) = weight_start(record.as_str())
-            .map_err(|_| parse_err("start of event record", &record))?;
-        let (rest, old_weight) =
-            double(rest).map_err(|_| parse_err("weight entry", rest))?;
+            // TODO: code duplication with `rescale_weight`
+            let (rest, start) = weight_start(record.as_str())
+                .map_err(|_| parse_err("start of event record", &record))?;
+            let (rest, old_weight) =
+                double(rest).map_err(|_| parse_err("weight entry", rest))?;
 
-        let start = start.len();
-        let end = record.len() - rest.len();
-        record.replace_range(start..end, &weight.to_string());
-        trace!("replaced weight: {old_weight} -> {weight}");
+            let start = start.len();
+            let end = record.len() - rest.len();
+            record.replace_range(start..end, &weight.to_string());
+            trace!("replaced weight: {old_weight} -> {weight}");
 
-        #[cfg(feature = "multiweight")]
-        if weights.len() > 1 {
-            unimplemented!("Multiple weights in STRIPPER XML format")
+            #[cfg(feature = "multiweight")]
+            if weights.len() > 1 {
+                unimplemented!("Multiple weights in STRIPPER XML format")
+            }
         }
         self.sink.write_all(record.as_bytes()).map_err(IO)?;
         Ok(true)

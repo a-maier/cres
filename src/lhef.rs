@@ -154,15 +154,21 @@ impl FileIO {
         };
         let mut record = record?;
 
-        let (rest, _non_weight) = non_weight_entries(&record)
-            .map_err(|_| parse_err("entries before weight", &record))?;
+        if !weights.is_empty() {
+            let (rest, _non_weight) = non_weight_entries(&record)
+                .map_err(|_| parse_err("entries before weight", &record))?;
 
-        let weights_start = record.len() - rest.len();
-        update_central_weight(&mut record, weights_start, weights.central())?;
+            let weights_start = record.len() - rest.len();
+            update_central_weight(
+                &mut record,
+                weights_start,
+                weights.central(),
+            )?;
 
-        #[cfg(feature = "multiweight")]
-        if weights.len() > 1 {
-            unimplemented!("Multiple weights in LHEF")
+            #[cfg(feature = "multiweight")]
+            if weights.len() > 1 {
+                unimplemented!("Multiple weights in LHEF")
+            }
         }
         self.sink.write_all(record.as_bytes()).map_err(IO)?;
         Ok(true)

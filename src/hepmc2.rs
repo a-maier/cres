@@ -176,24 +176,31 @@ impl FileIO {
         };
         let mut record = record?;
 
-        debug_assert!(record.starts_with('E'));
-        let (weight_entries, _non_weight) = non_weight_entries(&record)
-            .map_err(|_| parse_err("entries before weight", &record))?;
-        let (rest, _nweights) = u32_entry(weight_entries).map_err(|_| {
-            parse_err("number of weights entry", weight_entries)
-        })?;
+        if !weights.is_empty() {
+            debug_assert!(record.starts_with('E'));
+            let (weight_entries, _non_weight) = non_weight_entries(&record)
+                .map_err(|_| parse_err("entries before weight", &record))?;
+            let (rest, _nweights) =
+                u32_entry(weight_entries).map_err(|_| {
+                    parse_err("number of weights entry", weight_entries)
+                })?;
 
-        let weights_start = record.len() - rest.len();
-        update_central_weight(&mut record, weights_start, weights.central())?;
+            let weights_start = record.len() - rest.len();
+            update_central_weight(
+                &mut record,
+                weights_start,
+                weights.central(),
+            )?;
 
-        #[cfg(feature = "multiweight")]
-        update_named_weights(
-            &mut record,
-            weights_start,
-            _nweights as usize,
-            &self._weight_names,
-            weights,
-        )?;
+            #[cfg(feature = "multiweight")]
+            update_named_weights(
+                &mut record,
+                weights_start,
+                _nweights as usize,
+                &self._weight_names,
+                weights,
+            )?;
+        }
         self.sink.write_all(record.as_bytes()).map_err(IO)?;
         Ok(true)
     }
