@@ -183,9 +183,17 @@ where
     > {
         use CresError::*;
 
-        let events = self.read_events()?;
+        let mut events = self.read_events()?;
         let nevents = events.len();
         info!("Read {nevents} events");
+
+        events.retain(|e| !e.outgoing().is_empty());
+        if events.len() < nevents {
+            warn!(
+                "Ignoring {} events without identified particles",
+                nevents - events.len()
+            );
+        }
         log_multiplicities(&events);
 
         let events = self.resampler.resample(events).map_err(ResamplingErr)?;
