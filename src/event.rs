@@ -221,7 +221,7 @@ pub struct Weights(Box<[N64]>);
 pub struct Weights(N64);
 
 impl Weights {
-    /// Get central weight
+    /// Create central weight
     pub fn new_single(w: N64) -> Self {
         #[cfg(feature = "multiweight")]
         return Self(vec![w].into_boxed_slice());
