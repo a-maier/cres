@@ -384,11 +384,11 @@ pub enum CreateError {
 
     #[cfg(not(feature = "ntuple"))]
     /// Attempt to use unsupported format
-    #[error("Support for ROOT ntuple format is not enabled. Reinstall cres with `cargo install cres --features = ntuple`")]
+    #[error("Support for ROOT ntuple format is not enabled. Reinstall cres with `cargo install cres --features=ntuple`")]
     RootUnsupported,
     #[cfg(not(feature = "stripper-xml"))]
     /// Attempt to use unsupported format
-    #[error("Support for STRIPPER XML format is not enabled. Reinstall cres with `cargo install cres --features = stripper-xml`")]
+    #[error("Support for STRIPPER XML format is not enabled. Reinstall cres with `cargo install cres --features=stripper-xml`")]
     XMLUnsupported,
 
     #[cfg(feature = "ntuple")]
