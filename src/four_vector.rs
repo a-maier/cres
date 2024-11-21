@@ -68,7 +68,7 @@ impl FourVector {
 
     /// The invariant mass square v_0^2 - \sum v_i^2 with i = 1,2,3
     pub fn m_sq(&self) -> N64 {
-        self.p[0] * self.p[0] - self.spatial_norm()
+        self.p[0] * self.p[0] - self.spatial_norm_sq()
     }
 }
 
