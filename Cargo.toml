@@ -85,7 +85,6 @@ anyhow = "1.0"
 bindgen = { version = "0.69", optional = true }
 cbindgen = "0.26"
 cc = { version = "1.0", optional = true }
-ntuple = { version = "0.9", optional = true }
 vergen = { version = "8", features = ["git", "gitcl"] }
 
 [dev-dependencies]
