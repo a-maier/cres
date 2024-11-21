@@ -135,8 +135,9 @@ impl DefaultClustering {
                 nu_l_bar = nu_l_bar.abs();
             };
             let nu_pos = outgoing
-                .binary_search_by_key(&nu_l_bar, |&(kind, _)| kind);
-            let Ok(nu_pos) = nu_pos else {
+                .iter()
+                .position(|(kind, _)| kind == &nu_l_bar);
+            let Some(nu_pos) = nu_pos else {
                 // no corresponding (anti-)neutrinos found
                 continue;
             };
