@@ -65,7 +65,7 @@ impl MaxRelWithDeltaR {
     ///
     /// For example, a scale factor of 2 means that a relative
     /// momentum difference of 10% contributes 0.2 to the distance.
-    pub const DEFAULT_MOMENTUM_SCALE: f64 = 2.;
+    pub const DEFAULT_MOMENTUM_SCALE: f64 = 1.;
 
     /// Default scale factor for ΔR
     ///
@@ -105,7 +105,7 @@ fn paired_distance(p_scale: N64, delta_r_scale: N64, p1: &[FourVector], p2: &[Fo
 }
 
 fn momentum_distance(p_scale: N64, delta_r_scale: N64, p1: FourVector, p2: FourVector) -> N64 {
-    let rel_p_diff = (p1.spatial_norm_sq() / p2.spatial_norm_sq()).ln().abs();
+    let rel_p_diff = (p1.pt() / p2.pt()).ln().abs();
     let delta_r = PseudoJet::from(p1).delta_r(&p2.into());
     std::cmp::max(p_scale * rel_p_diff, delta_r_scale * delta_r)
 }
