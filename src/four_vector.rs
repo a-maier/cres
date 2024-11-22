@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use jetty::PseudoJet;
 use noisy_float::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -142,5 +144,12 @@ impl From<FourVector> for PseudoJet {
 impl From<&FourVector> for PseudoJet {
     fn from(p: &FourVector) -> Self {
         [p[0], p[1], p[2], p[3]].into()
+    }
+}
+
+impl Display for FourVector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let p = self.p;
+        write!(f, "{p:?} (pt: {})", self.pt)
     }
 }
