@@ -13,16 +13,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, shells::*, Generator};
 use dirs::home_dir;
-use strum::EnumString;
+use strum::{Display, EnumString};
+use sysinfo::{get_current_pid, ProcessRefreshKind, RefreshKind, System};
 
 #[derive(
     Copy,
     Clone,
     Debug,
+    Display,
     Eq,
     PartialEq,
     Ord,
@@ -31,6 +33,8 @@ use strum::EnumString;
     EnumString,
     ValueEnum,
 )]
+#[strum(ascii_case_insensitive)]
+#[strum(serialize_all = "lowercase")]
 enum Shell {
     Bash,
     Elvish,
@@ -43,8 +47,10 @@ enum Shell {
 #[derive(Debug, Parser)]
 struct ShellSelect {
     /// Shell for which to generate completions
+    ///
+    /// If omitted, try to generate completions for the current shell
     #[clap(value_enum)]
-    shell: Shell,
+    shell: Option<Shell>,
 }
 
 fn gen_completion<S: Copy + Generator, W: Write>(shell: S, mut to: W) {
@@ -64,7 +70,10 @@ fn gen_completion<S: Copy + Generator, W: Write>(shell: S, mut to: W) {
 }
 
 fn main() -> Result<()> {
-    let shell = ShellSelect::parse().shell;
+    let shell = ShellSelect::parse().shell
+        .map_or_else(|| get_parent_shell(), Ok)
+        .context("Failed to determine shell")?;
+    eprintln!("Generating {shell} completions");
     match shell {
         Shell::Bash => gen_completion(Bash, gen_bash_outfile()?),
         Shell::Elvish => gen_completion(Elvish, &mut stdout()),
@@ -73,6 +82,30 @@ fn main() -> Result<()> {
         Shell::Zsh => gen_completion(Zsh, &mut stdout()),
     }
     Ok(())
+}
+
+fn get_parent_shell() -> Result<Shell> {
+    let system = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+    );
+    let my_pid = get_current_pid()
+        .map_err(|err| anyhow!("{err}"))
+        .context("Failed to get PID of the current process")?;
+    let Some(process) = system.process(my_pid) else {
+        bail!("Failed to access current process (PID {my_pid}")
+    };
+    let Some(parent_pid) = process.parent() else {
+        bail!("Failed to get parent process PID for current process (PID {my_pid}")
+    };
+    let Some(parent_process) = system.process(parent_pid) else {
+        bail!("Failed to access parent process (PID {my_pid}")
+    };
+    let Some(shell_name) = parent_process.name().to_str() else {
+        bail!("Parent process name is not a valid UTF-8 string")
+    };
+    let shell = shell_name.try_into()
+        .with_context(|| format!("{shell_name} is not a supported shell"))?;
+    Ok(shell)
 }
 
 fn gen_bash_outfile() -> Result<File> {
