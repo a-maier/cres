@@ -32,6 +32,7 @@ impl<'a> Cell<'a> {
         let mut weight_sum = events[seed_idx].weight();
         debug_assert!(weight_sum < 0.);
         debug!("Cell seed {seed_idx}  with weight {:e}", weight_sum);
+        trace!("Seed event: {}", events[seed_idx]);
         let mut members = vec![seed_idx];
         let mut radius = n64(0.);
 
@@ -42,6 +43,7 @@ impl<'a> Cell<'a> {
                 "adding event {next_idx} with distance {dist}, weight {:e} to cell",
                 events[next_idx].weight()
             );
+            trace!("Added event: {}", events[next_idx]);
             weight_sum += events[next_idx].weight();
             members.push(next_idx);
             radius = dist;

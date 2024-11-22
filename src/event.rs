@@ -1,6 +1,7 @@
 use crate::four_vector::FourVector;
 
-use std::convert::From;
+use std::fmt;
+use std::{convert::From, fmt::Display};
 use std::default::Default;
 use std::ops::AddAssign;
 
@@ -188,6 +189,24 @@ impl Event {
         }
     }
 }
+
+impl Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (pid, momenta) in self.outgoing() {
+            if let Some(name) = pid.name() {
+                writeln!(f, "  {name}:")?
+            } else {
+                writeln!(f, "  {pid:?}:")?
+            };
+            for momentum in momenta {
+                writeln!(f, "    - {momentum}")?;
+            }
+        }
+        let weights = self.weights.read();
+        write!(f, "weights: {weights:?}")
+    }
+}
+
 
 /// Event weights
 #[cfg(feature = "multiweight")]
