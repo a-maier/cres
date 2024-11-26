@@ -209,7 +209,9 @@ impl Clustering for DefaultClustering {
                 }
             } else if self.include_neutrinos || !id.abs().is_neutrino() {
                 for p in out.iter() {
-                    ev.add_outgoing(id, *p);
+                    // only keep transverse momentum components
+                    let p = [- p.pt() * p.pt(), p[1], p[2], n64(0.)];
+                    ev.add_outgoing(id, p.into());
                 }
             }
         }
