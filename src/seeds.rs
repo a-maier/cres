@@ -50,7 +50,7 @@ impl StrategicSelector {
 }
 
 impl SelectSeeds for StrategicSelector {
-    type ParallelIter = rayon::vec::IntoIter<usize>;
+    type ParallelIter = rayon::iter::MaxLen<rayon::vec::IntoIter<usize>>;
 
     fn select_seeds(&self, events: &[Event]) -> Self::ParallelIter {
         use Strategy::*;
@@ -69,6 +69,10 @@ impl SelectSeeds for StrategicSelector {
                 events[m].weight().cmp(&events[n].weight())
             }),
         }
-        neg_weight.into_par_iter()
+        // limit size of tasks
+        // if we don't do this, the resampling can stall with only a
+        // single thread trying to work on a last huge chunk of cells
+        const MAX_TASK_SIZE: usize = 64;
+        neg_weight.into_par_iter().with_max_len(MAX_TASK_SIZE)
     }
 }
