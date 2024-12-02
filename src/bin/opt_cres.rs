@@ -70,6 +70,10 @@ pub(crate) struct Opt {
     #[clap(flatten)]
     pub(crate) particle_def: ParticleDefinitions,
 
+    /// Minimum missing transverse momentum
+    #[clap(long, default_value_t)]
+    pub(crate) min_missing_pt: f64,
+
     #[clap(flatten)]
     pub(crate) unweight: UnweightOpt,
 

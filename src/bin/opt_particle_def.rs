@@ -13,7 +13,7 @@ pub(crate) struct ParticleDefinitions {
     #[clap(flatten)]
     pub(crate) photon_def: PhotonDefinition,
 
-    /// Include neutrinos in the distance measure
+    /// Include neutrinos (missing pt) in the distance measure
     #[clap(long, default_value_t)]
     pub(crate) include_neutrinos: bool,
 }

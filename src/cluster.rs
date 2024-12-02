@@ -27,6 +27,7 @@ pub struct DefaultClustering {
     photon_def: Option<PhotonDefinition>,
     reconstruct_W: bool,
     include_neutrinos: bool,
+    min_missing_pt: f64,
 }
 
 impl DefaultClustering {
@@ -38,6 +39,7 @@ impl DefaultClustering {
             photon_def: None,
             include_neutrinos: false,
             reconstruct_W: false,
+            min_missing_pt: 0.
         }
     }
 
@@ -56,6 +58,12 @@ impl DefaultClustering {
     /// Whether to include neutrinos in final event record
     pub fn include_neutrinos(mut self, include: bool) -> Self {
         self.include_neutrinos = include;
+        self
+    }
+
+    /// Whether to require a minimum missing transverse momentum
+    pub fn min_missing_pt(mut self, min_missing_pt: f64) -> Self {
+        self.min_missing_pt = min_missing_pt;
         self
     }
 
@@ -208,10 +216,16 @@ impl Clustering for DefaultClustering {
                     clustered_to_leptons.push(p.into());
                 }
             } else if self.include_neutrinos || !id.abs().is_neutrino() {
-                for p in out.iter() {
-                    // only keep transverse momentum components
-                    let p = [- p.pt() * p.pt(), p[1], p[2], n64(0.)];
-                    ev.add_outgoing(id, p.into());
+                let missing_pt = out.iter().copied()
+                    .reduce(|p1, p2| p1 + p2)
+                    .unwrap()
+                    .pt();
+                if missing_pt > self.min_missing_pt {
+                    for p in out.iter() {
+                        // only keep transverse momentum components
+                        let p = [- p.pt() * p.pt(), p[1], p[2], n64(0.)];
+                        ev.add_outgoing(id, p.into());
+                    }
                 }
             }
         }
