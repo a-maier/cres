@@ -125,7 +125,8 @@ where
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
     let mut clustering = DefaultClustering::new(jet_def.into())
         .reconstruct_W(opt.reconstruct_W)
-        .include_neutrinos(include_neutrinos);
+        .include_neutrinos(include_neutrinos)
+        .min_missing_pt(opt.min_missing_pt);
 
     if lepton_def.leptonalgorithm.is_some() {
         clustering = clustering.with_lepton_def(lepton_def.into())
@@ -188,6 +189,7 @@ mod tests {
             max_cell_size: Some(100.),
             infiles: vec![PathBuf::from("test_data/showered.hepmc.zst")],
             include_neutrinos: Default::default(),
+            min_missing_pt: Default::default(),
             unweight: Default::default(),
             ptweight: Default::default(),
             // dumpcells: Default::default(),
@@ -199,6 +201,7 @@ mod tests {
             #[cfg(feature = "multiweight")]
             weights: Default::default(),
             distance: Default::default(),
+            reconstruct_W: Default::default(),
         };
         cres(opt).unwrap();
     }
