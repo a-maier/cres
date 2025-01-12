@@ -72,9 +72,9 @@ where
     }
 }
 
-impl<'x, P, DF> VPTree<P, DF>
+impl<'a, P, DF> VPTree<P, DF>
 where
-    P: Copy + PartialEq + 'x,
+    P: Copy + PartialEq + 'a,
     DF: Distance<P>,
 {
     /// Construct a vantage-point tree from the given nodes and distance
@@ -122,9 +122,8 @@ where
         }
     }
 
-    fn find_corner_pt<'a, I>(iter: I, dist: &DF) -> Option<usize>
+    fn find_corner_pt<I>(iter: I, dist: &DF) -> Option<usize>
     where
-        'x: 'a,
         I: IntoIterator<Item = &'a P>,
         DF: Distance<P>,
     {
@@ -183,9 +182,9 @@ where
     }
 }
 
-impl<'x, P, DF> VPTree<P, DF>
+impl<'a, P, DF> VPTree<P, DF>
 where
-    P: Copy + PartialEq + 'x + Send + Sync,
+    P: Copy + PartialEq + 'a + Send + Sync,
     DF: Distance<P> + Send + Sync,
 {
     /// Construct a vantage-point tree from the given nodes and distance
@@ -242,9 +241,8 @@ where
         }
     }
 
-    fn par_find_corner_pt<'a, I>(first: &P, iter: I, dist: &DF) -> usize
+    fn par_find_corner_pt<I>(first: &P, iter: I, dist: &DF) -> usize
     where
-        'x: 'a,
         I: ParallelIterator<Item = (usize, &'a P)>,
     {
         let max = iter.max_by_key(|(_, a)| dist.distance(first, a));
@@ -282,7 +280,7 @@ where
     }
 }
 
-impl<'x, P: Copy + Hash + Eq + 'x, DF: Distance<P>> VPTree<P, DF> {
+impl<P: Copy + Hash + Eq, DF: Distance<P>> VPTree<P, DF> {
     /// Find the nearest neighbours for `pt`
     pub fn nearest_in(&self, pt: &P) -> NearestNeighbourIter<'_, P, DF>
     where
@@ -421,7 +419,7 @@ pub struct NearestNeighbourIter<'a, P: Hash + Eq, DF> {
     distance_cache: HashMap<P, N64>,
 }
 
-impl<'a, P: Hash + Eq, DF> Iterator for NearestNeighbourIter<'a, P, DF>
+impl<P: Hash + Eq, DF> Iterator for NearestNeighbourIter<'_, P, DF>
 where
     P: Copy + PartialEq,
     DF: Distance<P>,

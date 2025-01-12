@@ -192,7 +192,7 @@ impl<'a, 'b, D: Distance> DistWrapper<'a, 'b, D> {
     }
 }
 
-impl<'a, 'b, D: Distance> Distance<usize> for DistWrapper<'a, 'b, D> {
+impl<D: Distance> Distance<usize> for DistWrapper<'_, '_, D> {
     fn distance(&self, e1: &usize, e2: &usize) -> N64 {
         self.ev_dist.distance(&self.events[*e1], &self.events[*e2])
     }

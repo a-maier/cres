@@ -71,7 +71,7 @@ fn gen_completion<S: Copy + Generator, W: Write>(shell: S, mut to: W) {
 
 fn main() -> Result<()> {
     let shell = ShellSelect::parse().shell
-        .map_or_else(|| get_parent_shell(), Ok)
+        .map_or_else(get_parent_shell, Ok)
         .context("Failed to determine shell")?;
     eprintln!("Generating {shell} completions");
     match shell {
