@@ -70,7 +70,8 @@ fn gen_completion<S: Copy + Generator, W: Write>(shell: S, mut to: W) {
 }
 
 fn main() -> Result<()> {
-    let shell = ShellSelect::parse().shell
+    let shell = ShellSelect::parse()
+        .shell
         .map_or_else(get_parent_shell, Ok)
         .context("Failed to determine shell")?;
     eprintln!("Generating {shell} completions");
@@ -103,7 +104,8 @@ fn get_parent_shell() -> Result<Shell> {
     let Some(shell_name) = parent_process.name().to_str() else {
         bail!("Parent process name is not a valid UTF-8 string")
     };
-    let shell = shell_name.try_into()
+    let shell = shell_name
+        .try_into()
         .with_context(|| format!("{shell_name} is not a supported shell"))?;
     Ok(shell)
 }

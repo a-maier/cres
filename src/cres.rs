@@ -147,12 +147,12 @@ pub enum CresError<E1, E2, E3, E4, E5> {
 
 /// Alias for a cell resampling error
 pub type CellResError<R, C, Cl, S, U> = CresError<
-            <R as UpdateWeights>::Error,
-            <C as TryConvert<EventRecord, Event>>::Error,
-            <Cl as Clustering>::Error,
-            <S as Resample>::Error,
-            <U as Unweight>::Error,
-        >;
+    <R as UpdateWeights>::Error,
+    <C as TryConvert<EventRecord, Event>>::Error,
+    <Cl as Clustering>::Error,
+    <S as Resample>::Error,
+    <U as Unweight>::Error,
+>;
 
 impl<R, C, Cl, S, U> Cres<R, C, Cl, S, U>
 where
@@ -178,9 +178,7 @@ where
     /// 3. Apply cell resampling
     /// 4. Unweight
     /// 5. Update event weights, rereading the original records
-    pub fn run(
-        &mut self,
-    ) -> Result<(), CellResError<R, C, Cl, S, U>> {
+    pub fn run(&mut self) -> Result<(), CellResError<R, C, Cl, S, U>> {
         use CresError::*;
 
         let mut events = self.read_events()?;
