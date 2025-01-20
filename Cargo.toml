@@ -2,7 +2,7 @@
 name = "cres"
 version = "0.7.1"
 description = "Cell resampling for collider events"
-authors = ["Andreas Maier <andreas.martin.maier@desy.de>"]
+authors = ["Andreas Maier <amaier@ifae.es>"]
 edition = "2021"
 license = "GPL-3.0-or-later"
 readme = "Readme.md"
