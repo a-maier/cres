@@ -419,7 +419,9 @@ impl ObserveCell for Observer {
                 "Median radius: {:.3}",
                 median_radius(res.cell_radii.as_mut_slice())
             );
-            res.cell_collector.as_ref().map(|c| c.dump_info());
+            if let Some(c) = res.cell_collector.as_ref() {
+                c.dump_info();
+            }
             self.central = res;
         }
     }
