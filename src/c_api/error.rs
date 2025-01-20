@@ -52,7 +52,7 @@ fn cres_last_err_internal(buf: *mut c_char, buflen: usize) -> i32 {
         e.as_ref().map(|e| e.to_string())
     });
     if let Some(msg) = err {
-        let msg_len = msg.as_bytes().len();
+        let msg_len = msg.len();
         if buflen == 0 {
             return (1 + msg_len) as i32;
         }
