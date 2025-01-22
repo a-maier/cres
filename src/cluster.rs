@@ -135,6 +135,7 @@ impl DefaultClustering {
         const MW_MIN: f64 = 60.;
         const MW_MAX: f64 = 100.;
         const MW: f64 = 80.377;
+        const PT_MIN: f64 = 0.75;
         let charged_leptons = outgoing.iter()
             .filter(|(kind, _)| kind.abs().is_charged_lepton());
         for (l, pl) in charged_leptons {
@@ -159,8 +160,9 @@ impl DefaultClustering {
             let pairs =
                 pl.iter().cartesian_product(pnu)
                 .filter(|&(&pl, &pnu)| {
-                    let mw = (pl + pnu).m();
-                    mw > MW_MIN && mw < MW_MAX
+                    let pw = pl + pnu;
+                    let mw = pw.m();
+                    mw > MW_MIN && mw < MW_MAX && pw.pt() > PT_MIN
                 });
             let mut pairs = Vec::from_iter(pairs);
             pairs.sort_by_key(|&(&pl, &pnu)| (n64(MW) - (pl + pnu).m()).abs());
