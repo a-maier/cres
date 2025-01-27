@@ -1,10 +1,9 @@
-use std::convert::From;
+use std::{convert::From, sync::LazyLock};
 
 use clap::{Parser, ValueEnum};
 use cres::cluster::JetAlgorithm;
 use cres::compression::Compression;
 
-use lazy_static::lazy_static;
 use regex::Regex;
 use strum::{Display, EnumString};
 use thiserror::Error;
@@ -13,10 +12,9 @@ const GZIP_DEFAULT_LEVEL: u8 = 6;
 const LZ4_DEFAULT_LEVEL: u8 = 0;
 const ZSTD_DEFAULT_LEVEL: u8 = 0;
 
-lazy_static! {
-    static ref COMPRESSION_RE: Regex =
-        Regex::new(r"^(?P<algo>[[:alnum:]]+)(?P<lvl>_\d+)?$").unwrap();
-}
+static COMPRESSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?P<algo>[[:alnum:]]+)(?P<lvl>_\d+)?$").unwrap()
+});
 
 pub(crate) fn parse_compr(s: &str) -> Result<Compression, ParseCompressionErr> {
     use Compression::*;

@@ -79,21 +79,21 @@ pub mod vptree;
 mod parsing;
 mod util;
 
-use lazy_static::lazy_static;
+const fn parse_version(s: &str) -> u32 {
+    match u32::from_str_radix(s, 10) {
+        Ok(int) => int,
+        Err(_) => panic!("Failed to parse version number"),
+    }
+}
 
 /// cres version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-lazy_static! {
-    /// Major version number
-    pub static ref VERSION_MAJOR: u32 =
-        env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap();
-    /// Minor version number
-    pub static ref VERSION_MINOR: u32 =
-        env!("CARGO_PKG_VERSION_MINOR").parse().unwrap();
-    /// Patch version number
-    pub static ref VERSION_PATCH: u32 =
-        env!("CARGO_PKG_VERSION_PATCH").parse().unwrap();
-}
+/// Major version number
+pub const VERSION_MAJOR: u32 = parse_version(env!("CARGO_PKG_VERSION_MAJOR"));
+/// Minor version number
+pub const VERSION_MINOR: u32 = parse_version(env!("CARGO_PKG_VERSION_MINOR"));
+/// Patch version number
+pub const VERSION_PATCH: u32 = parse_version(env!("CARGO_PKG_VERSION_PATCH"));
 /// Hash of the compiled git commit
 pub const GIT_REV: Option<&str> = option_env!("VERGEN_GIT_SHA");
 /// git branch during compilation
