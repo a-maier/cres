@@ -87,7 +87,7 @@ fn main() -> Result<()> {
 
 fn get_parent_shell() -> Result<Shell> {
     let system = System::new_with_specifics(
-        RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
     );
     let my_pid = get_current_pid()
         .map_err(|err| anyhow!("{err}"))
