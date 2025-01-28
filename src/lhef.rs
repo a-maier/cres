@@ -11,7 +11,7 @@ use nom::{
     character::complete::{i32, space0, u32},
     multi::count,
     sequence::preceded,
-    IResult,
+    IResult, Parser,
 };
 use particle_id::ParticleID;
 
@@ -254,7 +254,7 @@ impl LHEFParser for Converter {
                 continue;
             }
             // ignore decay parents & colour
-            let (rest, _) = count(any_entry, 4)(rest).map_err(|_| {
+            let (rest, _) = count(any_entry, 4).parse(rest).map_err(|_| {
                 parse_err("entries before particle momentum", rest)
             })?;
             let (rest, px) =
@@ -308,16 +308,16 @@ fn non_weight_entries(record: &str) -> IResult<&str, &str> {
     let record = record.trim_start();
     let line_end = record.find('\n').unwrap(); // TODO: error treatment
     let rest = &record[(line_end + 1)..];
-    let (rest, _nup) = preceded(space0, non_space)(rest)?;
+    let (rest, _nup) = preceded(space0, non_space).parse(rest)?;
     let (rest, _idrup) = any_entry(rest)?;
     let (parsed, rest) = record.split_at(record.len() - rest.len());
     Ok((rest, parsed))
 }
 
 pub(crate) fn u32_entry0(line: &str) -> IResult<&str, u32> {
-    preceded(space0, u32)(line)
+    preceded(space0, u32).parse(line)
 }
 
 pub(crate) fn i32_entry0(line: &str) -> IResult<&str, i32> {
-    preceded(space0, i32)(line)
+    preceded(space0, i32).parse(line)
 }

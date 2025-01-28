@@ -14,8 +14,8 @@ use nom::{
     bytes::complete::tag,
     character::complete::{char, i32, multispace0, space0, space1, u64},
     combinator::all_consuming,
-    sequence::{preceded, tuple},
-    IResult,
+    sequence::preceded,
+    IResult, Parser,
 };
 use particle_id::ParticleID;
 use quick_xml::events::attributes::Attribute;
@@ -436,7 +436,7 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
 }
 
 fn parse_u64<'a, 'b: 'a>(attr: &'a Attribute<'b>) -> IResult<&'a [u8], u64> {
-    all_consuming(u64)(attr.value.as_ref())
+    all_consuming(u64).parse(attr.value.as_ref())
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -592,13 +592,13 @@ impl StripperXmlParser for Converter {
             type NomErr<'a> = nom::Err<nom::error::Error<&'a str>>;
             let (r, pid) = particle_id(r)
                 .map_err(|_| parse_err("particle id entry", r))?;
-            let (r, _) = tag("\">")(r).map_err(|_err: NomErr<'_>| {
+            let (r, _) = tag("\">").parse(r).map_err(|_err: NomErr<'_>| {
                 Error::IncompleteTag("<p>", take_chars(r, 100))
             })?;
             let (r, p) = particle_momentum(&r[1..])
                 .map_err(|_| parse_err("particle momentum entry", r))?;
             event.add_outgoing(pid, p);
-            (rest, _) = tag("</p>")(r).map_err(|_err: NomErr<'_>| {
+            (rest, _) = tag("</p>").parse(r).map_err(|_err: NomErr<'_>| {
                 Error::UnclosedTag("<p".to_string(), take_chars(r, 100))
             })?;
         }
@@ -610,27 +610,27 @@ impl StripperXmlParser for Converter {
 }
 
 fn weight_start(line: &str) -> IResult<&str, &str> {
-    let (rest, _) = tuple((tag("<se"), space1, tag("w=\"")))(line)?;
+    let (rest, _) = (tag("<se"), space1, tag("w=\"")).parse(line)?;
     let (start, rest) = line.split_at(line.len() - rest.len());
     Ok((rest, start))
 }
 
 fn particle_start(line: &str) -> IResult<&str, &str> {
-    preceded(multispace0, tag("<p"))(line)
+    preceded(multispace0, tag("<p")).parse(line)
 }
 
 fn particle_status(line: &str) -> IResult<&str, i32> {
-    let (rest, parsed) = tuple((space0, tag("id=\""), i32))(line)?;
+    let (rest, parsed) = (space0, tag("id=\""), i32).parse(line)?;
     Ok((rest, parsed.2))
 }
 
 fn particle_id(line: &str) -> IResult<&str, ParticleID> {
-    let (rest, id) = preceded(char(','), i32)(line)?;
+    let (rest, id) = preceded(char(','), i32).parse(line)?;
     Ok((rest, ParticleID::new(id)))
 }
 
 fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
-    let (rest, p) = tuple((
+    let (rest, p) = (
         space0,
         double,
         char(','),
@@ -640,7 +640,8 @@ fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
         char(','),
         double,
         space0,
-    ))(line)?;
+    )
+        .parse(line)?;
     Ok((rest, [n64(p.1), n64(p.3), n64(p.5), n64(p.7)].into()))
 }
 

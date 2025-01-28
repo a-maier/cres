@@ -7,7 +7,7 @@ use std::{
 use audec::auto_decompress;
 use log::trace;
 use noisy_float::prelude::*;
-use nom::{multi::count, IResult};
+use nom::{multi::count, IResult, Parser};
 use particle_id::ParticleID;
 
 use crate::{
@@ -454,7 +454,8 @@ fn extract_weights(record: &str) -> Result<(f64, Vec<f64>, &str), ReadError> {
         .map_err(|_| parse_err("number of weights entry", rest))?;
 
     let res = if cfg!(feature = "multiweight") {
-        let (rest, weights) = count(double_entry, nweights as usize)(rest)
+        let (rest, weights) = count(double_entry, nweights as usize)
+            .parse(rest)
             .map_err(|_| parse_err("event weight entries", rest))?;
         (weights[0], weights, rest)
     } else {
@@ -510,18 +511,18 @@ fn parse_weight_names_line<'a>(
 fn non_weight_entries(line: &str) -> IResult<&str, &str> {
     debug_assert!(line.starts_with('E'));
     // ignore first 10 entries
-    let (rest, _) = count(any_entry, 10)(&line[1..])?;
+    let (rest, _) = count(any_entry, 10).parse(&line[1..])?;
     let (rest, nrandom_states) = u32_entry(rest)?;
     // ignore random states
-    let (rest, _) = count(any_entry, nrandom_states as usize)(rest)?;
+    let (rest, _) = count(any_entry, nrandom_states as usize).parse(rest)?;
     let (parsed, rest) = line.split_at(line.len() - rest.len());
     Ok((rest, parsed))
 }
 
 #[cfg(feature = "multiweight")]
 fn string_entry(line: &str) -> IResult<&str, &str> {
-    use nom::{character::complete::space1, sequence::preceded};
-    preceded(space1, string)(line)
+    use nom::{character::complete::space1, sequence::preceded, Parser};
+    preceded(space1, string).parse(line)
 }
 
 #[cfg(feature = "multiweight")]
@@ -530,5 +531,5 @@ fn string(line: &str) -> IResult<&str, &str> {
         bytes::complete::take_until, character::complete::char,
         sequence::delimited,
     };
-    delimited(char('"'), take_until("\""), char('"'))(line)
+    delimited(char('"'), take_until("\""), char('"')).parse(line)
 }
