@@ -3,7 +3,7 @@ use crate::traits::Unweight;
 
 use noisy_float::prelude::*;
 use rand::{
-    distributions::{Distribution, Uniform},
+    distr::{Distribution, Uniform},
     Rng,
 };
 use rayon::prelude::*;
@@ -41,7 +41,7 @@ impl<R: Rng> Unweight for Unweighter<R> {
         }
         let orig_wt_sum: N64 = events.par_iter().map(|e| e.weight()).sum();
 
-        let distr = Uniform::from(0.0..min_wt);
+        let distr = Uniform::try_from(0.0..min_wt).unwrap();
         let keep = |e: &Event| {
             let wt: f64 = e.weight().into();
             let awt = wt.abs();

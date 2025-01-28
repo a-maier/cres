@@ -5,7 +5,7 @@ use crate::cell::Cell;
 use log::info;
 use noisy_float::prelude::*;
 use rand::{
-    distributions::{Distribution, Uniform},
+    distr::{Distribution, Uniform},
     Rng,
 };
 
@@ -90,7 +90,7 @@ impl CellCollector {
                 let events = cell.iter().map(|e| e.id()).collect();
                 self.largest_by_weight.insert((weight, count), events);
             }
-            let distr = Uniform::from(0..=count);
+            let distr = Uniform::try_from(0..=count).unwrap();
             let idx = distr.sample(&mut rng);
             if idx < self.random.len() {
                 let events = cell.iter().map(|e| e.id()).collect();
@@ -197,7 +197,7 @@ impl CellCollector {
                 .map(|(id, ev)| (id + self.count, ev)),
         );
         while self.random.len() > NCELLS {
-            let distr = Uniform::from(0..self.random.len());
+            let distr = Uniform::try_from(0..self.random.len()).unwrap();
             let idx = distr.sample(rng);
             self.random.swap_remove(idx);
         }

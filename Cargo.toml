@@ -37,8 +37,8 @@ particle_id = { version = "0.5", features = ["serde"] }
 pathfinding = "4.2"
 permutohedron = "0.2"
 quick-xml = { version = "0.31", features = ["serde"], optional = true }
-rand = "0.8"
-rand_xoshiro = "0.6"
+rand = "0.9"
+rand_xoshiro = "0.7"
 rayon = "1.5"
 regex = "1.5"
 serde = { version = "1.0", features = ["derive"] }
