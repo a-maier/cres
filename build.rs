@@ -4,18 +4,11 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use cbindgen::Language;
-use vergen::EmitBuilder;
+use vergen_git2::{Emitter, Git2Builder};
 
 fn main() -> Result<()> {
-    // optionally emit git branch and hash
-    let _ = EmitBuilder::builder()
-        .git_branch()
-        .git_sha(true)
-        // don't emit on error
-        // we ignore the "fail" part
-        .fail_on_error()
-        .quiet()
-        .emit();
+    // optionally emit git branch and hash, ignoring all errors
+    let _ = emit_vergen();
 
     if cfg!(target_family = "unix") {
         write_c_header()
@@ -33,6 +26,16 @@ fn main() -> Result<()> {
         println!("cargo:rustc-link-arg={flag}");
     }
 
+    Ok(())
+}
+
+fn emit_vergen() -> Result<()> {
+    let git2 = Git2Builder::default().branch(true).sha(true).build()?;
+    Emitter::default()
+        .fail_on_error()
+        .quiet()
+        .add_instructions(&git2)?
+        .emit()?;
     Ok(())
 }
 

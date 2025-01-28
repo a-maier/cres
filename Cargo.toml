@@ -85,7 +85,7 @@ anyhow = "1.0"
 bindgen = { version = "0.71", optional = true }
 cbindgen = "0.28"
 cc = { version = "1.0", optional = true }
-vergen = { version = "8", features = ["git", "gitcl"] }
+vergen-git2 = "1.0"
 
 [dev-dependencies]
 tempfile = "3.8"
