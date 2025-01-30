@@ -138,3 +138,6 @@ const NFEATURES: usize = {
     }
     nfeatures
 };
+
+pub use noisy_float::prelude::{n64, N64, Float};
+pub use particle_id::*;
