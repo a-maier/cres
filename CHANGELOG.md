@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+- When generating shell completions, try to guess the shell if the
+  argument is omitted.
+- `noisy_float` and `particle_id` types in public interfaces are now
+  re-exported
+- [C API] Make `TypeSet::view` to convert from `TypeSet` to
+  ``TypeSetView` public.
+
+### Changed
+
+- Extended output for identified event categories
+- Events without outgoing particles are excluded from resampling
+- Updated dependencies
+
+### Fixed
+
+- Various fixes in documentation and error messages
+
 ## 0.7.1
 
 ### Fixed
