@@ -75,6 +75,23 @@ pub struct NaiveSearchData<D> {
     max_dist: N64,
 }
 
+impl<D> NaiveSearchData<D> {
+    /// Convert into the underlying distance
+    pub fn into_dist(self) -> D {
+        self.dist
+    }
+
+    /// Access the distance function
+    pub fn dist(&self) -> &D {
+        &self.dist
+    }
+
+    /// Get maximum allowed distance for nearest neighbours
+    pub fn max_dist(&self) -> N64 {
+        self.max_dist
+    }
+}
+
 impl<D: Distance<usize> + Send + Sync> NeighbourSearch for &NaiveSearchData<D> {
     type Iter = NaiveNeighbourIter;
 

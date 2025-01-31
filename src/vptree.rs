@@ -47,6 +47,25 @@ impl<P, DF> VPTree<P, DF> {
         self.max_dist = max_dist;
         self
     }
+
+    /// Convert into a `Vec` of nodes and the distance function
+    pub fn into_nodes_dist(self) -> (Vec<P>, DF) {
+        let Self { nodes, dist, ..} = self;
+        let nodes = nodes.into_iter()
+            .map(|Node{ vantage_pt, children: _ }| vantage_pt)
+            .collect();
+        (nodes, dist)
+    }
+
+    /// Access the distance function
+    pub fn dist(&self) -> &DF {
+        &self.dist
+    }
+
+    /// Get maximum allowed distance for nearest neighbours
+    pub fn max_dist(&self) -> N64 {
+        self.max_dist
+    }
 }
 
 impl<P: Copy + PartialEq + Eq, DF: Distance<P>> VPTree<P, DF> {
