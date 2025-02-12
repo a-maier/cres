@@ -65,7 +65,7 @@ impl MaxRelWithDeltaR {
     ///
     /// For example, a scale factor of 2 means that a relative
     /// momentum difference of 10% contributes 0.2 to the distance.
-    pub const DEFAULT_MOMENTUM_SCALE: f64 = 1.;
+    pub const DEFAULT_MOMENTUM_SCALE: f64 = 3.;
 
     /// Default scale factor for ΔR
     ///
