@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+### Added
+
+- Document minimal supported Rust version (MSRV).
+
 ## 0.9.0
 
 ### Added
