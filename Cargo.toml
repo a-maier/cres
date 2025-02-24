@@ -10,6 +10,7 @@ keywords = ["physics"]
 categories = ["science"]
 repository = "https://github.com/a-maier/cres"
 autobins = false
+rust-version = "1.82.0"
 
 [dependencies]
 anyhow = "1.0"
