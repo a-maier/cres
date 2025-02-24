@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+
+- Accessor functions for neighbour search cached
+- (C API) Conversion form `EventView` to `Event`
+
+### Fixed
+
+- Central weight updating in HepMC records. Usually this would only
+  affect the last digit in the updated weight, except when it was
+  zero.
+
 ## 0.8.0
 
 ### Added
