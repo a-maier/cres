@@ -372,12 +372,12 @@ pub(crate) fn update_central_weight(
 ) -> Result<(), ReadError> {
     use ReadError::*;
 
-    let (_, weight_entry) = any_entry(&record[entry_pos..]).map_err(|_| {
+    let (after_entry, _) = any_entry(&record[entry_pos..]).map_err(|_| {
         ParseEntry("central weight entry", take_chars(record, 100))
     })?;
     // +1 to ensure we skip one space
     let start = entry_pos + 1;
-    let end = entry_pos + weight_entry.len();
+    let end = record.len() - after_entry.len();
     record.replace_range(start..end, &weight.to_string());
     Ok(())
 }
