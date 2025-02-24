@@ -22,6 +22,8 @@ system, run
 
     cargo install cres
 
+The current version requires Rust 1.82.0 or later.
+
 Precompiled executables are available on
 [hepforge](https://cres.hepforge.org/).
 
