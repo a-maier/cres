@@ -51,7 +51,7 @@ The basic usage is
 
     cres -a JETALGO -R JETR --jetpt JETPT --max-cell-size R -o OUTDIR EVENTFILES...
 
-This takes a a number of input events files in HepMC2 or Les Houches
+This takes a number of input events files in HepMC2 or Les Houches
 Event format with mixed-weight events and for each file produces an
 output file of the same name inside `OUTDIR` with a smaller
 contribution from negative weights. The input file can be compressed
