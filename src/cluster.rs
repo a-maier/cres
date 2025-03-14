@@ -132,6 +132,7 @@ impl DefaultClustering {
         outgoing: &[(ParticleID, Box<[FourVector]>)],
         ev: &mut EventBuilder
     ) {
+        const PT_MIN: f64 = 0.75;
         const MW: f64 = 80.377;
         let charged_leptons = outgoing.iter()
             .filter(|(kind, _)| kind.abs().is_charged_lepton());
@@ -154,7 +155,12 @@ impl DefaultClustering {
                 W_minus
             };
 
-            let pairs = pl.iter().cartesian_product(pnu);
+            let pairs = pl.iter().cartesian_product(pnu)
+                .filter(|&(&pl, &pnu)| {
+                    let pw = pl + pnu;
+                    pw.pt() > PT_MIN
+                });
+
             let mut pairs = Vec::from_iter(pairs);
             pairs.sort_by_key(|&(&pl, &pnu)| (n64(MW) - (pl + pnu).m()).abs());
             pairs.reverse();
