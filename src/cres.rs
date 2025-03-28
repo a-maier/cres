@@ -302,9 +302,9 @@ fn log_multiplicities(events: &[Event]) {
             );
             *multiplicities.entry(out_multiplicities).or_default() += 1;
         }
-        let mut multiplicites = Vec::from_iter(multiplicities);
-        multiplicites.sort_unstable_by(|a, b| (b.1, &a.0).cmp(&(a.1, &b.0)));
-        for (types, nevents) in multiplicites.iter().take(MAX_MULT_SHOWN) {
+        let mut multiplicities = Vec::from_iter(multiplicities);
+        multiplicities.sort_unstable_by(|a, b| (b.1, &a.0).cmp(&(a.1, &b.0)));
+        for (types, nevents) in multiplicities.iter().take(MAX_MULT_SHOWN) {
             if types.is_empty() {
                 info!("{nevents} events without identified particles");
             } else {
@@ -317,10 +317,10 @@ fn log_multiplicities(events: &[Event]) {
                 );
             }
         }
-        if multiplicites.len() > MAX_MULT_SHOWN {
+        if multiplicities.len() > MAX_MULT_SHOWN {
             warn!(
                 "Found more than {MAX_MULT_SHOWN} event categories ({})",
-                multiplicites.len()
+                multiplicities.len()
             );
         }
     }
