@@ -62,6 +62,12 @@ impl Distance for DistanceFn {
         let dist = unsafe { (self.fun)(self.data, &event_view1, &event_view2) };
         n64(dist)
     }
+
+    // In contrast with the default we assume that the supplied distance
+    // function *can* compare events with different multiplicities.
+    fn allows_mixed_multiplicities() -> bool {
+        true
+    }
 }
 
 fn extract_typesets(ev: &Event) -> Vec<TypeSet> {

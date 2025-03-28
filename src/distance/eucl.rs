@@ -72,6 +72,10 @@ impl Distance for EuclWithScaledPt {
         }
         dist
     }
+
+    fn allows_mixed_multiplicities() -> bool {
+        true
+    }
 }
 
 impl EuclWithScaledPt {

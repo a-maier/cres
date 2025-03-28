@@ -50,9 +50,15 @@ impl<P, DF> VPTree<P, DF> {
 
     /// Convert into a `Vec` of nodes and the distance function
     pub fn into_nodes_dist(self) -> (Vec<P>, DF) {
-        let Self { nodes, dist, ..} = self;
-        let nodes = nodes.into_iter()
-            .map(|Node{ vantage_pt, children: _ }| vantage_pt)
+        let Self { nodes, dist, .. } = self;
+        let nodes = nodes
+            .into_iter()
+            .map(
+                |Node {
+                     vantage_pt,
+                     children: _,
+                 }| vantage_pt,
+            )
             .collect();
         (nodes, dist)
     }
