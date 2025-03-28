@@ -14,6 +14,11 @@ use noisy_float::prelude::*;
 pub trait Distance<E = Event> {
     /// Compute the distance between two events
     fn distance(&self, ev1: &E, ev2: &E) -> N64;
+
+    /// Whether the distance between events with different multiplicities is finite
+    fn allows_mixed_multiplicities() -> bool {
+        false
+    }
 }
 
 impl<D, E> Distance<E> for &D
@@ -22,6 +27,10 @@ where
 {
     fn distance(&self, ev1: &E, ev2: &E) -> N64 {
         (*self).distance(ev1, ev2)
+    }
+
+    fn allows_mixed_multiplicities() -> bool {
+        D::allows_mixed_multiplicities()
     }
 }
 
@@ -42,5 +51,9 @@ impl<'a, 'b, D: Distance> DistWrapper<'a, 'b, D> {
 impl<D: Distance> Distance<usize> for DistWrapper<'_, '_, D> {
     fn distance(&self, e1: &usize, e2: &usize) -> N64 {
         self.ev_dist.distance(&self.events[*e1], &self.events[*e2])
+    }
+
+    fn allows_mixed_multiplicities() -> bool {
+        D::allows_mixed_multiplicities()
     }
 }

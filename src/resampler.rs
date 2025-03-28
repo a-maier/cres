@@ -23,7 +23,11 @@ use thread_local::ThreadLocal;
 
 /// Error during resampling
 #[derive(Debug, Error)]
-pub enum ResamplingError {}
+pub enum ResamplingError {
+    /// Mismatch between event multiplicities not allowed by metric
+    #[error("Cannot resample events with mixed multiplicites with the chosen distance. Either choose a distance that allows mixed multiplicities or resample different multiplicities separately")]
+    MultiplicityMismatch,
+}
 
 /// Main resampling class
 pub struct Resampler<D, N, O, S> {
@@ -74,6 +78,14 @@ where
         events: &[Event],
     ) -> Result<(), Self::Error> {
         {
+            if let Some((first, rest)) = events.split_first() {
+                let mult_ok = D::allows_mixed_multiplicities()
+                    || multiplicities_match(first, rest);
+                if !mult_ok {
+                    return Err(ResamplingError::MultiplicityMismatch);
+                }
+            }
+
             self.print_wt_sum(events);
 
             let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
@@ -110,6 +122,16 @@ where
         }
         Ok(())
     }
+}
+
+fn multiplicities_match(first: &Event, rest: &[Event]) -> bool {
+    rest.iter().all(|e| {
+        e.outgoing().len() == first.outgoing().len()
+            && e.outgoing()
+                .iter()
+                .zip(first.outgoing())
+                .all(|((t1, p1), (t2, p2))| t1 == t2 && p1.len() == p2.len())
+    })
 }
 
 /// Construct a `Resampler` object
