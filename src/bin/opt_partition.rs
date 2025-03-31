@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use cres::compression::Compression;
 
-use crate::opt_common::*;
+use crate::{opt_common::*, opt_particle_def::ParticleDefinitions};
 
 // TODO: code duplication with opt_cres
 #[derive(Debug, Parser)]
@@ -13,19 +13,6 @@ pub(crate) struct Opt {
     #[clap(long, short, value_parser)]
     pub(crate) outfile: PathBuf,
 
-    #[clap(flatten)]
-    pub(crate) jet_def: JetDefinition,
-
-    #[clap(flatten)]
-    pub(crate) lepton_def: LeptonDefinition,
-
-    #[clap(flatten)]
-    pub(crate) photon_def: PhotonDefinition,
-
-    /// Include neutrinos in the distance measure
-    #[clap(long, default_value_t)]
-    pub(crate) include_neutrinos: bool,
-
     /// Number of regions into which the phase space is partitioned
     #[clap(long, value_parser = parse_nregions)]
     pub(crate) regions: u32,
@@ -33,6 +20,9 @@ pub(crate) struct Opt {
     /// Input files
     #[clap(name = "INFILES", value_parser)]
     pub(crate) infiles: Vec<PathBuf>,
+
+    #[clap(flatten)]
+    pub(crate) particle_def: ParticleDefinitions,
 
     #[clap(long, value_parser = parse_compr,
            help = "Compress output file.

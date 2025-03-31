@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::path::PathBuf;
 
 use crate::opt_common::*;
+use crate::opt_particle_def::ParticleDefinitions;
 
 use cres::compression::Compression;
 use cres::seeds::Strategy;
@@ -59,17 +60,7 @@ pub(crate) struct Opt {
     pub(crate) outdir: PathBuf,
 
     #[clap(flatten)]
-    pub(crate) jet_def: JetDefinition,
-
-    #[clap(flatten)]
-    pub(crate) lepton_def: LeptonDefinition,
-
-    #[clap(flatten)]
-    pub(crate) photon_def: PhotonDefinition,
-
-    /// Include neutrinos in the distance measure
-    #[clap(long, default_value_t)]
-    pub(crate) include_neutrinos: bool,
+    pub(crate) particle_def: ParticleDefinitions,
 
     #[clap(flatten)]
     pub(crate) unweight: UnweightOpt,

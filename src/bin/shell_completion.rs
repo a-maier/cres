@@ -1,6 +1,7 @@
 mod opt_classify;
 mod opt_common;
 mod opt_cres;
+mod opt_particle_def;
 mod opt_partition;
 
 use crate::opt_cres::Opt;

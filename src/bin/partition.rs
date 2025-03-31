@@ -1,4 +1,5 @@
 mod opt_common;
+mod opt_particle_def;
 mod opt_partition;
 
 use std::fs::File;
@@ -22,6 +23,7 @@ use cres::{
 use env_logger::Env;
 use log::{debug, info, trace};
 use noisy_float::prelude::*;
+use opt_particle_def::ParticleDefinitions;
 use rayon::prelude::IntoParallelIterator;
 
 fn main() -> Result<()> {
@@ -51,15 +53,22 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
+    let ParticleDefinitions {
+        jet_def,
+        lepton_def,
+        photon_def,
+        include_neutrinos,
+    } = opt.particle_def;
+
     let converter = Converter::new();
 
-    let mut clustering = DefaultClustering::new(opt.jet_def.into())
-        .include_neutrinos(opt.include_neutrinos);
-    if opt.lepton_def.leptonalgorithm.is_some() {
-        clustering = clustering.with_lepton_def(opt.lepton_def.into())
+    let mut clustering = DefaultClustering::new(jet_def.into())
+        .include_neutrinos(include_neutrinos);
+    if lepton_def.leptonalgorithm.is_some() {
+        clustering = clustering.with_lepton_def(lepton_def.into())
     }
-    if opt.photon_def.photonradius.is_some() {
-        clustering = clustering.with_photon_def(opt.photon_def.into())
+    if photon_def.photonradius.is_some() {
+        clustering = clustering.with_photon_def(photon_def.into())
     }
 
     // TODO: in principle we only need the kinematic part

@@ -1,6 +1,7 @@
 mod opt_common;
 mod opt_cres;
 mod opt_cres_validate;
+mod opt_particle_def;
 
 use std::error::Error;
 use std::fs::create_dir_all;
@@ -23,6 +24,7 @@ use cres::{
 };
 use env_logger::Env;
 use log::{debug, info};
+use opt_particle_def::ParticleDefinitions;
 use rand::SeedableRng;
 use rand_xoshiro::Xoshiro256Plus;
 
@@ -65,6 +67,12 @@ where
     }
 
     debug!("settings: {:#?}", opt);
+    let ParticleDefinitions {
+        jet_def,
+        lepton_def,
+        photon_def,
+        include_neutrinos,
+    } = opt.particle_def;
 
     let mut event_io = IOBuilder::default();
     #[cfg(feature = "multiweight")]
@@ -98,13 +106,13 @@ where
     let rng = Xoshiro256Plus::seed_from_u64(opt.unweight.seed);
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
-    let mut clustering = DefaultClustering::new(opt.jet_def.into())
-        .include_neutrinos(opt.include_neutrinos);
-    if opt.lepton_def.leptonalgorithm.is_some() {
-        clustering = clustering.with_lepton_def(opt.lepton_def.into())
+    let mut clustering = DefaultClustering::new(jet_def.into())
+        .include_neutrinos(include_neutrinos);
+    if lepton_def.leptonalgorithm.is_some() {
+        clustering = clustering.with_lepton_def(lepton_def.into())
     }
-    if opt.photon_def.photonradius.is_some() {
-        clustering = clustering.with_photon_def(opt.photon_def.into())
+    if photon_def.photonradius.is_some() {
+        clustering = clustering.with_photon_def(photon_def.into())
     }
     #[cfg(feature = "multiweight")]
     let converter = Converter::with_weights(opt.weights);

@@ -18,12 +18,12 @@ pub(crate) fn validate(opt: Opt) -> Result<Opt, ValidationError> {
         leptonalgorithm,
         leptonpt,
         leptonradius,
-    } = &opt.lepton_def;
+    } = &opt.particle_def.lepton_def;
     let &PhotonDefinition {
         photonefrac,
         photonradius,
         photonpt,
-    } = &opt.photon_def;
+    } = &opt.particle_def.photon_def;
     match (leptonalgorithm, leptonpt, leptonradius) {
         (Some(_), Some(_), Some(_)) => Ok(()),
         (None, None, None) => Ok(()),
