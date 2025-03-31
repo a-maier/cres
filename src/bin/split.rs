@@ -4,6 +4,7 @@ mod opt_split;
 
 use std::{
     collections::{hash_map::Entry, HashMap},
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -90,6 +91,7 @@ fn main() -> Result<()> {
                 Entry::Vacant(v) => {
                     let mult = v.key();
                     let out_path = gen_out_path(&opt.outdir, mult, filename);
+                    fs::create_dir_all(out_path.parent().unwrap())?;
                     let writer = ntuple::Writer::new(&out_path, "")
                         .with_context(|| {
                             format!(
