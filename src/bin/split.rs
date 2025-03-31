@@ -119,6 +119,7 @@ fn gen_outfile_name(
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     let mut res = file_stem.as_os_str().to_owned();
+    res.push(".");
     let mult_string = mult
         .iter()
         .map(|(id, n)| format!("{n}_{}", name(*id)))
