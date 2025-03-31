@@ -4,7 +4,6 @@ mod opt_split;
 
 use std::{
     collections::{hash_map::Entry, HashMap},
-    fs,
     path::{Path, PathBuf},
 };
 
@@ -71,14 +70,13 @@ fn main() -> Result<()> {
         clustering = clustering.with_photon_def(photon_def.into())
     }
 
-    fs::create_dir_all(&opt.outdir)?;
     for file in opt.infiles {
         info!("Splitting up {file:?}");
-        let [_, file_stem, suffix] = split_filename(&file);
 
         let reader = ntuple::Reader::new(&file).with_context(|| {
             format!("Failed to read {file:?} as NTuple file")
         })?;
+        let filename = Path::new(file.file_name().unwrap());
         let mut writers = HashMap::new();
 
         for event in reader {
@@ -91,9 +89,7 @@ fn main() -> Result<()> {
             match writers.entry(multiplicities) {
                 Entry::Vacant(v) => {
                     let mult = v.key();
-                    let outfile_name =
-                        gen_outfile_name(file_stem, mult, suffix);
-                    let out_path = &opt.outdir.join(&outfile_name);
+                    let out_path = gen_out_path(&opt.outdir, mult, filename);
                     let writer = ntuple::Writer::new(&out_path, "")
                         .with_context(|| {
                             format!(
@@ -110,16 +106,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
-fn gen_outfile_name(
-    file_stem: &Path,
+fn gen_out_path(
+    outdir: &Path,
     mult: &[(ParticleID, usize)],
-    suffix: &Path,
+    filename: &Path,
 ) -> PathBuf {
-    use std::ffi::OsStr;
-    use std::os::unix::ffi::OsStrExt;
-    let mut res = file_stem.as_os_str().to_owned();
-    res.push(".");
     let mut mult_string = mult
         .iter()
         .map(|(id, n)| format!("{n}_{}", name(*id).replace(' ', "_")))
@@ -127,9 +118,9 @@ fn gen_outfile_name(
     if mult_string.is_empty() {
         mult_string = "no_particles".to_owned();
     }
-    res.push(OsStr::from_bytes(mult_string.as_bytes()));
-    res.push(suffix.as_os_str());
-    Path::new(&res).to_path_buf()
+    [&outdir, Path::new(&mult_string), Path::new(filename)]
+        .into_iter()
+        .collect()
 }
 
 fn multiplicities(event: &Event) -> Vec<(ParticleID, usize)> {
@@ -151,30 +142,4 @@ fn name(t: ParticleID) -> String {
             cluster::PID_ISOLATED_PHOTON => "isolated photons".to_string(),
             _ => format!("particles with id {}", t.id()),
         })
-}
-
-#[cfg(unix)]
-fn split_filename(p: &Path) -> [&Path; 3] {
-    use std::ffi::OsStr;
-    use std::os::unix::ffi::OsStrExt;
-
-    let p = OsStrExt::as_bytes(p.as_os_str());
-    let start_filename = p
-        .iter()
-        .rposition(|&c| c == b'/')
-        .map(|p| p + 1)
-        .unwrap_or(0);
-    let (directory, filename) = p.split_at(start_filename);
-    // find first dot that is *not* the first character
-    let filename_end = filename
-        .iter()
-        .skip(1)
-        .position(|&c| c == b'.')
-        .map(|p| p + 1);
-    let (stem, suffix) = if let Some(filename_end) = filename_end {
-        filename.split_at(filename_end)
-    } else {
-        (filename, &[] as _)
-    };
-    [directory, stem, suffix].map(|p| Path::new(OsStr::from_bytes(p)))
 }
