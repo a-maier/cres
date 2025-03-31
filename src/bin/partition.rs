@@ -58,12 +58,17 @@ fn main() -> Result<()> {
         lepton_def,
         photon_def,
         include_neutrinos,
+        min_missing_pt,
+        reconstruct_W,
+
     } = opt.particle_def;
 
     let converter = Converter::new();
 
     let mut clustering = DefaultClustering::new(jet_def.into())
-        .include_neutrinos(include_neutrinos);
+        .reconstruct_W(reconstruct_W)
+        .include_neutrinos(include_neutrinos)
+        .min_missing_pt(min_missing_pt);
     if lepton_def.leptonalgorithm.is_some() {
         clustering = clustering.with_lepton_def(lepton_def.into())
     }
