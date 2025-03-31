@@ -342,9 +342,12 @@ pub(crate) fn is_muon(id: ParticleID) -> bool {
     id == muon
 }
 
-pub(crate) const PID_JET: ParticleID = ParticleID::new(81);
-pub(crate) const PID_DRESSED_LEPTON: ParticleID = ParticleID::new(82);
-pub(crate) const PID_ISOLATED_PHOTON: ParticleID = ParticleID::new(83);
+/// Internal particle ID for jets
+pub const PID_JET: ParticleID = ParticleID::new(81);
+/// Internal particle ID for dressed leptons
+pub const PID_DRESSED_LEPTON: ParticleID = ParticleID::new(82);
+/// Internal particle ID for isolated photons
+pub const PID_ISOLATED_PHOTON: ParticleID = ParticleID::new(83);
 
 /// Cluster the given `partons` into jets
 pub fn cluster(
