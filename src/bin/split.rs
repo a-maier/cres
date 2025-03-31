@@ -122,7 +122,7 @@ fn gen_outfile_name(
     res.push(".");
     let mut mult_string = mult
         .iter()
-        .map(|(id, n)| format!("{n}_{}", name(*id)))
+        .map(|(id, n)| format!("{n}_{}", name(*id).replace(' ', "_")))
         .join("_");
     if mult_string.is_empty() {
         mult_string = "no_particles".to_owned();
