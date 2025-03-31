@@ -61,6 +61,11 @@ name = "cres"
 path = "src/bin/main.rs"
 
 [[bin]]
+name = "cres-split-by-multiplicity"
+path = "src/bin/split.rs"
+required-features = ["ntuple"]
+
+[[bin]]
 name = "cres-partition"
 path = "src/bin/partition.rs"
 
