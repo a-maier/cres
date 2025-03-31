@@ -120,10 +120,13 @@ fn gen_outfile_name(
     use std::os::unix::ffi::OsStrExt;
     let mut res = file_stem.as_os_str().to_owned();
     res.push(".");
-    let mult_string = mult
+    let mut mult_string = mult
         .iter()
         .map(|(id, n)| format!("{n}_{}", name(*id)))
         .join("_");
+    if mult_string.is_empty() {
+        mult_string = "no_particles".to_owned();
+    }
     res.push(OsStr::from_bytes(mult_string.as_bytes()));
     res.push(suffix.as_os_str());
     Path::new(&res).to_path_buf()
