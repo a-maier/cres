@@ -90,6 +90,8 @@ where
         lepton_def,
         photon_def,
         include_neutrinos,
+        min_missing_pt,
+        reconstruct_W,
     } = opt.particle_def;
 
     let mut event_io = IOBuilder::default();
@@ -125,9 +127,9 @@ where
 
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
     let mut clustering = DefaultClustering::new(jet_def.into())
-        .reconstruct_W(opt.reconstruct_W)
+        .reconstruct_W(reconstruct_W)
         .include_neutrinos(include_neutrinos)
-        .min_missing_pt(opt.min_missing_pt);
+        .min_missing_pt(min_missing_pt);
 
     if lepton_def.leptonalgorithm.is_some() {
         clustering = clustering.with_lepton_def(lepton_def.into())
