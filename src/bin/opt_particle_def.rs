@@ -24,12 +24,13 @@ pub(crate) struct ParticleDefinitions {
     pub(crate) min_missing_pt: f64,
 
     /// Reconstruct intermediate W bosons
-    #[clap(long, value_parser = parse_w_reconstruction)]
+    #[clap(long, value_parser = parse_w_reconstruction, default_value = "none")]
     pub(crate) reconstruct_W: WReconstruction,
 }
 
 fn parse_w_reconstruction(s: &str) -> Result<WReconstruction, String> {
     match s {
+        "none" => Ok(WReconstruction::None),
         "by-mass" | "m" => Ok(WReconstruction::ByMass),
         "by-transverse-mass" | "mT" => Ok(WReconstruction::ByTransverseMass),
         _ => Err(format!("Value '{s}' not supported for --reconstruct-w")),
