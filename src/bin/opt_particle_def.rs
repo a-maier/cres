@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use cres::cluster::WReconstruction;
+
 use crate::opt_common::{JetDefinition, LeptonDefinition, PhotonDefinition};
 
 #[derive(Debug, Copy, Clone, Parser)]
@@ -22,6 +24,14 @@ pub(crate) struct ParticleDefinitions {
     pub(crate) min_missing_pt: f64,
 
     /// Reconstruct intermediate W bosons
-    #[clap(long)]
-    pub(crate) reconstruct_W: bool,
+    #[clap(long, value_parser = parse_w_reconstruction)]
+    pub(crate) reconstruct_W: WReconstruction,
+}
+
+fn parse_w_reconstruction(s: &str) -> Result<WReconstruction, String> {
+    match s {
+        "by-mass" | "m" => Ok(WReconstruction::ByMass),
+        "by-transverse-mass" | "mT" => Ok(WReconstruction::ByTransverseMass),
+        _ => Err(format!("Value '{s}' not supported for --reconstruct-w")),
+    }
 }
