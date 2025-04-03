@@ -25,9 +25,21 @@ pub struct DefaultClustering {
     jet_def: JetDefinition,
     lepton_def: Option<JetDefinition>,
     photon_def: Option<PhotonDefinition>,
-    reconstruct_W: bool,
+    reconstruct_W: WReconstruction,
     include_neutrinos: bool,
     min_missing_pt: f64,
+}
+
+/// How to reconstruct W bosons
+#[derive(Deserialize, Serialize, Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
+pub enum WReconstruction {
+    /// Don't reconstruct W bosons
+    #[default]
+    None,
+    /// Reconstruct W bosons if the reconstructed (invariant) mass matches
+    ByMass,
+    /// Reconstruct W bosons if the reconstructed transverse mass matches
+    ByTransverseMass,
 }
 
 impl DefaultClustering {
@@ -38,7 +50,7 @@ impl DefaultClustering {
             lepton_def: None,
             photon_def: None,
             include_neutrinos: false,
-            reconstruct_W: false,
+            reconstruct_W: Default::default(),
             min_missing_pt: 0.
         }
     }
@@ -69,7 +81,7 @@ impl DefaultClustering {
 
     /// Whether to reconstruct an intermediate W boson
     #[allow(non_snake_case)]
-    pub fn reconstruct_W(mut self, reconstruct: bool) -> Self {
+    pub fn reconstruct_W(mut self, reconstruct: WReconstruction) -> Self {
         self.reconstruct_W = reconstruct;
         self
     }
@@ -132,6 +144,9 @@ impl DefaultClustering {
         outgoing: &[(ParticleID, Box<[FourVector]>)],
         ev: &mut EventBuilder
     ) {
+        if self.reconstruct_W == WReconstruction::None {
+            return
+        }
         const PT_MIN: f64 = 0.75;
         const MW: f64 = 80.377;
         let charged_leptons = outgoing.iter()
@@ -155,13 +170,28 @@ impl DefaultClustering {
                 W_minus
             };
 
-            let pairs = pl.iter().cartesian_product(pnu)
-                .filter(|&(&pl, &pnu)| {
-                    let pw = pl + pnu;
-                    pw.pt() > PT_MIN
-                });
+            let pairs = pl.iter().cartesian_product(pnu);
 
-            let mut pairs = Vec::from_iter(pairs);
+            let mut pairs: Vec<_> = match self.reconstruct_W {
+                WReconstruction::ByMass => pairs.filter(|&(&pl, &pnu)| {
+                    // invariant mass cuts matching Rivet's MC_WINC analysis
+                    const MW_MIN: f64 = 60.;
+                    const MW_MAX: f64 = 100.;
+                    let pw = pl + pnu;
+                    let mw = pw.m();
+                    pw.pt() > PT_MIN && mw > MW_MIN && mw < MW_MAX
+                }).collect(),
+                WReconstruction::ByTransverseMass => pairs.filter(|&(&pl, &pnu)| {
+                    // transverse mass cuts matching ATLAS, e.g. ATLAS_2011_I925932
+                    const MT_MIN: f64 = 40.;
+                    const MT_MAX: f64 = f64::MAX;
+                    let pw = pl + pnu;
+                    let dphi = PseudoJet::from(pl).delta_phi(&PseudoJet::from(pnu));
+                    let mt2 = n64(2.)*pl.pt()*pnu.pt()*(n64(1.) - dphi.cos());
+                    pw.pt() > PT_MIN && mt2 > MT_MIN * MT_MIN && mt2 < MT_MAX * MT_MAX
+                }).collect(),
+                WReconstruction::None => unreachable!(),
+            };
             pairs.sort_by_key(|&(&pl, &pnu)| (n64(MW) - (pl + pnu).m()).abs());
             pairs.reverse();
             while let Some((&pl, &pnu)) = pairs.pop() {
@@ -184,9 +214,7 @@ impl Clustering for DefaultClustering {
         let mut clustered_to_leptons = Vec::new();
         let mut clustered_to_jets = Vec::new();
 
-        if self.reconstruct_W {
-            self.add_reconstructed_Ws(&outgoing, &mut ev);
-        }
+        self.add_reconstructed_Ws(&outgoing, &mut ev);
 
         // treat photons
         debug_assert!(outgoing.windows(2).all(|p| p[0].0 >= p[1].0));
