@@ -129,6 +129,18 @@ impl std::ops::Sub for FourVector {
     }
 }
 
+impl std::ops::Neg for FourVector {
+    type Output = Self;
+
+    fn neg(mut self) -> Self::Output {
+        for p in &mut self.p {
+            *p = -*p;
+        }
+        // no need to update the pt
+        self
+    }
+}
+
 impl From<PseudoJet> for FourVector {
     fn from(p: PseudoJet) -> Self {
         [p.e(), p.px(), p.py(), p.pz()].into()

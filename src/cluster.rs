@@ -3,7 +3,6 @@ use std::{
     str::FromStr,
 };
 
-use itertools::Itertools;
 use jetty::{anti_kt_f, cambridge_aachen_f, kt_f, Cluster, PseudoJet};
 use noisy_float::prelude::*;
 use particle_id::{
@@ -129,75 +128,96 @@ impl DefaultClustering {
     }
 
     // reconstruct intermediate W bosons
-    // 1. For each type of charged lepton find the corresponding
-    //    anti-neutrinos
-    // 2. Take all pairs of (charged lepton, anti-neutrino)
-    //    with a mass between `MW_MIN` and `MW_MAX`
-    // 3. Iteratively combine the pairs with mass closest to `MW`
-    //    into a W, removing all remaining pairs containing the
-    //    used charged lepton or antineutrino.
     // Note that *both* the W and its decay products are included
     // in the metric
     #[allow(non_snake_case)]
     fn add_reconstructed_Ws(
         &self,
-        outgoing: &[(ParticleID, Box<[FourVector]>)],
+        orig_outgoing: &[(ParticleID, Box<[FourVector]>)],
         ev: &mut EventBuilder
     ) {
         if self.reconstruct_W == WReconstruction::None {
             return
         }
-        const PT_MIN: f64 = 0.75;
-        const MW: f64 = 80.377;
-        let charged_leptons = outgoing.iter()
-            .filter(|(kind, _)| kind.abs().is_charged_lepton());
-        for (l, pl) in charged_leptons {
-            let mut nu_l_bar = ParticleID::new(- l.id().abs() - 1);
-            if l.is_anti_particle() {
-                nu_l_bar = nu_l_bar.abs();
-            };
-            let nu_pos = outgoing
+        let mut charged_leptons = ev.outgoing()
+            .iter()
+            .filter(|(kind, _)| *kind == PID_DRESSED_LEPTON);
+        let Some((_, pl)) = charged_leptons.next() else {
+            return
+        };
+        assert!(charged_leptons.next().is_none());
+
+        // let p_miss = -ev.outgoing()
+        //     .iter()
+        //     .filter_map(|(t, p)| if t.abs().is_neutrino() {
+        //         None
+        //     } else {
+        //         Some(*p)
+        //     })
+        //     .reduce(std::ops::Add::add)
+        //     .unwrap_or_default();
+
+        let p_miss = -orig_outgoing
+            .iter()
+            .filter_map(|(t, p)| if t.abs().is_neutrino() {
+                None
+            } else {
+                Some(p.iter().copied().reduce(std::ops::Add::add).unwrap_or_default())
+            })
+            .reduce(std::ops::Add::add)
+            .unwrap_or_default();
+        // reconstruct missing energy such that p_miss is lightlike
+        let e_miss = p_miss.spatial_norm();
+        let p_miss = FourVector::from([e_miss, p_miss[1], p_miss[2], p_miss[3]]);
+
+        let mw_reco = (*pl + p_miss).m();
+        let is_w = match self.reconstruct_W {
+            WReconstruction::ByMass =>  {
+                // invariant mass cuts matching Rivet's MC_WINC analysis
+                const MW_MIN: f64 = 60.;
+                const MW_MAX: f64 = 100.;
+                mw_reco > MW_MIN && mw_reco < MW_MAX
+            },
+            WReconstruction::ByTransverseMass => {
+                // invariant mass cut matching ATLAS_2011_I925932
+                // transverse mass cut matching ATLAS, e.g. ATLAS_2011_I925932
+                const MT_MIN: f64 = 40.;
+                let pt_miss = FourVector::from(
+                    [n64(0.), p_miss[1], p_miss[2], n64(0.)]
+                );
+                let dphi = PseudoJet::from(pl).delta_phi(
+                    &PseudoJet::from(pt_miss)
+                );
+                let mt2 = n64(2.)*pl.pt()*pt_miss.pt()*(n64(1.) - dphi.cos());
+                mw_reco < 1000. && mt2 > MT_MIN * MT_MIN
+            },
+            WReconstruction::None => unreachable!(),
+        };
+        if is_w {
+            let mut bare_charged_leptons = orig_outgoing
                 .iter()
-                .position(|(kind, _)| kind == &nu_l_bar);
-            let Some(nu_pos) = nu_pos else {
-                // no corresponding (anti-)neutrinos found
-                continue;
-            };
-            let pnu = outgoing[nu_pos].1.as_ref();
+                .filter(|(kind, _)| kind.abs().is_charged_lepton());
+            let (l, pl_bare) = bare_charged_leptons.next().unwrap();
+            assert_eq!(pl_bare.len(), 1);
+            let pl_bare = pl_bare[0];
+            assert_eq!(&pl_bare, pl);
+            assert!(bare_charged_leptons.next().is_none());
             let w_id = if l.is_anti_particle() {
                 W_plus
             } else {
                 W_minus
             };
-
-            let pairs = pl.iter().cartesian_product(pnu);
-
-            let mut pairs: Vec<_> = match self.reconstruct_W {
-                WReconstruction::ByMass => pairs.filter(|&(&pl, &pnu)| {
-                    // invariant mass cuts matching Rivet's MC_WINC analysis
-                    const MW_MIN: f64 = 60.;
-                    const MW_MAX: f64 = 100.;
-                    let pw = pl + pnu;
-                    let mw = pw.m();
-                    pw.pt() > PT_MIN && mw > MW_MIN && mw < MW_MAX
-                }).collect(),
-                WReconstruction::ByTransverseMass => pairs.filter(|&(&pl, &pnu)| {
-                    // transverse mass cuts matching ATLAS, e.g. ATLAS_2011_I925932
-                    const MT_MIN: f64 = 40.;
-                    const MT_MAX: f64 = f64::MAX;
-                    let pw = pl + pnu;
-                    let dphi = PseudoJet::from(pl).delta_phi(&PseudoJet::from(pnu));
-                    let mt2 = n64(2.)*pl.pt()*pnu.pt()*(n64(1.) - dphi.cos());
-                    pw.pt() > PT_MIN && mt2 > MT_MIN * MT_MIN && mt2 < MT_MAX * MT_MAX
-                }).collect(),
-                WReconstruction::None => unreachable!(),
+            let mut nu_l_bar = ParticleID::new(- l.id().abs() - 1);
+            if l.is_anti_particle() {
+                nu_l_bar = nu_l_bar.abs();
             };
-            pairs.sort_by_key(|&(&pl, &pnu)| (n64(MW) - (pl + pnu).m()).abs());
-            pairs.reverse();
-            while let Some((&pl, &pnu)) = pairs.pop() {
-                ev.add_outgoing(w_id, pl + pnu);
-                pairs.retain(|&(&ppl, &ppnu)| pl != ppl && pnu != ppnu);
-            }
+            let (_, pnu) = orig_outgoing
+                .iter()
+                .find(|(t, _)|  *t == nu_l_bar)
+                .unwrap();
+            assert_eq!(pnu.len(), 1);
+            let pnu = pnu[0];
+            ev.add_outgoing(w_id, *pl + pnu);
         }
     }
 }
@@ -213,8 +233,6 @@ impl Clustering for DefaultClustering {
 
         let mut clustered_to_leptons = Vec::new();
         let mut clustered_to_jets = Vec::new();
-
-        self.add_reconstructed_Ws(&outgoing, &mut ev);
 
         // treat photons
         debug_assert!(outgoing.windows(2).all(|p| p[0].0 >= p[1].0));
@@ -233,12 +251,12 @@ impl Clustering for DefaultClustering {
         }
 
         // treat all other particles
-        for (id, out) in outgoing {
-            if is_parton(id) || is_hadron(id.abs()) {
+        for (id, out) in &outgoing {
+            if is_parton(*id) || is_hadron(id.abs()) {
                 for p in out.iter() {
                     clustered_to_jets.push(p.into());
                 }
-            } else if self.is_clustered_to_lepton(id) {
+            } else if self.is_clustered_to_lepton(*id) {
                 for p in out.iter() {
                     clustered_to_leptons.push(p.into());
                 }
@@ -251,7 +269,7 @@ impl Clustering for DefaultClustering {
                     for p in out.iter() {
                         // only keep transverse momentum components
                         let p = [- p.pt() * p.pt(), p[1], p[2], n64(0.)];
-                        ev.add_outgoing(id, p.into());
+                        ev.add_outgoing(*id, p.into());
                     }
                 }
             }
@@ -268,6 +286,8 @@ impl Clustering for DefaultClustering {
                 ev.add_outgoing(PID_DRESSED_LEPTON, lepton.into());
             }
         }
+
+        self.add_reconstructed_Ws(&outgoing, &mut ev);
 
         let mut ev = ev.build();
         ev.weights = weights;
