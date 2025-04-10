@@ -90,6 +90,10 @@ impl EventBuilder {
             outgoing_by_pid,
         }
     }
+
+    pub fn outgoing(&self) -> &[(ParticleID, FourVector)] {
+        &self.outgoing_by_pid
+    }
 }
 
 impl From<EventBuilder> for Event {
