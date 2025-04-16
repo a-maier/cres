@@ -283,7 +283,9 @@ impl Clustering for DefaultClustering {
         // add dressed leptons
         if let Some(lepton_def) = self.lepton_def.as_ref() {
             for lepton in cluster(clustered_to_leptons, lepton_def) {
-                ev.add_outgoing(PID_DRESSED_LEPTON, lepton.into());
+                if lepton.rap().abs() < 2.4 {
+                    ev.add_outgoing(PID_DRESSED_LEPTON, lepton.into());
+                }
             }
         }
 
