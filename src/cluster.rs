@@ -217,7 +217,12 @@ impl DefaultClustering {
                 .unwrap();
             assert_eq!(pnu.len(), 1);
             let pnu = pnu[0];
-            ev.add_outgoing(w_id, *pl + pnu);
+            let mut pw = *pl + pnu;
+            const PTW_THRESHOLD: f64 = 0.75;
+            if pw.pt() < PTW_THRESHOLD {
+                pw = [pw[0], n64(0.), n64(0.), pw[3]].into();
+            }
+            ev.add_outgoing(w_id, pw);
         }
     }
 }
