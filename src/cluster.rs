@@ -170,7 +170,8 @@ impl DefaultClustering {
         let e_miss = p_miss.spatial_norm();
         let p_miss = FourVector::from([e_miss, p_miss[1], p_miss[2], p_miss[3]]);
 
-        let mw_reco = (*pl + p_miss).m();
+        let mut pw = *pl + p_miss;
+        let mw_reco = pw.m();
         let is_w = match self.reconstruct_W {
             WReconstruction::ByMass =>  {
                 // invariant mass cuts matching Rivet's MC_WINC analysis
@@ -207,17 +208,6 @@ impl DefaultClustering {
             } else {
                 W_minus
             };
-            let mut nu_l_bar = ParticleID::new(- l.id().abs() - 1);
-            if l.is_anti_particle() {
-                nu_l_bar = nu_l_bar.abs();
-            };
-            let (_, pnu) = orig_outgoing
-                .iter()
-                .find(|(t, _)|  *t == nu_l_bar)
-                .unwrap();
-            assert_eq!(pnu.len(), 1);
-            let pnu = pnu[0];
-            let mut pw = *pl + pnu;
             const PTW_THRESHOLD: f64 = 0.75;
             if pw.pt() < PTW_THRESHOLD {
                 pw = [pw[0], n64(0.), n64(0.), pw[3]].into();
