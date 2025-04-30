@@ -170,7 +170,7 @@ impl DefaultClustering {
         let e_miss = p_miss.spatial_norm();
         let p_miss = FourVector::from([e_miss, p_miss[1], p_miss[2], p_miss[3]]);
 
-        let mut pw = *pl + p_miss;
+        let pw = *pl + p_miss;
         let mw_reco = pw.m();
         let is_w = match self.reconstruct_W {
             WReconstruction::ByMass =>  {
@@ -208,10 +208,6 @@ impl DefaultClustering {
             } else {
                 W_minus
             };
-            const PTW_THRESHOLD: f64 = 0.75;
-            if pw.pt() < PTW_THRESHOLD {
-                pw = [pw[0], n64(0.), n64(0.), pw[3]].into();
-            }
             ev.add_outgoing(w_id, pw);
         }
     }
