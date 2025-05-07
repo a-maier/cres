@@ -60,6 +60,7 @@ fn main() -> Result<()> {
         include_neutrinos,
         min_missing_pt,
         reconstruct_W,
+        reconstruct_Z,
 
     } = opt.particle_def;
 
@@ -67,6 +68,7 @@ fn main() -> Result<()> {
 
     let mut clustering = DefaultClustering::new(jet_def.into())
         .reconstruct_W(reconstruct_W)
+        .reconstruct_Z(reconstruct_Z)
         .include_neutrinos(include_neutrinos)
         .min_missing_pt(min_missing_pt);
     if lepton_def.leptonalgorithm.is_some() {

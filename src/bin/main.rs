@@ -92,6 +92,7 @@ where
         include_neutrinos,
         min_missing_pt,
         reconstruct_W,
+        reconstruct_Z,
     } = opt.particle_def;
 
     let mut event_io = IOBuilder::default();
@@ -127,6 +128,7 @@ where
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
     let mut clustering = DefaultClustering::new(jet_def.into())
         .reconstruct_W(reconstruct_W)
+        .reconstruct_Z(reconstruct_Z)
         .include_neutrinos(include_neutrinos)
         .min_missing_pt(min_missing_pt);
 
@@ -204,6 +206,7 @@ mod tests {
             weights: Default::default(),
             distance: Default::default(),
             reconstruct_W: Default::default(),
+            reconstruct_Z: Default::default(),
         };
         cres(opt).unwrap();
     }

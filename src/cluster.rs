@@ -1,12 +1,11 @@
 use std::{
-    fmt::{self, Display},
-    str::FromStr,
+    fmt::{self, Display}, str::FromStr
 };
 
 use jetty::{anti_kt_f, cambridge_aachen_f, kt_f, Cluster, PseudoJet};
 use noisy_float::prelude::*;
 use particle_id::{
-    gauge_bosons::W_plus, sm_elementary_particles::{bottom, electron, gluon, muon, photon, W_minus}, ParticleID
+    gauge_bosons::{W_plus, Z}, sm_elementary_particles::{bottom, electron, gluon, muon, photon, W_minus}, ParticleID
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -25,6 +24,7 @@ pub struct DefaultClustering {
     lepton_def: Option<JetDefinition>,
     photon_def: Option<PhotonDefinition>,
     reconstruct_W: WReconstruction,
+    reconstruct_Z: bool,
     include_neutrinos: bool,
     min_missing_pt: f64,
 }
@@ -50,6 +50,7 @@ impl DefaultClustering {
             photon_def: None,
             include_neutrinos: false,
             reconstruct_W: Default::default(),
+            reconstruct_Z: Default::default(),
             min_missing_pt: 0.
         }
     }
@@ -82,6 +83,13 @@ impl DefaultClustering {
     #[allow(non_snake_case)]
     pub fn reconstruct_W(mut self, reconstruct: WReconstruction) -> Self {
         self.reconstruct_W = reconstruct;
+        self
+    }
+
+    /// Whether to reconstruct an intermediate Z boson
+    #[allow(non_snake_case)]
+    pub fn reconstruct_Z(mut self, reconstruct: bool) -> Self {
+        self.reconstruct_Z = reconstruct;
         self
     }
 
@@ -125,6 +133,40 @@ impl DefaultClustering {
             - cone_mom.pz() * cone_mom.pz())
         .sqrt();
         photon_pt > e_fraction * cone_et
+    }
+
+    // reconstruct intermediate Z bosons
+    // Note that *both* the T and its decay products are included
+    // in the metric
+    #[allow(non_snake_case)]
+    fn add_reconstructed_Zs(
+        &self,
+        ev: &mut EventBuilder
+    ) {
+        if !self.reconstruct_Z {
+            return
+        }
+        let mut charged_leptons = ev.outgoing()
+            .iter()
+            .filter(|(kind, _)| is_light_lepton(*kind));
+        assert!(
+            charged_leptons.clone().count() <= 1,
+            "Z reconstruction from final states with more than one charged lepton is not implemented"
+        );
+        let Some((l, pl)) = charged_leptons.next() else {
+            return
+        };
+        let mut antileptons = ev.outgoing()
+            .iter()
+            .filter(|(kind, _)| *kind == l.anti());
+        assert!(
+            charged_leptons.clone().count() <= 1,
+            "Z reconstruction from final states with more than one charged antilepton is not implemented"
+        );
+        let Some((_, plbar)) = antileptons.next() else {
+            return
+        };
+        ev.add_outgoing(Z, *pl + *plbar);
     }
 
     // reconstruct intermediate W bosons
@@ -281,6 +323,7 @@ impl Clustering for DefaultClustering {
         }
 
         self.add_reconstructed_Ws(&outgoing, &mut ev);
+        self.add_reconstructed_Zs(&mut ev);
 
         let mut ev = ev.build();
         ev.weights = weights;

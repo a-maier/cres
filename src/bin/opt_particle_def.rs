@@ -26,6 +26,10 @@ pub(crate) struct ParticleDefinitions {
     /// Reconstruct intermediate W bosons
     #[clap(long, value_parser = parse_w_reconstruction, default_value = "none")]
     pub(crate) reconstruct_W: WReconstruction,
+
+    /// Reconstruct intermediate Z bosons
+    #[clap(long, default_value_t)]
+    pub(crate) reconstruct_Z: bool,
 }
 
 fn parse_w_reconstruction(s: &str) -> Result<WReconstruction, String> {
