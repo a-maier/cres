@@ -92,6 +92,7 @@ where
         include_neutrinos,
         min_missing_pt,
         reconstruct_W,
+        reconstruct_Z,
     } = opt.particle_def;
 
     let mut event_io = IOBuilder::default();
@@ -128,6 +129,7 @@ where
     let unweighter = Unweighter::new(opt.unweight.minweight, rng);
     let mut clustering = DefaultClustering::new(jet_def.into())
         .reconstruct_W(reconstruct_W)
+        .reconstruct_Z(reconstruct_Z)
         .include_neutrinos(include_neutrinos)
         .min_missing_pt(min_missing_pt);
 
@@ -193,6 +195,7 @@ mod tests {
                 include_neutrinos: false,
                 min_missing_pt: Default::default(),
                 reconstruct_W: Default::default(),
+                reconstruct_Z: Default::default(),
             },
             max_cell_size: Some(100.),
             infiles: vec![PathBuf::from("test_data/showered.hepmc.zst")],
