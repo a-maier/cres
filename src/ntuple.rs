@@ -21,12 +21,7 @@ pub struct FileReader {
 impl FileReader {
     /// Construct a reader from the given (potentially compressed) HepMC2 event file
     pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
-        use CreateError::NTuple;
-        let reader = ntuple::Reader::new(&source_path).ok_or_else(|| {
-            NTuple(format!(
-                "Failed to create ntuple reader for {source_path:?}"
-            ))
-        })?;
+        let reader = ntuple::Reader::new(&source_path)?;
 
         Ok(Self {
             reader,
@@ -89,11 +84,8 @@ impl FileIO {
         sink_path: PathBuf,
         _weight_names: Vec<String>,
     ) -> Result<Self, CreateError> {
-        use CreateError::NTuple;
         let reader = FileReader::try_new(source_path)?;
-        let writer = ntuple::Writer::new(&sink_path, "").ok_or_else(|| {
-            NTuple(format!("Failed to create ntuple writer to {sink_path:?}"))
-        })?;
+        let writer = ntuple::Writer::new(&sink_path, "")?;
         Ok(Self {
             reader,
             writer,
@@ -230,5 +222,45 @@ impl UpdateWeights for FileIO {
         }
         self.writer.write(&record).unwrap();
         Ok(true)
+    }
+}
+
+impl From<ntuple::reader::CreateError> for CreateError {
+    fn from(source: ntuple::reader::CreateError) -> Self {
+        use ntuple::reader::CreateError as NTupleErr;
+        let msg = source.to_string();
+        match source {
+            NTupleErr::Open(_) => {
+                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                CreateError::OpenInput(err)
+            }
+            NTupleErr::NoTTree => {
+                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                CreateError::Read(err)
+            }
+            NTupleErr::Exception | NTupleErr::Unknown => {
+                CreateError::Other(msg)
+            }
+        }
+    }
+}
+
+impl From<ntuple::writer::CreateError> for CreateError {
+    fn from(source: ntuple::writer::CreateError) -> Self {
+        use ntuple::writer::CreateError as NTupleErr;
+        let msg = source.to_string();
+        match source {
+            NTupleErr::Create(_) => {
+                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                CreateError::CreateTarget(err)
+            }
+            NTupleErr::NoTTree => {
+                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                CreateError::Write(err)
+            }
+            NTupleErr::Exception | NTupleErr::Unknown => {
+                CreateError::Other(msg)
+            }
+        }
     }
 }

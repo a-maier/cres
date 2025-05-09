@@ -383,6 +383,9 @@ pub enum CreateError {
     /// UTF8 error
     #[error("UTF8 error")]
     Utf8(#[from] Utf8Error),
+    /// Any other error
+    #[error("{0}")]
+    Other(String),
 
     #[cfg(not(feature = "ntuple"))]
     /// Attempt to use unsupported format
@@ -392,11 +395,6 @@ pub enum CreateError {
     /// Attempt to use unsupported format
     #[error("Support for STRIPPER XML format is not enabled. Reinstall cres with `cargo install cres --features=stripper-xml`")]
     XMLUnsupported,
-
-    #[cfg(feature = "ntuple")]
-    /// ROOT NTuple error
-    #[error("{0}")]
-    NTuple(String),
 
     #[cfg(feature = "stripper-xml")]
     /// XML error in STRIPPER XML file

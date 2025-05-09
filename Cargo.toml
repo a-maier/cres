@@ -32,7 +32,7 @@ logbar = "0.1"
 lz4 = "1.23"
 noisy_float = { version = "0.2", features = ["serde"] }
 nom = "8"
-ntuple = { version = "0.9", optional = true }
+ntuple = { version = "0.10", optional = true }
 parking_lot = { version = "0.12", features = ["serde"] }
 particle_id = { version = "0.5", features = ["serde"] }
 pathfinding = "4.2"

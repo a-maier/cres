@@ -182,11 +182,15 @@ impl Classifier {
             ])
         };
 
-        let writers: Option<Vec<_>> = (0..partitions.len())
-            .map(|i| Writer::new(make_outname(i), ""))
+        let writers: Result<Vec<_>> = (0..partitions.len())
+            .map(|i| {
+                let outname = make_outname(i);
+                Writer::new(&outname, "").with_context(|| {
+                    format!("Failed to create ntuple writer to {outname:?}")
+                })
+            })
             .collect();
-        let mut writers = writers
-            .ok_or_else(|| anyhow!("Failed to create ntuple writers"))?;
+        let mut writers = writers?;
 
         let expected_nevents = reader.size_hint().0;
         let event_progress =
