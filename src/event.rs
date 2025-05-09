@@ -182,7 +182,7 @@ impl Event {
     }
 
     /// Rescale weights by some factor
-    pub fn rescale_weights(&mut self, scale: N64) {
+    pub fn rescale_weights(&self, scale: N64) {
         for wt in self.weights.write().iter_mut() {
             *wt *= scale
         }
