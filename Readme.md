@@ -17,15 +17,18 @@ Jeppe R. Andersen, Andreas Maier, Daniel Maître\
 Installation
 ------------
 
-If [Rust and Cargo](https://www.rust-lang.org/) are installed on your
-system, run
+The current version requires Rust 1.82.0 or later. You can install
+[Rust and Cargo](https://www.rust-lang.org/) with
+
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+To install the latest release, run
 
     cargo install cres
 
-The current version requires Rust 1.82.0 or later.
-
 Precompiled executables are available on
-[hepforge](https://cres.hepforge.org/).
+[hepforge](https://cres.hepforge.org/) and
+[github](https://github.com/a-maier/cres/releases).
 
 To install the development version, run
 
@@ -35,14 +38,14 @@ Check the [Features section](#Features) for more options.
 
 To generate shell command completion, run
 
-    cres-generate-shell-completion SHELL
+    cres-generate-shell-completions SHELL
 
 For bash and fish, command completion should work upon the next login.
 For other shells, the completion code is written to standard
 output. Consult your shell's documentation if you are unsure what to
 do with it. To list the supported shells, run
 
-    cres-generate-shell-completion --help
+    cres-generate-shell-completions --help
 
 Usage
 -----
@@ -122,7 +125,7 @@ and value have to be separated by '='. For example:
 
 The argfile can be used like this:
 
-    cres @argfile -o OUT.HEPMC2 IN.HEPMC2
+    cres @argfile -o OUTDIR IN.HEPMC2
 
 
 Scaling to huge samples
