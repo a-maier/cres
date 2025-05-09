@@ -1,6 +1,6 @@
 use crate::{
+    event::{Event, EventBuilder},
     ParticleID,
-    event::{Event, EventBuilder}
 };
 
 use std::marker::PhantomData;
@@ -86,8 +86,7 @@ impl<'a> From<EventView<'a>> for Event {
             n_weights,
             n_type_sets,
         } = view;
-        let n_particles =
-            (0..n_type_sets)
+        let n_particles = (0..n_type_sets)
             .map(|n| unsafe { (*type_sets.add(n)).n_momenta })
             .sum();
         let mut event = EventBuilder::with_capacity(n_particles);
