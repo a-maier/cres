@@ -378,7 +378,7 @@ pub enum CreateError {
     #[error("Failed to compress target file")]
     CompressTarget(#[source] std::io::Error),
     /// Failed to write to target file
-    #[error("Failed to compress target file")]
+    #[error("Failed to write to target file")]
     Write(#[source] std::io::Error),
     /// UTF8 error
     #[error("UTF8 error")]
