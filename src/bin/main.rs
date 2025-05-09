@@ -150,24 +150,26 @@ mod tests {
         let tempdir = tempdir().unwrap();
         let opt = Opt {
             outdir: tempdir.path().to_path_buf(),
-            jet_def: JetDefinition {
-                jetalgorithm: JetAlgorithm::AntiKt,
-                jetradius: 0.4,
-                jetpt: 30.,
-            },
-            lepton_def: LeptonDefinition {
-                leptonalgorithm: Some(JetAlgorithm::AntiKt),
-                leptonradius: Some(0.1),
-                leptonpt: Some(30.),
-            },
-            photon_def: PhotonDefinition {
-                photonefrac: Some(0.09),
-                photonradius: Some(0.2),
-                photonpt: Some(20.),
+            particle_def: ParticleDefinitions {
+                jet_def: JetDefinition {
+                    jetalgorithm: JetAlgorithm::AntiKt,
+                    jetradius: 0.4,
+                    jetpt: 30.,
+                },
+                lepton_def: LeptonDefinition {
+                    leptonalgorithm: Some(JetAlgorithm::AntiKt),
+                    leptonradius: Some(0.1),
+                    leptonpt: Some(30.),
+                },
+                photon_def: PhotonDefinition {
+                    photonefrac: Some(0.09),
+                    photonradius: Some(0.2),
+                    photonpt: Some(20.),
+                },
+                include_neutrinos: false,
             },
             max_cell_size: Some(100.),
             infiles: vec![PathBuf::from("test_data/showered.hepmc.zst")],
-            include_neutrinos: Default::default(),
             unweight: Default::default(),
             ptweight: Default::default(),
             // dumpcells: Default::default(),
