@@ -101,11 +101,11 @@ The most important options are
       d(p, q) = \sqrt{ ptweight^2 (p_\perp - q_\perp)^2 + \sum (p_i - q_i)^2 }
 
 - With `--minweight` events are also unweighted in addition to the
-  resampling.  Events with weight `w < minweight` are discarded with
-  probability `1-|w|/minweight` and reweighted to `sign(w) * minweight`
-  otherwise. Finally, all event weights are rescaled to exactly
-  preserve the original sum of weights. The seed for unweighting can
-  be chosen with the `--seed` option.
+  resampling. For events with weight `w < minweight` the weight is set
+  to zero with probability `1-|w|/minweight` and to `sign(w) *
+  minweight` otherwise. Finally, all event weights are rescaled to
+  exactly preserve the original sum of weights. The seed for
+  unweighting can be chosen with the `--seed` option.
 
 There are too many options
 --------------------------
