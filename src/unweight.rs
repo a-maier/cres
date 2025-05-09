@@ -32,7 +32,7 @@ impl<R: Rng> Unweight for Unweighter<R> {
     ///
     /// Finally, all event weights are rescaled uniformly to preserve
     /// the total sun of weights.
-    fn unweight(&mut self, events: &mut [Event]) -> Result<(), Self::Error> {
+    fn unweight(&mut self, events: &[Event]) -> Result<(), Self::Error> {
         let min_wt = self.min_wt;
         let nmin_wt = n64(min_wt);
 
@@ -42,7 +42,7 @@ impl<R: Rng> Unweight for Unweighter<R> {
         let orig_wt_sum: N64 = events.par_iter().map(|e| e.weight()).sum();
 
         let distr = Uniform::try_from(0.0..min_wt).unwrap();
-        for event in events.iter_mut() {
+        for event in events.iter() {
             let wt: f64 = event.weight().into();
             let awt = wt.abs();
             if awt > min_wt || awt == 0. {
@@ -61,9 +61,7 @@ impl<R: Rng> Unweight for Unweighter<R> {
             warn!("Sum of weights is 0 after unweighting")
         } else {
             let reweight = orig_wt_sum / final_wt_sum;
-            events
-                .par_iter_mut()
-                .for_each(|e| e.rescale_weights(reweight));
+            events.par_iter().for_each(|e| e.rescale_weights(reweight));
         }
         Ok(())
     }
@@ -74,7 +72,7 @@ pub struct NoUnweighter {}
 impl Unweight for NoUnweighter {
     type Error = std::convert::Infallible;
 
-    fn unweight(&mut self, _events: &mut [Event]) -> Result<(), Self::Error> {
+    fn unweight(&mut self, _events: &[Event]) -> Result<(), Self::Error> {
         Ok(())
     }
 }
