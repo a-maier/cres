@@ -73,7 +73,7 @@ pub trait Unweight {
     type Error;
 
     /// Unweight events
-    fn unweight(&mut self, e: Vec<Event>) -> Result<Vec<Event>, Self::Error>;
+    fn unweight(&mut self, e: &mut [Event]) -> Result<(), Self::Error>;
 }
 
 /// Callback after resampling a cell

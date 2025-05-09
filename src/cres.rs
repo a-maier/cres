@@ -194,10 +194,10 @@ where
         }
         log_multiplicities(&events);
 
-        let events = self.resampler.resample(events).map_err(ResamplingErr)?;
-
         let mut events =
-            self.unweighter.unweight(events).map_err(UnweightErr)?;
+            self.resampler.resample(events).map_err(ResamplingErr)?;
+
+        self.unweighter.unweight(&mut events).map_err(UnweightErr)?;
         events.par_sort_unstable();
 
         let sum_wt: N64 = events.par_iter().map(|e| e.weight()).sum();
