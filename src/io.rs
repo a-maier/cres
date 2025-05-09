@@ -318,7 +318,9 @@ pub enum CombinedBuildError {
 
 /// Error from event I/O operations
 #[derive(Debug, Error)]
-#[error("Error in event I/O reading from {infile} and writing to {outfile}")]
+#[error(
+    "Error in event I/O reading from {infile:?} and writing to {outfile:?}"
+)]
 pub struct FileIOError {
     infile: PathBuf,
     outfile: PathBuf,
