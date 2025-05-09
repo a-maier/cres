@@ -194,8 +194,7 @@ where
         }
         log_multiplicities(&events);
 
-        let mut events =
-            self.resampler.resample(events).map_err(ResamplingErr)?;
+        self.resampler.resample(&events).map_err(ResamplingErr)?;
 
         self.unweighter.unweight(&mut events).map_err(UnweightErr)?;
         events.par_sort_unstable();

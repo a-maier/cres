@@ -72,8 +72,8 @@ where
     /// Seeds with non-negative weight are ignored.
     fn resample(
         &mut self,
-        events: Vec<Event>,
-    ) -> Result<Vec<Event>, Self::Error> {
+        events: &[Event],
+    ) -> Result<(), Self::Error> {
         {
             self.print_wt_sum(&events);
 
@@ -109,7 +109,7 @@ where
 
             debug!("Resampling done");
         }
-        Ok(events)
+        Ok(())
     }
 }
 
@@ -240,10 +240,7 @@ where
 {
     type Error = ResamplingError;
 
-    fn resample(
-        &mut self,
-        events: Vec<Event>,
-    ) -> Result<Vec<Event>, Self::Error> {
+    fn resample(&mut self, events: &[Event]) -> Result<(), Self::Error> {
         let observer_data = ObserverData {
             cell_collector: self
                 .cell_collector
@@ -263,12 +260,12 @@ where
             .observer(observer)
             .neighbour_search::<N>()
             .build();
-        let events = crate::traits::Resample::resample(&mut resampler, events)?;
+        crate::traits::Resample::resample(&mut resampler, events)?;
 
         if let Some(c) = self.cell_collector.as_mut() {
             c.replace(resampler.observer.central.cell_collector.unwrap());
         }
-        Ok(events)
+        Ok(())
     }
 }
 

@@ -64,7 +64,7 @@ pub trait Resample {
     type Error;
 
     /// Resample events
-    fn resample(&mut self, e: Vec<Event>) -> Result<Vec<Event>, Self::Error>;
+    fn resample(&mut self, e: &[Event]) -> Result<(), Self::Error>;
 }
 
 /// Unweight events
