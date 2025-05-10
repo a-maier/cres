@@ -3,7 +3,7 @@ use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use cbindgen::Language;
+use cbindgen::{FunctionConfig, Language};
 use vergen_git2::{Emitter, Git2Builder};
 
 fn main() -> Result<()> {
@@ -46,10 +46,14 @@ fn write_c_header() {
 
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
-    let mut config = cbindgen::Config::default();
-    config.cpp_compat = true;
-    config.function.must_use =
-        Some("__attribute__((warn_unused_result))".to_string());
+    let config = cbindgen::Config {
+        cpp_compat: true,
+        function: FunctionConfig {
+            must_use: Some("__attribute__((warn_unused_result))".to_string()),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
     cbindgen::Builder::new()
         .with_config(config)
         .with_header(

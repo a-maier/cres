@@ -75,7 +75,7 @@ where
         events: &[Event],
     ) -> Result<(), Self::Error> {
         {
-            self.print_wt_sum(&events);
+            self.print_wt_sum(events);
 
             let nneg_weight = events.iter().filter(|e| e.weight() < 0.).count();
 
@@ -84,13 +84,13 @@ where
             info!("Initialising nearest-neighbour search");
             let neighbour_search = N::new_with_dist(
                 events.len(),
-                DistWrapper::new(&self.distance, &events),
+                DistWrapper::new(&self.distance, events),
                 max_cell_size,
             );
 
             info!("Resampling {nneg_weight} cells");
             let progress = ProgressBar::new(nneg_weight as u64, "events treated:");
-            let seeds = self.seeds.select_seeds(&events);
+            let seeds = self.seeds.select_seeds(events);
             seeds.for_each(|seed| {
                 assert!(seed < events.len());
                 if events[seed].weight() > 0. {
@@ -98,7 +98,7 @@ where
                 }
                 trace!("New cell around event {}", events[seed].id());
                 let mut cell =
-                    Cell::new(&events, seed, &neighbour_search);
+                    Cell::new(events, seed, &neighbour_search);
                 cell.resample();
                 self.observer.observe_cell(&cell);
                 progress.inc(1);
