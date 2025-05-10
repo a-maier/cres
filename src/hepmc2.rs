@@ -119,6 +119,7 @@ pub struct FileIO {
     sink_path: PathBuf,
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
+    discard_weightless: bool,
 }
 
 impl FileIO {
@@ -128,6 +129,7 @@ impl FileIO {
         sink_path: PathBuf,
         compression: Option<Compression>,
         _weight_names: Vec<String>,
+        discard_weightless: bool,
     ) -> Result<Self, CreateError> {
         use CreateError::*;
         let reader = FileReader::try_new(source_path)?;
@@ -142,6 +144,7 @@ impl FileIO {
             sink_path,
             sink,
             _weight_names,
+            discard_weightless,
         })
     }
 
@@ -177,6 +180,10 @@ impl FileIO {
         let mut record = record?;
 
         if !weights.is_empty() {
+            if self.discard_weightless && weights.central() == 0. {
+                return Ok(true);
+            }
+
             debug_assert!(record.starts_with('E'));
             let (weight_entries, _non_weight) = non_weight_entries(&record)
                 .map_err(|_| parse_err("entries before weight", &record))?;

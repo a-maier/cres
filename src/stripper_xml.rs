@@ -136,6 +136,7 @@ pub struct FileIO {
     sink: Box<dyn Write>,
     _weight_names: Vec<String>,
     weight_scale: f64,
+    discard_weightless: bool,
 }
 
 impl FileIO {
@@ -150,6 +151,7 @@ impl FileIO {
         sink_path: PathBuf,
         compression: Option<Compression>,
         _weight_names: Vec<String>,
+        discard_weightless: bool,
         scaling: &HashMap<String, f64>,
     ) -> Result<Self, CreateError> {
         use CreateError::*;
@@ -174,6 +176,7 @@ impl FileIO {
             sink_path,
             sink,
             _weight_names,
+            discard_weightless,
             weight_scale,
         })
     }
@@ -233,6 +236,10 @@ impl FileIO {
         let mut record = record?;
 
         if !weights.is_empty() {
+            if self.discard_weightless && weights.central() == 0. {
+                return Ok(true);
+            }
+
             let weight = weights.central() / self.weight_scale;
 
             // TODO: code duplication with `rescale_weight`

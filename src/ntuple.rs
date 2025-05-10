@@ -75,6 +75,7 @@ pub struct FileIO {
     writer: ntuple::Writer,
     sink_path: PathBuf,
     _weight_names: Vec<String>,
+    discard_weightless: bool,
 }
 
 impl FileIO {
@@ -83,6 +84,7 @@ impl FileIO {
         source_path: PathBuf,
         sink_path: PathBuf,
         _weight_names: Vec<String>,
+        discard_weightless: bool,
     ) -> Result<Self, CreateError> {
         let reader = FileReader::try_new(source_path)?;
         let writer = ntuple::Writer::new(&sink_path, "")?;
@@ -91,6 +93,7 @@ impl FileIO {
             writer,
             _weight_names,
             sink_path,
+            discard_weightless,
         })
     }
 
@@ -202,6 +205,10 @@ impl UpdateWeights for FileIO {
         let mut record = self.into_io_error(record)?;
 
         if !weights.is_empty() {
+            if self.discard_weightless && weights.central() == 0. {
+                return Ok(true);
+            }
+
             let mut weights = weights.iter().copied();
             record.weight = weights.next().unwrap().into();
 

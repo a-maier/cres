@@ -136,6 +136,18 @@ variable."
     #[clap(long, value_delimiter = ',')]
     pub(crate) weights: Vec<String>,
 
+    /// Discard events with zero weight
+    ///
+    /// By default, only even weights are modified and all other event
+    /// information is, even for events with zero weight. This is
+    /// important for cases where the event records carry additional
+    /// information. For instance, HepMC events with zero weight may
+    /// still update the current cross section estimate. With this
+    /// option enabled, events with zero weight are omitted from the
+    /// output.
+    #[clap(long, default_value_t)]
+    pub(crate) discard_weightless: bool,
+
     /// Input files
     #[clap(name = "INFILES", value_parser)]
     pub(crate) infiles: Vec<PathBuf>,

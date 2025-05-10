@@ -78,6 +78,7 @@ where
     #[cfg(feature = "multiweight")]
     event_io.weight_names(opt.weights.clone());
     event_io.compression(opt.compression);
+    event_io.discard_weightless(opt.discard_weightless);
 
     create_dir_all(&opt.outdir)?;
     let files = opt.infiles.into_iter().map(|f| {
@@ -180,6 +181,7 @@ mod tests {
             threads: Default::default(),
             #[cfg(feature = "multiweight")]
             weights: Default::default(),
+            discard_weightless: Default::default(),
         };
         cres(opt).unwrap();
     }

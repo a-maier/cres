@@ -130,6 +130,7 @@ pub struct IOBuilder {
     scaling: HashMap<String, f64>,
     compression: Option<Compression>,
     weight_names: Vec<String>,
+    discard_weightless: bool,
 }
 
 impl IOBuilder {
@@ -148,6 +149,15 @@ impl IOBuilder {
         self
     }
 
+    /// Decide if events with zero weight should be discarded
+    pub fn discard_weightless(
+        &mut self,
+        discard_weightless: bool,
+    ) -> &mut Self {
+        self.discard_weightless = discard_weightless;
+        self
+    }
+
     /// Build an event I/O object from the given input and output files
     pub fn build_from_files(
         self,
@@ -158,6 +168,7 @@ impl IOBuilder {
             scaling,
             compression,
             weight_names,
+            discard_weightless,
         } = self;
         let _scaling = scaling;
 
@@ -172,6 +183,7 @@ impl IOBuilder {
                     outfile,
                     compression,
                     weight_names,
+                    discard_weightless,
                 )?)
             }
             #[cfg(feature = "lhef")]
@@ -182,12 +194,18 @@ impl IOBuilder {
                     outfile,
                     compression,
                     weight_names,
+                    discard_weightless,
                 )?)
             }
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => {
                 use crate::ntuple::FileIO as NTupleIO;
-                Box::new(NTupleIO::try_new(infile, outfile, weight_names)?)
+                Box::new(NTupleIO::try_new(
+                    infile,
+                    outfile,
+                    weight_names,
+                    discard_weightless,
+                )?)
             }
             #[cfg(feature = "stripper-xml")]
             FileFormat::StripperXml => {
@@ -197,6 +215,7 @@ impl IOBuilder {
                     outfile,
                     compression,
                     weight_names,
+                    discard_weightless,
                     &_scaling,
                 )?)
             }
@@ -600,7 +619,7 @@ impl UpdateWeights for CombinedFileIO {
         self.rewind()?;
         let mut nevent = 0;
         let progress =
-            ProgressBar::new(weights.len() as u64, "events written:");
+            ProgressBar::new(weights.len() as u64, "events updated:");
         for idx in 0..self.files.len() {
             self.open(idx)?;
             let current = self.current.as_mut().unwrap();
