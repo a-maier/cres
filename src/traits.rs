@@ -46,6 +46,14 @@ pub trait Clustering {
     fn cluster(&self, ev: Event) -> Result<Event, Self::Error>;
 }
 
+impl<C: Clustering> Clustering for &C {
+    type Error = <C as Clustering>::Error;
+
+    fn cluster(&self, ev: Event) -> Result<Event, Self::Error> {
+        <C as Clustering>::cluster(self, ev)
+    }
+}
+
 /// Convert between two types
 ///
 /// In contrast to [std::convert::TryFrom] the converter can maintain
