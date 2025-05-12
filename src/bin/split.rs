@@ -3,7 +3,7 @@ mod opt_particle_def;
 mod opt_split;
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     fs::{self, File},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
@@ -14,12 +14,13 @@ use crate::opt_split::Opt;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::{
+    FEATURES, GIT_BRANCH, GIT_REV, ParticleID, VERSION,
+    compression::{Compression, compress_writer},
     event::Event,
     formats::FileFormat,
-    io::{detect_event_file_format, Converter, EventFileReader, EventRecord},
+    io::{Converter, EventFileReader, EventRecord, detect_event_file_format},
     prelude::DefaultClustering,
     traits::{Clustering, TryConvert},
-    ParticleID, FEATURES, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
 use itertools::Itertools;
@@ -83,7 +84,9 @@ fn main() -> Result<()> {
         match format {
             FileFormat::HepMC2 => todo!("HepMC2 splitting not yet implemented"),
             #[cfg(feature = "lhef")]
-            FileFormat::Lhef => split_lhef(file, &clustering, &opt.outdir)?,
+            FileFormat::Lhef => {
+                split_lhef(file, &clustering, &opt.outdir, opt.compression)?
+            }
             #[cfg(feature = "ntuple")]
             FileFormat::BlackHatNtuple => split_ntuple(
                 &file,
@@ -104,7 +107,12 @@ fn main() -> Result<()> {
 }
 
 // TODO: code duplication between `split_*` functions
-fn split_lhef<C>(file: PathBuf, clustering: &C, outdir: &Path) -> Result<()>
+fn split_lhef<C>(
+    file: PathBuf,
+    clustering: &C,
+    outdir: &Path,
+    compression: Option<Compression>,
+) -> Result<()>
 where
     C: Clustering,
     <C as Clustering>::Error: std::error::Error + Send + Sync + 'static,
@@ -125,7 +133,8 @@ where
                 fs::create_dir_all(out_path.parent().unwrap())?;
                 let outfile = File::create(&out_path)
                     .with_context(|| format!("Failed to open {out_path:?}"))?;
-                let mut writer = BufWriter::new(outfile);
+                let writer = BufWriter::new(outfile);
+                let mut writer = compress_writer(writer, compression)?;
                 writer.write_all(&header)?;
                 let event = String::try_from(event).unwrap();
                 v.insert(writer).write_all(event.as_bytes())?

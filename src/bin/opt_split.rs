@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use cres::compression::Compression;
 
-use crate::opt_particle_def::ParticleDefinitions;
+use crate::{opt_common::parse_compr, opt_particle_def::ParticleDefinitions};
 
 // TODO: code duplication with opt_cres
 #[derive(Debug, Parser)]
@@ -20,7 +21,6 @@ pub(crate) struct Opt {
     pub(crate) particle_def: ParticleDefinitions,
 
     // TODO: output compression option
-
     /// Verbosity level
     #[clap(
         short,
@@ -43,4 +43,11 @@ The default can be set with the `RAYON_NUM_THREADS` environment
 variable."
     )]
     pub(crate) threads: usize,
+
+    #[clap(long, value_parser = parse_compr,
+                help = "Compress output file.
+Possible settings are 'bzip2', 'gzip', 'zstd', 'lz4'.
+Compression levels can be set with algorithm_level e.g. 'zstd_5'.
+Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
+    pub(crate) compression: Option<Compression>,
 }
