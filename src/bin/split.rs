@@ -4,7 +4,8 @@ mod opt_split;
 
 use std::{
     collections::{hash_map::Entry, HashMap},
-    fs,
+    fs::{self, File},
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
@@ -13,9 +14,12 @@ use crate::opt_split::Opt;
 use anyhow::{Context, Result};
 use clap::Parser;
 use cres::{
-    event::Event, io::Converter, ntuple::NTupleConverter,
-    prelude::DefaultClustering, traits::Clustering, ParticleID, FEATURES,
-    GIT_BRANCH, GIT_REV, VERSION,
+    event::Event,
+    formats::FileFormat,
+    io::{detect_event_file_format, Converter, EventFileReader, EventRecord},
+    prelude::DefaultClustering,
+    traits::{Clustering, TryConvert},
+    ParticleID, FEATURES, GIT_BRANCH, GIT_REV, VERSION,
 };
 use env_logger::Env;
 use itertools::Itertools;
@@ -50,8 +54,6 @@ fn main() -> Result<()> {
 
     debug!("settings: {:#?}", opt);
 
-    let converter = Converter::new();
-
     let ParticleDefinitions {
         jet_def,
         lepton_def,
@@ -74,38 +76,112 @@ fn main() -> Result<()> {
     for file in opt.infiles {
         info!("Splitting up {file:?}");
 
-        let reader = ntuple::Reader::new(&file).with_context(|| {
-            format!("Failed to read {file:?} as NTuple file")
+        let format = detect_event_file_format(&file).with_context(|| {
+            format!("Failed to determine format of {file:?}")
         })?;
-        let filename = Path::new(file.file_name().unwrap());
-        let mut writers = HashMap::new();
-
-        for event in reader {
-            let event = event.with_context(|| {
-                format!("Failed to read event from {file:?}")
-            })?;
-            let internal = converter.convert_ntuple(event.clone())?;
-            let clustered = clustering.cluster(internal)?;
-            let multiplicities = multiplicities(&clustered);
-            match writers.entry(multiplicities) {
-                Entry::Vacant(v) => {
-                    let mult = v.key();
-                    let out_path = gen_out_path(&opt.outdir, mult, filename);
-                    fs::create_dir_all(out_path.parent().unwrap())?;
-                    let writer = ntuple::Writer::new(&out_path, "")
-                        .with_context(|| {
-                            format!(
-                                "Failed to write {out_path:?} as NTuple file"
-                            )
-                        })?;
-                    v.insert(writer).write(&event)?
-                }
-                Entry::Occupied(mut o) => o.get_mut().write(&event)?,
-            };
+        debug!("Reading {file:?} as {format:?} file");
+        match format {
+            FileFormat::HepMC2 => todo!("HepMC2 splitting not yet implemented"),
+            #[cfg(feature = "lhef")]
+            FileFormat::Lhef => split_lhef(file, &clustering, &opt.outdir)?,
+            #[cfg(feature = "ntuple")]
+            FileFormat::BlackHatNtuple => split_ntuple(
+                &file,
+                &clustering,
+                &opt.outdir,
+            )
+            .with_context(|| {
+                format!("Failed to split up BlackHatNTuple file {file:?}")
+            })?,
+            #[cfg(feature = "stripper-xml")]
+            FileFormat::StripperXml => {
+                todo!("XML splitting not yet implemented")
+            }
         }
     }
     info!("Done");
     Ok(())
+}
+
+// TODO: code duplication between `split_*` functions
+fn split_lhef<C>(file: PathBuf, clustering: &C, outdir: &Path) -> Result<()>
+where
+    C: Clustering,
+    <C as Clustering>::Error: std::error::Error + Send + Sync + 'static,
+{
+    let reader = cres::lhef::FileReader::try_new(file.clone())?;
+    let header = reader.header().to_owned();
+    let filename = Path::new(file.file_name().unwrap());
+    let mut writers = HashMap::new();
+    for event in reader {
+        let event = event
+            .with_context(|| format!("Failed to read event from {file:?}"))?;
+        let multiplicities =
+            extract_multiplicities(event.clone(), &clustering)?;
+        match writers.entry(multiplicities) {
+            Entry::Vacant(v) => {
+                let mult = v.key();
+                let out_path = gen_out_path(outdir, mult, filename);
+                fs::create_dir_all(out_path.parent().unwrap())?;
+                let outfile = File::create(&out_path)
+                    .with_context(|| format!("Failed to open {out_path:?}"))?;
+                let mut writer = BufWriter::new(outfile);
+                writer.write_all(&header)?;
+                let event = String::try_from(event).unwrap();
+                v.insert(writer).write_all(event.as_bytes())?
+            }
+            Entry::Occupied(mut o) => {
+                let event = String::try_from(event).unwrap();
+                o.get_mut().write_all(event.as_bytes())?
+            }
+        };
+    }
+    Ok(())
+}
+
+#[cfg(feature = "ntuple")]
+fn split_ntuple<C>(file: &Path, clustering: C, outdir: &Path) -> Result<()>
+where
+    C: Clustering,
+    <C as Clustering>::Error: std::error::Error + Send + Sync + 'static,
+{
+    let reader = ntuple::Reader::new(&file)
+        .with_context(|| format!("Failed to read {file:?} as NTuple file"))?;
+    let filename = Path::new(file.file_name().unwrap());
+    let mut writers = HashMap::new();
+    for event in reader {
+        let event = event
+            .with_context(|| format!("Failed to read event from {file:?}"))?;
+        let ev = EventRecord::NTuple(Box::new(event.clone()));
+        let multiplicities = extract_multiplicities(ev, &clustering)?;
+        match writers.entry(multiplicities) {
+            Entry::Vacant(v) => {
+                let mult = v.key();
+                let out_path = gen_out_path(outdir, mult, filename);
+                fs::create_dir_all(out_path.parent().unwrap())?;
+                let writer =
+                    ntuple::Writer::new(&out_path, "").with_context(|| {
+                        format!("Failed to write {out_path:?} as NTuple file")
+                    })?;
+                v.insert(writer).write(&event)?
+            }
+            Entry::Occupied(mut o) => o.get_mut().write(&event)?,
+        };
+    }
+    Ok(())
+}
+
+fn extract_multiplicities<C>(
+    event: EventRecord,
+    clustering: C,
+) -> Result<Vec<(ParticleID, usize)>>
+where
+    C: Clustering,
+    <C as Clustering>::Error: std::error::Error + Send + Sync + 'static,
+{
+    let internal = Converter::new().try_convert(event)?;
+    let clustered = clustering.cluster(internal)?;
+    Ok(multiplicities(&clustered))
 }
 
 fn gen_out_path(
