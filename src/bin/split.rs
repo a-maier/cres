@@ -145,6 +145,9 @@ where
             }
         };
     }
+    for mut writer in writers.into_values() {
+        writer.write_all(b"\n</LesHouchesEvents>\n")?;
+    }
     Ok(())
 }
 
