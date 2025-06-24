@@ -124,9 +124,12 @@ impl Iterator for FileIO {
     }
 }
 
+/// Meta information about a set of events
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct EventTypeInfo {
+    /// Overall weight normalisation factor
     pub scale: f64,
+    /// Names associated with event weights
     pub weight_names: Vec<String>,
 }
 
@@ -708,8 +711,11 @@ pub enum EventRecord {
     #[cfg(feature = "stripper-xml")]
     /// STRIPPER XML event record
     StripperXml {
+        /// The actual record
         record: String,
+        /// The names associated with the event weights
         weight_names: Vec<String>,
+        /// Overall weight normalisation
         weight_scale: f64,
     },
 }
