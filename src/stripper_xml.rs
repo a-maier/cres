@@ -16,7 +16,7 @@ use nom::{
         char, i32, multispace0, multispace1, space0, space1, u64,
     },
     combinator::{all_consuming, opt, recognize},
-    sequence::{preceded, tuple},
+    sequence::preceded,
     IResult, Parser,
 };
 use particle_id::ParticleID;
@@ -739,7 +739,7 @@ fn particle_momentum(line: &str) -> IResult<&str, FourVector> {
 }
 
 fn reweight_start(line: &str) -> IResult<&str, &str> {
-    recognize(tuple((
+    recognize((
         multispace0,
         tag("<rw"),
         multispace1,
@@ -749,7 +749,7 @@ fn reweight_start(line: &str) -> IResult<&str, &str> {
         multispace0,
         char('>'),
         multispace0,
-    ))).parse(line)
+    )).parse(line)
 }
 
 impl UpdateWeights for FileIO {
@@ -782,5 +782,5 @@ fn double(input: &str) -> IResult<&str, f64> {
 }
 
 fn ws_comma(input: &str) -> IResult<&str, &str> {
-    recognize(opt(tuple((multispace0, char(','), multispace0)))).parse(input)
+    recognize(opt((multispace0, char(','), multispace0))).parse(input)
 }
