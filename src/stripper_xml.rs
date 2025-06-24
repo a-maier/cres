@@ -414,10 +414,7 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
                         let mut nsubevents = None;
                         let mut alpha_s_power = None;
                         let attributes =
-                            e.attributes().filter_map(|a| match a {
-                                Ok(a) => Some(a),
-                                Err(_) => None,
-                            });
+                            e.attributes().filter_map(|a| a.ok());
                         for attr in attributes {
                             let attr_err = |attr, val: &Attribute<'_>| {
                                 let val: &[u8] = val.value.as_ref();
