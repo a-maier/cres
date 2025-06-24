@@ -260,11 +260,13 @@ impl FileIO {
                 let mut start = start + rwtag.len();
                 for entry in &self.weight_entries {
                     let rest = &record[start..];
-                    let (_rest, old) = recognize(double).parse(rest)
+                    let (_rest, old) = recognize(double)
+                        .parse(rest)
                         .map_err(|_| parse_err("reweight entry", rest))?;
                     start += if self.weights_to_resample.contains(entry) {
                         let wt_str = weights.next().unwrap().to_string();
-                        record.replace_range(start..(start + old.len()), &wt_str);
+                        record
+                            .replace_range(start..(start + old.len()), &wt_str);
                         wt_str.len()
                     } else {
                         old.len()
@@ -413,8 +415,7 @@ pub(crate) fn extract_xml_info(r: impl BufRead) -> Result<XMLTag, CreateError> {
                         let mut nevents = None;
                         let mut nsubevents = None;
                         let mut alpha_s_power = None;
-                        let attributes =
-                            e.attributes().filter_map(|a| a.ok());
+                        let attributes = e.attributes().filter_map(|a| a.ok());
                         for attr in attributes {
                             let attr_err = |attr, val: &Attribute<'_>| {
                                 let val: &[u8] = val.value.as_ref();
@@ -670,7 +671,8 @@ impl StripperXmlParser for Converter {
         let mut x1 = None;
         let mut x2 = None;
         for name in weight_names {
-            let (r, wt) = preceded(opt(char(',')), double).parse(rest)
+            let (r, wt) = preceded(opt(char(',')), double)
+                .parse(rest)
                 .map_err(|_| parse_err("reweight entry", rest))?;
             rest = r;
             if self.weight_names().contains(name) {
@@ -746,7 +748,8 @@ fn reweight_start(line: &str) -> IResult<&str, &str> {
         multispace0,
         char('>'),
         multispace0,
-    )).parse(line)
+    ))
+    .parse(line)
 }
 
 impl UpdateWeights for FileIO {
