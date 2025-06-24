@@ -17,7 +17,7 @@ use nom::{
     },
     combinator::{all_consuming, opt, recognize},
     sequence::{preceded, tuple},
-    IResult,
+    IResult, Parser,
 };
 use particle_id::ParticleID;
 use quick_xml::events::attributes::Attribute;
@@ -260,7 +260,7 @@ impl FileIO {
                 let mut start = start + rwtag.len();
                 for entry in &self.weight_entries {
                     let rest = &record[start..];
-                    let (_rest, old) = recognize(double)(rest)
+                    let (_rest, old) = recognize(double).parse(rest)
                         .map_err(|_| parse_err("reweight entry", rest))?;
                     start += if self.weights_to_resample.contains(entry) {
                         let wt_str = weights.next().unwrap().to_string();
@@ -673,7 +673,7 @@ impl StripperXmlParser for Converter {
         let mut x1 = None;
         let mut x2 = None;
         for name in weight_names {
-            let (r, wt) = preceded(opt(char(',')), double)(rest)
+            let (r, wt) = preceded(opt(char(',')), double).parse(rest)
                 .map_err(|_| parse_err("reweight entry", rest))?;
             rest = r;
             if self.weight_names().contains(name) {
@@ -749,7 +749,7 @@ fn reweight_start(line: &str) -> IResult<&str, &str> {
         multispace0,
         char('>'),
         multispace0,
-    )))(line)
+    ))).parse(line)
 }
 
 impl UpdateWeights for FileIO {
@@ -782,5 +782,5 @@ fn double(input: &str) -> IResult<&str, f64> {
 }
 
 fn ws_comma(input: &str) -> IResult<&str, &str> {
-    recognize(opt(tuple((multispace0, char(','), multispace0))))(input)
+    recognize(opt(tuple((multispace0, char(','), multispace0)))).parse(input)
 }
