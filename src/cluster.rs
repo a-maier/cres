@@ -112,7 +112,7 @@ impl Clustering for DefaultClustering {
         let mut clustered_to_jets = Vec::new();
 
         // treat photons
-        debug_assert!(outgoing.windows(2).all(|p| p[0].0 >= p[1].0));
+        debug_assert!(outgoing.is_sorted_by(|a, b| a.0 >= b.0));
         if let Ok(photon_pos) = outgoing.binary_search_by(|p| photon.cmp(&p.0))
         {
             for p in outgoing[photon_pos].1.iter() {
