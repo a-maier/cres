@@ -133,7 +133,9 @@ Possible values with increasing amount of output are
     #[clap(
         long, default_value = "negative",
         value_parser = parse_weight_sign,
-        help = "Which events are chosen as cell seeds. Possible values are
+        help = "Which events are chosen as cell seeds. Cell growth
+terminates once the accumulated weight changes sign, e.g. from
+negative to non-negative. Possible values are
 'negative': events with negative weight,
 'positive': events with positive weight,
 'all': all events, regardless of weight."
@@ -156,16 +158,16 @@ variable."
 
 Limiting the cell size ensures that event weights are only
 redistributed between events that are sufficiently similar.
-The downside is that not all negative weights may be cancelled.
-")]
+The downside is that not all negative weights may be cancelled."
+    )]
     pub(crate) max_cell_size: Option<f64>,
 
     #[cfg(feature = "multiweight")]
     #[clap(long, value_delimiter = ',', help = "Comma-separated list of weights to include in the resampling
 
 In addition to the main event weight, weights with the given
-names will be averaged within each cell.
-")]
+names will be averaged within each cell."
+    )]
     // Would be nice to use a HashSet here, but clap refuses to parse
     // that out of the box
     pub(crate) weights: Vec<String>,
@@ -178,8 +180,8 @@ important for cases where the event records carry additional
 information. For instance, HepMC events with zero weight may
 still update the current cross section estimate. With this
 option enabled, events with zero weight are omitted from the
-output.
-")]
+output."
+    )]
     pub(crate) discard_weightless: bool,
 
     /// Input files
