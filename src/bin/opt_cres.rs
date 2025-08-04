@@ -14,8 +14,14 @@ fn parse_strategy(s: &str) -> Result<Strategy, UnknownStrategy> {
     use Strategy::*;
     match s {
         "Any" | "any" => Ok(Next),
-        "MostNegative" | "most_negative" => Ok(MostNegative),
-        "LeastNegative" | "least_negative" => Ok(LeastNegative),
+        "LargestAbsWeightFirst"
+        | "largest_abs_weight_first"
+        | "MostNegative"
+        | "most_negative" => Ok(LargestAbsWeightFirst),
+        "SmallestAbsWeightFirst"
+        | "smallest_abs_weight_first"
+        | "LeastNegative"
+        | "least_negative" => Ok(SmallestAbsWeightFirst),
         _ => Err(UnknownStrategy(s.to_string())),
     }
 }
@@ -116,12 +122,12 @@ Possible values with increasing amount of output are
     pub(crate) search: Search,
 
     #[clap(
-        long, default_value = "most_negative",
+        long, default_value = "any",
         value_parser = parse_strategy,
         help = "Strategy for choosing cell seeds. Possible values are
-'least_negative': event with negative weight closest to zero,
-'most_negative' event with the lowest weight,
-'any': no additional requirements beyond a negative weight.\n"
+'smallest_abs_weight_first': seeds with weight closest to zero are chosen first,
+'largest_abs_weight_first' seeds with the largest absolute weight are chosen first,
+'any': seeds are chosen in an arbitrary order.\n"
     )]
     pub(crate) strategy: Strategy,
 

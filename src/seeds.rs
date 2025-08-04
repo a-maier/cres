@@ -23,9 +23,9 @@ pub trait SelectSeeds {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Strategy {
     /// Select events with the negative weight closest to zero first
-    LeastNegative,
+    SmallestAbsWeightFirst,
     /// Select events with the most negative weight first
-    MostNegative,
+    LargestAbsWeightFirst,
     /// Take negative-weight events in the order passed to [select_seeds](SelectSeeds::select_seeds)
     Next,
 }
@@ -44,7 +44,7 @@ pub enum WeightSign {
 
 impl Default for Strategy {
     fn default() -> Self {
-        Self::MostNegative
+        Self::LargestAbsWeightFirst
     }
 }
 
@@ -83,10 +83,10 @@ impl SelectSeeds for StrategicSelector {
             .collect();
         match self.strategy {
             Next => {}
-            MostNegative => {
+            LargestAbsWeightFirst => {
                 seeds.par_sort_unstable_by_key(|&n| events[n].weight())
             }
-            LeastNegative => seeds.par_sort_unstable_by(|&n, &m| {
+            SmallestAbsWeightFirst => seeds.par_sort_unstable_by(|&n, &m| {
                 events[m].weight().cmp(&events[n].weight())
             }),
         }
