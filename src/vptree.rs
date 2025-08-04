@@ -187,7 +187,7 @@ where
         if pts.len() < 2 || depth == 0 {
             return;
         }
-        // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
+        debug_assert!(pts.is_sorted_by_key(|pt| pt.0));
         // the last point is the one furthest away from the parent,
         // so it is the best candidate for the next vantage point
         pts.swap(0, pts.len() - 1);
@@ -286,7 +286,7 @@ where
         if pts.len() < PAR_MIN_SIZE {
             return Self::build_tree(pts, dist, depth);
         }
-        // debug_assert!(pts.is_sorted_by_key(|pt| pt.0))
+        debug_assert!(pts.is_sorted_by_key(|pt| pt.0));
         pts.swap(0, pts.len() - 1);
         let (vp, pts) = pts.split_first_mut().unwrap();
         pts.par_iter_mut().for_each(|(d, pt)| {
