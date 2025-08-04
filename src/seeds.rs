@@ -17,6 +17,9 @@ pub trait SelectSeeds {
     /// seeds in `events`, in the order in which cells are to be
     /// constructed.
     fn select_seeds(&self, events: &[Event]) -> Self::ParallelIter;
+
+    /// Check if the given event is a valid cell seed
+    fn is_valid_seed(&self, event: &Event) -> bool;
 }
 
 /// Strategy for seeds selection
@@ -95,5 +98,13 @@ impl SelectSeeds for StrategicSelector {
         // single thread trying to work on a last huge chunk of cells
         const MAX_TASK_SIZE: usize = 64;
         seeds.into_par_iter().with_max_len(MAX_TASK_SIZE)
+    }
+
+    fn is_valid_seed(&self, event: &Event) -> bool {
+        match self.weight_sign {
+            WeightSign::Negative => event.weight() < 0.,
+            WeightSign::Positive => event.weight() > 0.,
+            WeightSign::All => true
+        }
     }
 }

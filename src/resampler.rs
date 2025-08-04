@@ -93,7 +93,8 @@ where
             let seeds = self.seeds.select_seeds(events);
             seeds.for_each(|seed| {
                 assert!(seed < events.len());
-                if events[seed].weight() > 0. {
+                if !self.seeds.is_valid_seed(&events[seed]) {
+                    progress.inc(1);
                     return;
                 }
                 trace!("New cell around event {}", events[seed].id());
