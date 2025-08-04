@@ -93,7 +93,7 @@ impl ProgressBar {
 
     fn logbar(len: u64, message: &str) -> Self {
         let style = logbar::Style::new().indicator('█');
-        eprintln!("{}", message);
+        eprintln!("{message}");
         let bar = logbar::ProgressBar::with_style(len as usize, style);
         // temporarily disable logging to not overwrite the bar
         log::set_max_level(log::LevelFilter::Off);

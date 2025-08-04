@@ -238,11 +238,11 @@ impl From<ntuple::reader::CreateError> for CreateError {
         let msg = source.to_string();
         match source {
             NTupleErr::Open(_) => {
-                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                let err = std::io::Error::other(msg);
                 CreateError::OpenInput(err)
             }
             NTupleErr::NoTTree => {
-                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                let err = std::io::Error::other(msg);
                 CreateError::Read(err)
             }
             NTupleErr::Exception | NTupleErr::Unknown => {
@@ -258,11 +258,11 @@ impl From<ntuple::writer::CreateError> for CreateError {
         let msg = source.to_string();
         match source {
             NTupleErr::Create(_) => {
-                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                let err = std::io::Error::other(msg);
                 CreateError::CreateTarget(err)
             }
             NTupleErr::NoTTree => {
-                let err = std::io::Error::new(std::io::ErrorKind::Other, msg);
+                let err = std::io::Error::other(msg);
                 CreateError::Write(err)
             }
             NTupleErr::Exception | NTupleErr::Unknown => {

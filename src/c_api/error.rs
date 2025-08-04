@@ -19,7 +19,7 @@ pub extern "C" fn cres_print_last_err() {
     let _ = std::panic::catch_unwind(|| {
         LAST_ERROR.with(|e| {
             if let Some(err) = &*e.borrow() {
-                eprintln!("{}", err);
+                eprintln!("{err}");
             }
         })
     });
@@ -40,7 +40,7 @@ pub extern "C" fn cres_get_last_err(buf: *mut c_char, buflen: usize) -> i32 {
         Ok(i) => i,
         Err(err) => {
             LAST_ERROR
-                .with(|e| *e.borrow_mut() = Some(anyhow!("panic: {:?}", err)));
+                .with(|e| *e.borrow_mut() = Some(anyhow!("panic: {err:?}")));
             -1
         }
     }
