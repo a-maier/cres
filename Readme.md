@@ -136,20 +136,27 @@ parallelisation over several nodes is discouraged, as the cell
 resampling quality will not benefit from higher event statistics.
 
 For very large samples consisting of many smaller subsamples the
-following work flow is recommended:
+following work flow is recommended. The following commands assume
+uncompressed HepMC event files, but other event formats as well as compressed
+event files are supported as usual.
 
 1. Run
 
         cres-partition @partitionargs -o partition --regions N SUBSAMPLE.HEPMC2
 
-   on a a single subsample, e.g. 10^6 events. `N` is the number of
+   on one single subsample, e.g. 10^6 events. `N` is the number of
    nodes on which `cres` should be later run in
    parallel. `cres-partition` should be fast and memory-efficient
    enough to be run on a single node.
 
+   `@partitionargs` stands for further command-line arguments, or
+   alternatively for an argument file containing the standard `cres`
+   options needed to define the metric, e.g. `--jetalgorithm`,
+   `--jetradius`, `--jetpt`, and `--max-cell-size`.
+
 2. Using the `partition` file created in step 1., run
 
-        cres-classify @classifyargs -p partition SUBSAMPLE.HEPMC2
+        cres-classify-events --outdir cres-split -p partition SUBSAMPLE.HEPMC2
 
    on each subsample. Each subsample can be treated in parallel. This
    will split `SUBSAMPLE.HEPMC2` into `N` parts `SUBSAMPLE.X.HEPMC2`.
