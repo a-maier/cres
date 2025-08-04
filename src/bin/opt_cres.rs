@@ -77,11 +77,10 @@ pub(crate) struct UnweightOpt {
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) struct Opt {
-    /// Output directory.
-    ///
-    /// For each input file, an output file with the same name is
-    /// written to the given directory.
-    #[clap(long, short, value_parser)]
+    #[clap(long, short, value_parser, help ="Output directory.
+
+For each input file, an output file with the same name is
+written to the given directory.")]
     pub(crate) outdir: PathBuf,
 
     #[clap(flatten)]
@@ -113,7 +112,7 @@ Maximum levels are 'gzip_9', 'zstd_19', 'lz4_16'.")]
         default_value = "Info",
         help = "Verbosity level.
 Possible values with increasing amount of output are
-'off', 'error', 'warn', 'info', 'debug', 'trace'.\n"
+'off', 'error', 'warn', 'info', 'debug', 'trace'."
     )]
     pub(crate) loglevel: String,
 
@@ -127,7 +126,7 @@ Possible values with increasing amount of output are
         help = "Strategy for choosing cell seeds. Possible values are
 'smallest_abs_weight_first': seeds with weight closest to zero are chosen first,
 'largest_abs_weight_first' seeds with the largest absolute weight are chosen first,
-'any': seeds are chosen in an arbitrary order.\n"
+'any': seeds are chosen in an arbitrary order."
     )]
     pub(crate) strategy: Strategy,
 
@@ -137,7 +136,7 @@ Possible values with increasing amount of output are
         help = "Which events are chosen as cell seeds. Possible values are
 'negative': events with negative weight,
 'positive': events with positive weight,
-'all': all events, regardless of weight. The default is 'negative'."
+'all': all events, regardless of weight."
     )]
     pub(crate) seed_weights: WeightSign,
 
@@ -153,34 +152,34 @@ variable."
     )]
     pub(crate) threads: usize,
 
-    /// Maximum cell size in GeV.
-    ///
-    /// Limiting the cell size ensures that event weights are only
-    /// redistributed between events that are sufficiently similar.
-    /// The downside is that not all negative weights may be cancelled.
-    #[clap(long)]
+    #[clap(long, help ="Maximum cell size in GeV.
+
+Limiting the cell size ensures that event weights are only
+redistributed between events that are sufficiently similar.
+The downside is that not all negative weights may be cancelled.
+")]
     pub(crate) max_cell_size: Option<f64>,
 
-    /// Comma-separated list of weights to include in the resampling
-    ///
-    /// In addition to the main event weight, weights with the given
-    /// names will be averaged within each cell.
+    #[cfg(feature = "multiweight")]
+    #[clap(long, value_delimiter = ',', help = "Comma-separated list of weights to include in the resampling
+
+In addition to the main event weight, weights with the given
+names will be averaged within each cell.
+")]
     // Would be nice to use a HashSet here, but clap refuses to parse
     // that out of the box
-    #[cfg(feature = "multiweight")]
-    #[clap(long, value_delimiter = ',')]
     pub(crate) weights: Vec<String>,
 
-    /// Discard events with zero weight
-    ///
-    /// By default, only even weights are modified and all other event
-    /// information is, even for events with zero weight. This is
-    /// important for cases where the event records carry additional
-    /// information. For instance, HepMC events with zero weight may
-    /// still update the current cross section estimate. With this
-    /// option enabled, events with zero weight are omitted from the
-    /// output.
-    #[clap(long, default_value_t)]
+    #[clap(long, default_value_t, help = "Discard events with zero weight
+
+By default, only even weights are modified and all other event
+information is, even for events with zero weight. This is
+important for cases where the event records carry additional
+information. For instance, HepMC events with zero weight may
+still update the current cross section estimate. With this
+option enabled, events with zero weight are omitted from the
+output.
+")]
     pub(crate) discard_weightless: bool,
 
     /// Input files
