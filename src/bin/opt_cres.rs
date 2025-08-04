@@ -5,7 +5,7 @@ use crate::opt_common::*;
 use crate::opt_particle_def::ParticleDefinitions;
 
 use cres::compression::Compression;
-use cres::seeds::Strategy;
+use cres::seeds::{Strategy, WeightSign};
 
 use clap::{Parser, ValueEnum};
 use thiserror::Error;
@@ -25,7 +25,26 @@ pub struct UnknownStrategy(pub String);
 
 impl Display for UnknownStrategy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unknown strategy: {}", self.0)
+        write!(f, "Unknown strategy: '{}'", self.0)
+    }
+}
+
+fn parse_weight_sign(s: &str) -> Result<WeightSign, UnknownWeightSign> {
+    use WeightSign::*;
+    match s {
+        "All" | "all" => Ok(All),
+        "Negative" | "negative" => Ok(Negative),
+        "Positive" | "positive" => Ok(Positive),
+        _ => Err(UnknownWeightSign(s.to_string())),
+    }
+}
+
+#[derive(Debug, Clone, Error)]
+pub struct UnknownWeightSign(pub String);
+
+impl Display for UnknownWeightSign {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Unknown weight sign: '{}'", self.0)
     }
 }
 
@@ -105,6 +124,16 @@ Possible values with increasing amount of output are
 'any': no additional requirements beyond a negative weight.\n"
     )]
     pub(crate) strategy: Strategy,
+
+    #[clap(
+        long, default_value = "negative",
+        value_parser = parse_weight_sign,
+        help = "Which events are chosen as cell seeds. Possible values are
+'negative': events with negative weight,
+'positive': events with positive weight,
+'all': all events, regardless of weight. The default is 'negative'."
+    )]
+    pub(crate) seed_weights: WeightSign,
 
     #[clap(
         short,

@@ -9,7 +9,7 @@ use crate::distance::{DistWrapper, Distance, EuclWithScaledPt};
 use crate::event::Event;
 use crate::neighbour_search::TreeSearch;
 use crate::progress_bar::{Progress, ProgressBar};
-use crate::seeds::{StrategicSelector, Strategy};
+use crate::seeds::{StrategicSelector, Strategy, WeightSign};
 use crate::traits::{
     NeighbourSearch, NeighbourSearchAlgo, ObserveCell, Resample, SelectSeeds,
 };
@@ -224,6 +224,7 @@ impl Default
 /// Default implementation of cell resampling
 pub struct DefaultResampler<N> {
     ptweight: f64,
+    seed_weights: WeightSign,
     strategy: Strategy,
     max_cell_size: Option<f64>,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
@@ -254,7 +255,7 @@ where
         };
 
         let mut resampler = ResamplerBuilder::default()
-            .seeds(StrategicSelector::new(self.strategy))
+            .seeds(StrategicSelector::new(self.seed_weights, self.strategy))
             .distance(EuclWithScaledPt::new(n64(self.ptweight)))
             .max_cell_size(self.max_cell_size)
             .observer(observer)
@@ -279,6 +280,7 @@ impl<N> DefaultResampler<N> {
 /// Build a [DefaultResampler]
 pub struct DefaultResamplerBuilder<N> {
     ptweight: f64,
+    seed_weights: WeightSign,
     strategy: Strategy,
     max_cell_size: Option<f64>,
     cell_collector: Option<Rc<RefCell<CellCollector>>>,
@@ -289,6 +291,7 @@ impl Default for DefaultResamplerBuilder<TreeSearch> {
     fn default() -> Self {
         Self {
             ptweight: 0.,
+            seed_weights: WeightSign::default(),
             strategy: Strategy::default(),
             max_cell_size: None,
             cell_collector: None,
@@ -307,6 +310,12 @@ impl<N> DefaultResamplerBuilder<N> {
     /// Set the strategy for selecting cell seeds
     pub fn strategy(mut self, value: Strategy) -> Self {
         self.strategy = value;
+        self
+    }
+
+    /// Set the selection of cell seeds according to the sign of their weights
+    pub fn seed_weights(mut self, value: WeightSign) -> Self {
+        self.seed_weights = value;
         self
     }
 
@@ -329,6 +338,7 @@ impl<N> DefaultResamplerBuilder<N> {
     pub fn neighbour_search<NN>(self) -> DefaultResamplerBuilder<NN> {
         DefaultResamplerBuilder {
             ptweight: self.ptweight,
+            seed_weights: self.seed_weights,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
             cell_collector: self.cell_collector,
@@ -340,6 +350,7 @@ impl<N> DefaultResamplerBuilder<N> {
     pub fn build(self) -> DefaultResampler<N> {
         DefaultResampler {
             ptweight: self.ptweight,
+            seed_weights: self.seed_weights,
             strategy: self.strategy,
             max_cell_size: self.max_cell_size,
             cell_collector: self.cell_collector,

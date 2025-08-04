@@ -100,6 +100,7 @@ where
         .max_cell_size(opt.max_cell_size)
         .ptweight(opt.ptweight)
         .strategy(opt.strategy)
+        .seed_weights(opt.seed_weights)
         .cell_collector(cell_collector.clone())
         .neighbour_search::<N>()
         .build();
@@ -177,6 +178,7 @@ mod tests {
             compression: Default::default(),
             loglevel: "info".to_owned(),
             search: Default::default(),
+            seed_weights: Default::default(),
             strategy: Default::default(),
             threads: Default::default(),
             #[cfg(feature = "multiweight")]

@@ -30,22 +30,38 @@ pub enum Strategy {
     Next,
 }
 
+/// Weight criterion for choosing seeds
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum WeightSign {
+    /// Select events with negative weight as seeds
+    #[default]
+    Negative,
+    /// Select events with positive weight as seeds
+    Positive,
+    /// Select all events as cell seeds, regardless of weight
+    All,
+}
+
 impl Default for Strategy {
     fn default() -> Self {
         Self::MostNegative
     }
 }
 
-/// Select event seeds according to a [Strategy]
+/// Select event seeds
 #[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct StrategicSelector {
     strategy: Strategy,
+    weight_sign: WeightSign,
 }
 
 impl StrategicSelector {
-    /// Select event seeds according to the given [Strategy]
-    pub fn new(strategy: Strategy) -> Self {
-        Self { strategy }
+    /// Select event seeds with the given [WeightSign] in the order defined by a [Strategy]
+    pub fn new(weight_sign: WeightSign, strategy: Strategy) -> Self {
+        Self {
+            weight_sign,
+            strategy,
+        }
     }
 }
 
@@ -54,18 +70,23 @@ impl SelectSeeds for StrategicSelector {
 
     fn select_seeds(&self, events: &[Event]) -> Self::ParallelIter {
         use Strategy::*;
-        let mut neg_weight: Vec<_> = events
+        let filter: fn(&Event) -> bool = match self.weight_sign {
+            WeightSign::Negative => |e| e.weight() < 0.,
+            WeightSign::Positive => |e| e.weight() > 0.,
+            WeightSign::All => |_| true,
+        };
+        let mut seeds: Vec<_> = events
             .par_iter()
             .enumerate()
-            .filter(|(_n, e)| e.weight() < 0.)
+            .filter(|(_n, e)| filter(e))
             .map(|(n, _e)| n)
             .collect();
         match self.strategy {
             Next => {}
             MostNegative => {
-                neg_weight.par_sort_unstable_by_key(|&n| events[n].weight())
+                seeds.par_sort_unstable_by_key(|&n| events[n].weight())
             }
-            LeastNegative => neg_weight.par_sort_unstable_by(|&n, &m| {
+            LeastNegative => seeds.par_sort_unstable_by(|&n, &m| {
                 events[m].weight().cmp(&events[n].weight())
             }),
         }
@@ -73,6 +94,6 @@ impl SelectSeeds for StrategicSelector {
         // if we don't do this, the resampling can stall with only a
         // single thread trying to work on a last huge chunk of cells
         const MAX_TASK_SIZE: usize = 64;
-        neg_weight.into_par_iter().with_max_len(MAX_TASK_SIZE)
+        seeds.into_par_iter().with_max_len(MAX_TASK_SIZE)
     }
 }
