@@ -77,10 +77,15 @@ pub(crate) struct UnweightOpt {
 #[derive(Debug, Parser)]
 #[clap(about, author, version)]
 pub(crate) struct Opt {
-    #[clap(long, short, value_parser, help ="Output directory.
+    #[clap(
+        long,
+        short,
+        value_parser,
+        help = "Output directory.
 
 For each input file, an output file with the same name is
-written to the given directory.")]
+written to the given directory."
+    )]
     pub(crate) outdir: PathBuf,
 
     #[clap(flatten)]
@@ -154,7 +159,9 @@ variable."
     )]
     pub(crate) threads: usize,
 
-    #[clap(long, help ="Maximum cell size in GeV.
+    #[clap(
+        long,
+        help = "Maximum cell size in GeV.
 
 Limiting the cell size ensures that event weights are only
 redistributed between events that are sufficiently similar.
@@ -163,7 +170,10 @@ The downside is that not all negative weights may be cancelled."
     pub(crate) max_cell_size: Option<f64>,
 
     #[cfg(feature = "multiweight")]
-    #[clap(long, value_delimiter = ',', help = "Comma-separated list of weights to include in the resampling
+    #[clap(
+        long,
+        value_delimiter = ',',
+        help = "Comma-separated list of weights to include in the resampling
 
 In addition to the main event weight, weights with the given
 names will be averaged within each cell."
@@ -172,7 +182,10 @@ names will be averaged within each cell."
     // that out of the box
     pub(crate) weights: Vec<String>,
 
-    #[clap(long, default_value_t, help = "Discard events with zero weight
+    #[clap(
+        long,
+        default_value_t,
+        help = "Discard events with zero weight
 
 By default, only even weights are modified and all other event
 information is, even for events with zero weight. This is

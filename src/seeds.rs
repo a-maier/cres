@@ -104,7 +104,7 @@ impl SelectSeeds for StrategicSelector {
         match self.weight_sign {
             WeightSign::Negative => event.weight() < 0.,
             WeightSign::Positive => event.weight() > 0.,
-            WeightSign::All => true
+            WeightSign::All => true,
         }
     }
 }
