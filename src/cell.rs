@@ -29,8 +29,8 @@ impl<'a> Cell<'a> {
         N: NeighbourSearch,
         <N as NeighbourSearch>::Iter: Iterator<Item = (usize, N64)>,
     {
-        let mut weight_sum = events[seed_idx].weight();
-        debug_assert!(weight_sum < 0.);
+        let seed_wt = events[seed_idx].weight();
+        let mut weight_sum = seed_wt;
         debug!("Cell seed {seed_idx}  with weight {:e}", weight_sum);
         let mut members = vec![seed_idx];
         let mut radius = n64(0.);
@@ -45,7 +45,7 @@ impl<'a> Cell<'a> {
             weight_sum += events[next_idx].weight();
             members.push(next_idx);
             radius = dist;
-            if weight_sum >= 0. {
+            if weight_sum == 0. || weight_sum.signum() != seed_wt.signum() {
                 break;
             }
         }
