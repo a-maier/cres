@@ -1,3 +1,5 @@
+#[cfg(feature = "lhef")]
+use std::sync::Arc;
 use std::{
     collections::HashMap,
     fs::File,
@@ -419,6 +421,11 @@ pub enum CreateError {
     /// XML error in STRIPPER XML file
     #[error("XML Error in input file")]
     XMLError(#[from] crate::stripper_xml::Error),
+
+    #[cfg(all(feature = "lhef", feature = "multiweight"))]
+    /// Error parsing weight names
+    #[error("Error parsing weight names")]
+    ParseWeightNames(#[from] crate::lhef::WeightNameParseError),
 }
 
 /// UTF-8 error
@@ -444,6 +451,14 @@ pub enum ReadError {
     /// Missing named weight entry
     #[error("Failed to find weight\"{0}\": Event has weights {1}")]
     FindWeight(String, String),
+    /// Number of weights does not match expectation
+    #[error("Expected {expected} weights, Event has {found}")]
+    NumWeights {
+        /// Expected number of weights
+        expected: usize,
+        /// Number of weights found in event record
+        found: usize,
+    },
     /// Invalid entry
     #[error("{value} is not a valid value for {entry} in {record}")]
     InvalidEntry {
@@ -463,6 +478,11 @@ pub enum ReadError {
     /// UTF8 error
     #[error("UTF8 error")]
     Utf8(#[from] Utf8Error),
+
+    #[cfg(all(feature = "lhef", feature = "multiweight"))]
+    /// XML error in LHEF file
+    #[error("XML Error in input file")]
+    XML(#[from] quick_xml::Error),
 
     #[cfg(feature = "ntuple")]
     /// ROOT NTuple error
@@ -695,7 +715,12 @@ pub enum EventRecord {
     HepMC(String),
     #[cfg(feature = "lhef")]
     /// Bare Les Houches Event Format record
-    LHEF(String),
+    LHEF {
+        /// The actual record
+        record: String,
+        /// The names associated with the event weights
+        weight_names: Arc<[String]>,
+    },
     #[cfg(feature = "ntuple")]
     /// ROOT NTuple event record
     NTuple(Box<ntuple::Event>),
@@ -712,7 +737,10 @@ impl TryFrom<EventRecord> for String {
         match e {
             HepMC(s) => Ok(s),
             #[cfg(feature = "lhef")]
-            LHEF(s) => Ok(s),
+            LHEF {
+                record,
+                weight_names: _,
+            } => Ok(record),
             #[cfg(feature = "ntuple")]
             ev @ NTuple(_) => Err(ev),
             #[cfg(feature = "stripper-xml")]
@@ -765,7 +793,10 @@ impl TryConvert<EventRecord, Event> for Converter {
         let event = match record {
             EventRecord::HepMC(record) => self.parse_hepmc(&record)?,
             #[cfg(feature = "lhef")]
-            EventRecord::LHEF(record) => self.parse_lhef(&record)?,
+            EventRecord::LHEF {
+                record: event,
+                weight_names,
+            } => self.parse_lhef(&event, &weight_names)?,
             #[cfg(feature = "ntuple")]
             EventRecord::NTuple(record) => self.convert_ntuple(*record)?,
             #[cfg(feature = "stripper-xml")]

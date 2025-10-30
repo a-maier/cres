@@ -2,6 +2,7 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use audec::auto_decompress;
@@ -33,16 +34,22 @@ pub struct FileReader {
     source_path: PathBuf,
     source: Box<dyn BufRead>,
     header: Vec<u8>,
+    weight_names: Arc<[String]>,
 }
 
 impl FileReader {
     /// Construct a reader from the given (potentially compressed) Les Houches Event File
     pub fn try_new(source_path: PathBuf) -> Result<Self, CreateError> {
         let (header, source) = init_source(&source_path)?;
+        #[cfg(not(feature = "multiweight"))]
+        let _weight_names = Arc::new([]);
+        #[cfg(feature = "multiweight")]
+        let _weight_names = extract_weight_names(&header)?.into();
         Ok(Self {
             source_path,
             source,
             header,
+            weight_names: _weight_names,
         })
     }
 
@@ -59,6 +66,68 @@ impl FileReader {
         trace!("Read Les Houches Event record:\n{record}");
         Some(Ok(record))
     }
+}
+
+#[cfg(feature = "multiweight")]
+#[derive(Debug, thiserror::Error)]
+/// Error parsing <weightinfo> entries in a LHEF init block
+pub enum WeightNameParseError {
+    /// Header is invalid UTF-8
+    #[error("Failed to interpret header as UTF-8")]
+    UTF8(#[from] std::str::Utf8Error),
+    /// Header does not contain init block
+    #[error("Failed to find <init> block in header")]
+    NoInit,
+    /// XML parsing error
+    #[error("Failed to parse <weightinfo> tag")]
+    XML(#[from] quick_xml::Error),
+    /// Failed to parse <weightinfo> tag
+    #[error("Failed to parse <weightinfo> tag")]
+    ParseWeightInfo,
+    /// <weightinfo> tag without name attribute
+    #[error("<weightinfo> tag does not have a `name` attribute")]
+    NoName,
+}
+
+#[cfg(feature = "multiweight")]
+fn extract_weight_names(
+    header: &[u8],
+) -> Result<Vec<String>, WeightNameParseError> {
+    use WeightNameParseError::*;
+
+    const INIT_START_TAG: &str = "\n<init>\n";
+    const INIT_END_TAG: &str = "</init>";
+    const WEIGHTINFO_TAG_START: &str = "<weightinfo";
+    const NAME_ATTR: &[u8] = b"name";
+
+    let header = std::str::from_utf8(header)?;
+    let Some(init_start) = header.rfind(INIT_START_TAG) else {
+        return Err(NoInit);
+    };
+    let header = &header[init_start + INIT_START_TAG.len()..];
+    let Some(init_end) = header.rfind(INIT_END_TAG) else {
+        return Err(NoInit);
+    };
+    let mut header = &header[..init_end];
+
+    let mut weight_names = Vec::new();
+    while let Some(start) = header.find(WEIGHTINFO_TAG_START) {
+        header = &header[start..];
+        let mut reader = quick_xml::Reader::from_str(header);
+        let read = reader.read_event()?;
+        let quick_xml::events::Event::Empty(t) = read else {
+            return Err(ParseWeightInfo);
+        };
+        let name = t
+            .attributes()
+            .filter_map(|a| a.ok())
+            .find(|a| a.key.0 == NAME_ATTR);
+        let Some(name) = name else { return Err(NoName) };
+        let name = String::from_utf8(name.value.to_vec()).unwrap();
+        weight_names.push(name);
+        header = &header[reader.buffer_position() as usize..];
+    }
+    Ok(weight_names)
 }
 
 impl EventFileReader for FileReader {
@@ -85,7 +154,12 @@ impl Iterator for FileReader {
     type Item = Result<EventRecord, ReadError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_raw().map(|r| r.map(EventRecord::LHEF))
+        self.read_raw().map(|e| {
+            e.map(|record| EventRecord::LHEF {
+                record,
+                weight_names: self.weight_names.clone(),
+            })
+        })
     }
 }
 
@@ -94,7 +168,7 @@ pub struct FileIO {
     reader: FileReader,
     sink_path: PathBuf,
     sink: Box<dyn Write>,
-    _weight_names: Vec<String>,
+    _weights_to_resample: Vec<String>,
     discard_weightless: bool,
 }
 
@@ -105,7 +179,7 @@ impl FileIO {
         source_path: PathBuf,
         sink_path: PathBuf,
         compression: Option<Compression>,
-        _weight_names: Vec<String>,
+        _weights_to_resample: Vec<String>,
         discard_weightless: bool,
     ) -> Result<Self, CreateError> {
         use CreateError::*;
@@ -121,7 +195,7 @@ impl FileIO {
             reader,
             sink_path,
             sink,
-            _weight_names,
+            _weights_to_resample,
             discard_weightless,
         })
     }
@@ -174,11 +248,82 @@ impl FileIO {
 
             #[cfg(feature = "multiweight")]
             if weights.len() > 1 {
-                unimplemented!("Multiple weights in LHEF")
+                let rest = record
+                    .trim_start()
+                    .strip_prefix("<event>")
+                    .unwrap()
+                    .trim_start();
+                let (rest, nparticles): (_, u32) = u32_entry0(rest)
+                    .map_err(|_| parse_err("NUP entry", rest))?;
+                let rest = rest.splitn(2 + nparticles as usize, '\n').last();
+                let Some(mut rest) = rest else {
+                    return Err(Read(ReadError::FindEntry("weights", record)));
+                };
+                while rest.starts_with('#') {
+                    let start = rest.find('\n').unwrap_or(record.len());
+                    rest = &rest[start..];
+                }
+                let mut reader = quick_xml::Reader::from_str(rest);
+                loop {
+                    let read = reader.read_event().map_err(ReadError::from)?;
+                    match read {
+                        quick_xml::events::Event::Start(t)
+                            if &t.name().0 == b"weights" =>
+                        {
+                            let pos = record.len() - rest.len()
+                                + reader.buffer_position() as usize;
+                            self.update_weights_at(&mut record, pos, weights)?;
+                            break;
+                        }
+                        quick_xml::events::Event::Eof => {
+                            return Err(Read(ReadError::FindEntry(
+                                "weights", record,
+                            )))
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
         self.sink.write_all(record.as_bytes()).map_err(IO)?;
         Ok(true)
+    }
+
+    #[cfg(feature = "multiweight")]
+    fn update_weights_at(
+        &self,
+        record: &mut String,
+        mut pos: usize,
+        weights: &Weights,
+    ) -> Result<(), ReadError> {
+        type NomErr<'a> = nom::Err<nom::error::Error<&'a str>>;
+        let parse_err = |what, record: &str| {
+            ReadError::ParseEntry(what, take_chars(record, 100))
+        };
+
+        let mut weights = weights.iter().skip(1);
+        for weight_name in self.reader.weight_names.as_ref() {
+            use nom::{combinator::recognize, number::complete::double};
+
+            let rest = &record[pos..];
+            let (rest, space) = recognize(space0)
+                .parse(rest)
+                .map_err(|_err: NomErr<'_>| parse_err("weight entry", rest))?;
+            pos += space.len();
+
+            let (_rest, old) = recognize(double)
+                .parse(rest)
+                .map_err(|_err: NomErr<'_>| parse_err("weight entry", rest))?;
+
+            pos += if self._weights_to_resample.contains(weight_name) {
+                let wt_str = weights.next().unwrap().to_string();
+                record.replace_range(pos..(pos + old.len()), &wt_str);
+                wt_str.len()
+            } else {
+                old.len()
+            };
+        }
+        Ok(())
     }
 }
 
@@ -223,20 +368,27 @@ pub trait LHEFParser {
     type Error;
 
     /// Parse Les Houches Event Format event record
-    fn parse_lhef(&self, record: &str) -> Result<Event, Self::Error>;
+    fn parse_lhef(
+        &self,
+        record: &str,
+        weight_names: &[String],
+    ) -> Result<Event, Self::Error>;
 }
 
 impl LHEFParser for Converter {
     type Error = ReadError;
 
-    fn parse_lhef(&self, mut record: &str) -> Result<Event, Self::Error> {
+    fn parse_lhef(
+        &self,
+        mut record: &str,
+        _weight_names: &[String],
+    ) -> Result<Event, Self::Error> {
         use ReadError::*;
         const STATUS_OUTGOING: i32 = 1;
 
         let parse_err =
             |entry, record: &str| ParseEntry(entry, take_chars(record, 100));
 
-        // TODO: multiple weights
         record = record.trim_start();
         let Some(line_end) = record.find('\n') else {
             return Err(FindEntry("line break", record.to_string()));
@@ -251,13 +403,19 @@ impl LHEFParser for Converter {
         let (rest, wt) =
             double_entry(rest).map_err(|_| parse_err("XWGTUP entry", rest))?;
         event.add_weight(n64(wt));
-        for line in rest.lines().skip(1).take(nparticles) {
-            let (rest, id) =
-                i32_entry0(line).map_err(|_| parse_err("IDUP entry", line))?;
+        let mut record = rest;
+        for _particle in 0..nparticles {
+            let Some(start) = record.find('\n') else {
+                return Err(FindEntry("line break", rest.to_string()));
+            };
+            record = record[start..].trim_start();
+            let (rest, id) = i32_entry0(record)
+                .map_err(|_| parse_err("IDUP entry", record))?;
             let id = ParticleID::new(id);
             let (rest, status) =
                 i32_entry(rest).map_err(|_| parse_err("ISTUP entry", rest))?;
             if status != STATUS_OUTGOING {
+                record = rest;
                 continue;
             }
             // ignore decay parents & colour
@@ -272,7 +430,48 @@ impl LHEFParser for Converter {
                 double_entry(rest).map_err(|_| parse_err("py entry", rest))?;
             let (_, e) = double_entry(rest)
                 .map_err(|_| parse_err("energy entry", rest))?;
+            record = rest;
             event.add_outgoing(id, [n64(e), n64(px), n64(py), n64(pz)].into());
+        }
+
+        #[cfg(feature = "multiweight")]
+        if !self.weight_names().is_empty() {
+            let Some(start) = record.find('\n') else {
+                return Err(FindEntry("line break", record.to_string()));
+            };
+            record = record[start..].trim_start();
+            while record.starts_with('#') {
+                let start = record.find('\n').unwrap_or(record.len());
+                record = record[start..].trim_start();
+            }
+            let mut reader = quick_xml::Reader::from_str(record);
+            loop {
+                let read = reader.read_event()?;
+                match read {
+                    quick_xml::events::Event::Start(t)
+                        if &t.name().0 == b"weights" =>
+                    {
+                        let weights =
+                            reader.read_text(t.name()).map_err(|_| {
+                                ParseEntry("weights", record.to_string())
+                            })?;
+                        let mut weights = weights.as_ref();
+                        for name in _weight_names {
+                            let (rest, wt) =
+                                double_entry(weights).map_err(|_| {
+                                    parse_err("weight entry", record)
+                                })?;
+                            weights = rest;
+                            if self.weight_names().contains(name) {
+                                event.add_weight(n64(wt));
+                            }
+                        }
+                        break;
+                    }
+                    quick_xml::events::Event::Eof => break,
+                    _ => {}
+                }
+            }
         }
 
         Ok(event.build())
