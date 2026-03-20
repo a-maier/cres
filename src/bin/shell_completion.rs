@@ -144,7 +144,7 @@ fn gen_fish_outfile() -> Result<File> {
             }
             dir
         });
-    for part in ["fish", "vendor_completions.d", "cres,fish"] {
+    for part in ["fish", "vendor_completions.d", "cres.fish"] {
         outfile.push(part);
     }
     create_file(outfile)
